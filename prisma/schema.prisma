@@ -1,0 +1,148 @@
+// Ziwon.AI Prisma Schema Model Specification
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  name          String?
+  role          String        @default("USER") // USER, CONSULTANT, ADMIN
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  userCompanies UserCompany[]
+}
+
+model Company {
+  id                String           @id @default(uuid())
+  name              String
+  bizRegNo          String?          // 사업자등록번호
+  industryCode      String           // 표준산업분류코드
+  region            String           // 소재지 (예: 광주광역시, 서울특별시)
+  foundedDate       DateTime         // 창업일 (업력 계산용)
+  revenue           Decimal?         // 최근 매출액 (원)
+  employeeCount     Int              // 상시 근로자 수
+  isExporting       Boolean          @default(false)
+  hasPatents        Boolean          @default(false)
+  hasCertifications Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  userCompanies     UserCompany[]
+  recommendations   Recommendation[]
+}
+
+model UserCompany {
+  userId    String
+  companyId String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
+}
+
+model SupportProgram {
+  id                String            @id @default(uuid())
+  title             String            // 대표 사업명
+  organizer         String            // 주관기관
+  executingAgency   String?           // 수행기관
+  category          String            // 지원분야 (R&D, 사업화, 융자 등)
+  region            String            // 지원지역 (전국, 광주, 서울 등)
+  targetDescription String?           // 지원대상 요약
+  startDate         DateTime?         // 모집 시작일
+  endDate           DateTime?         // 모집 종료일
+  budget            String?           // 지원금액 규모
+  officialNoticeNo  String?           // 공고번호
+  duplicateStatus   String            @default("UNIQUE") // UNIQUE, MERGE_CANDIDATE, MERGED
+  canonicalId       String?           // 병합 시 마스터 Program ID
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  sources           SupportSource[]
+  documents         SupportDocument[]
+  analyses          SupportAnalysis[]
+  recommendations   Recommendation[]
+}
+
+model SupportSource {
+  id               String         @id @default(uuid())
+  supportProgramId String
+  sourceType       String         // K_STARTUP, BIZINFO, NAVER
+  externalId       String?        // 원본 사이트 아이디 / 공고 ID
+  sourceUrl        String         // 원문 공고 URL
+  rawTitle         String
+  rawData          String?        // 원본 JSON/XML/HTML
+  collectedAt      DateTime       @default(now())
+  program          SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+}
+
+model SupportDocument {
+  id               String          @id @default(uuid())
+  supportProgramId String
+  fileName         String
+  fileUrl          String
+  fileType         String          // HTML, PDF, HWP, HWPX, IMAGE
+  fileHash         String?         // MD5/SHA256 해시
+  contentHash      String?         // Extracted Text 해시
+  status           String          @default("PENDING") // PENDING, DOWNLOADED, PARSED, FAILED, OCR_REQUIRED, UNSUPPORTED
+  extractedText    String?
+  retrievedAt      DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  program          SupportProgram  @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+  chunks           DocumentChunk[]
+}
+
+model DocumentChunk {
+  id           String          @id @default(uuid())
+  documentId   String
+  chunkIndex   Int
+  pageNumber   Int?            // PDF/문서 페이지 번호
+  sectionTitle String?         // 섹션/조항 제목
+  content      String
+  startOffset  Int?            // 원본 텍스트 시작 위치
+  endOffset    Int?            // 원본 텍스트 끝 위치
+  createdAt    DateTime        @default(now())
+  document     SupportDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model SupportAnalysis {
+  id                 String         @id @default(uuid())
+  supportProgramId   String
+  model              String         // AI 모델명 (gemini-2.5-flash 등)
+  promptVersion      String         // v1.0, v1.1
+  analysisVersion    String         // v1
+  sourceDocumentHash String?        // 분석 시점 문서 해시
+  status             String         @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  resultJson         String         // 지원자격, 혜택, 제출서류, 평가가점 구조화 JSON
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  program            SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+}
+
+model Recommendation {
+  id               String         @id @default(uuid())
+  companyId        String
+  supportProgramId String
+  totalScore       Float          // Rule + AI 가중합 종합점수 (0~100)
+  hardEligibility  Boolean        @default(true) // 정량 조건 통과 여부
+  breakdownJson    String         // 항목별 득점표
+  passedConditions String         // 통과 조건 목록 JSON
+  warningNotices   String         // 주의사항/보완점 JSON
+  aiReasoning      String         // AI 추천 사유
+  createdAt        DateTime       @default(now())
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  program          SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+}
+
+model CrawlLog {
+  id           String   @id @default(uuid())
+  sourceType   String   // K_STARTUP, BIZINFO, NAVER
+  status       String   // SUCCESS, PARTIAL_SUCCESS, FAILED
+  itemCount    Int      @default(0)
+  errorMessage String?
+  executedAt   DateTime @default(now())
+}

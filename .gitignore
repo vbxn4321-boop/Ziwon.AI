@@ -1,0 +1,39 @@
+# dependencies
+/node_modules
+/.pnpm
+/.yarn
+
+# Next.js build output
+/.next/
+/out/
+
+# Production build
+/build
+/dist
+
+# Environment variables & secrets
+.env
+.env*.local
+.env.production
+.env.development
+
+# Databases & local sqlite
+*.db
+*.db-journal
+/prisma/dev.db
+
+# Logs & temp samples
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+kstartup-sample.html
+kstartup-tab-sample.html
+bizinfo-board-sample.html
+bizinfo-pbanc-list.html
+
+# IDE & OS files
+.DS_Store
+*.pem
+.vscode/
+.idea/
