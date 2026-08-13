@@ -1,8 +1,9 @@
+import "dotenv/config";
 import { prisma } from "../src/lib/db";
 import { runIngestionPipeline } from "../src/lib/crawler/collector";
 
-async function resetAndFetchLive() {
-  console.log("Cleaning up previous test database records...");
+async function resetAndFetchFullBulk() {
+  console.log("Cleaning up previous database records...");
   await prisma.supportSource.deleteMany();
   await prisma.supportDocument.deleteMany();
   await prisma.supportAnalysis.deleteMany();
@@ -12,28 +13,33 @@ async function resetAndFetchLive() {
   console.log("Database reset complete.\n");
 
   console.log("=========================================");
-  console.log("Running Live Ingestion from Official K-Startup OpenAPI...");
+  console.log("Running FULL BULK Ingestion from Official OpenAPIs");
+  console.log("Fetching ALL currently ongoing notices (1,500+ items)...");
   console.log("=========================================\n");
 
-  const count = await runIngestionPipeline(10);
-  console.log(`\n🎉 Ingested ${count} REAL LIVE K-Startup notices from data.go.kr!\n`);
+  const count = await runIngestionPipeline(0); // 0 means fetch ALL available items
+  console.log(`\n🎉 Ingested ${count} REAL LIVE notices from K-Startup & Bizinfo data.go.kr!\n`);
 
-  const programs = await prisma.supportProgram.findMany({
-    include: { sources: true },
+  const totalPrograms = await prisma.supportProgram.count();
+  const totalSources = await prisma.supportSource.count();
+
+  console.log("=== FULL BULK INGESTION SUMMARY ===");
+  console.log(`✅ Total SupportProgram Records: ${totalPrograms}`);
+  console.log(`✅ Total SupportSource Records: ${totalSources}`);
+
+  const samplePrograms = await prisma.supportProgram.findMany({
+    take: 5,
     orderBy: { createdAt: "desc" },
   });
 
-  console.log("--- REAL LIVE K-STARTUP NOTICES IN DATABASE ---");
-  programs.forEach((prog, i) => {
-    console.log(`\n${i + 1}. [${prog.category} / ${prog.region}] ${prog.title}`);
+  console.log("\n--- Sample Ingested Notices ---");
+  samplePrograms.forEach((prog, i) => {
+    console.log(`${i + 1}. [${prog.category} / ${prog.region}] ${prog.title}`);
     console.log(`   - 주관기관: ${prog.organizer}`);
-    console.log(`   - 지원대상: ${prog.targetDescription?.slice(0, 80)}...`);
-    console.log(`   - 모집기간: ${prog.startDate ? prog.startDate.toISOString().slice(0,10) : 'N/A'} ~ ${prog.endDate ? prog.endDate.toISOString().slice(0,10) : 'N/A'}`);
-    console.log(`   - 원문 URL: ${prog.sources[0]?.sourceUrl}`);
   });
 }
 
-resetAndFetchLive()
+resetAndFetchFullBulk()
   .catch(console.error)
   .finally(async () => {
     await prisma.$disconnect();

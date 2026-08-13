@@ -21,8 +21,9 @@ export interface RawNoticeItem {
 /**
  * Fetch real live notices from Bizinfo (기업마당) official OpenAPI
  * Endpoint: https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do
+ * When limit is 0 or undefined, fetches ALL available ongoing notices (1,500+ items).
  */
-export async function fetchBizinfoNotices(limit = 10): Promise<RawNoticeItem[]> {
+export async function fetchBizinfoNotices(limit?: number): Promise<RawNoticeItem[]> {
   const apiKey = process.env.BIZINFO_API_KEY;
 
   if (!apiKey) {
@@ -35,7 +36,7 @@ export async function fetchBizinfoNotices(limit = 10): Promise<RawNoticeItem[]> 
       apiKey
     )}&dataType=json`;
     console.log(
-      `[Bizinfo Live Ingestion] Requesting API: ${jsonUrl.replace(apiKey, "***REDACTED***")}`
+      `[Bizinfo Live Ingestion] Requesting Full API Feed: ${jsonUrl.replace(apiKey, "***REDACTED***")}`
     );
 
     const res = await fetch(jsonUrl, { next: { revalidate: 1800 } });
@@ -46,7 +47,10 @@ export async function fetchBizinfoNotices(limit = 10): Promise<RawNoticeItem[]> 
       const itemList = Array.isArray(items) ? items : [items];
 
       if (itemList.length > 0) {
-        return itemList.slice(0, limit).map((item: any, idx: number) => {
+        const targetItems = limit && limit > 0 ? itemList.slice(0, limit) : itemList;
+        console.log(`[Bizinfo] Extracted ${targetItems.length} live public notice items from feed.`);
+
+        return targetItems.map((item: any, idx: number) => {
           const pblancId = item.pblancId || `PBLN_${idx}`;
           const title = item.pblancNm || "기업마당 지원사업";
           const organizer = item.jnsmAgencyNm || item.refrncNm?.split(" ")[0] || "중소벤처기업부";
@@ -54,14 +58,12 @@ export async function fetchBizinfoNotices(limit = 10): Promise<RawNoticeItem[]> 
           const targetDescription = item.trgetNm || item.hashtags || "중소기업, 소상공인 및 창업기업";
           const sourceUrl = item.pblancUrl || `https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=${pblancId}`;
 
-          // Parse region from title (e.g. "[경기] 가평군..." -> "경기")
           let region = "전국";
           const regionMatch = title.match(/^\[([^\]]+)\]/);
           if (regionMatch) {
             region = regionMatch[1];
           }
 
-          // Parse attachment file names if provided
           const attachments: { fileName: string; fileUrl: string; fileType: string }[] = [];
           if (item.fileNm) {
             const files = String(item.fileNm).split("@");
