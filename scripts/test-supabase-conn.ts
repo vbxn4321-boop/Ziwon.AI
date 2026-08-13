@@ -1,20 +1,18 @@
 import "dotenv/config";
-import { Client } from "pg";
+import { prisma } from "../src/lib/db";
 
 async function testSupabase() {
-  const connectionString = process.env.DATABASE_URL;
   console.log("Testing connection string in .env...");
-
-  const client = new Client({ connectionString });
   try {
-    await client.connect();
-    console.log("🎉 SUCCESS! Connected to Supabase PostgreSQL Database!");
-    const res = await client.query("SELECT NOW()");
-    console.log("DB Time:", res.rows[0]);
-    await client.end();
+    const count = await prisma.supportProgram.count();
+    console.log("🎉 SUCCESS! Connected to Supabase PostgreSQL Database! Total notices:", count);
   } catch (err: any) {
     console.error("Connection failed:", err.message);
   }
 }
 
-testSupabase();
+testSupabase()
+  .catch(console.error)
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
