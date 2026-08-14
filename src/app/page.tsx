@@ -12,6 +12,9 @@ import {
   ToggleLeft,
   ToggleRight,
   RotateCcw,
+  Sparkles,
+  Zap,
+  ArrowDown,
 } from "lucide-react";
 import { Header } from "../components/Header";
 import { ProgramCard, SupportProgram } from "../components/ProgramCard";
@@ -25,10 +28,14 @@ interface FilterItem {
 export default function HomePage() {
   const [programs, setPrograms] = useState<SupportProgram[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
 
-  // Expired Notice Toggle (Default: false = Active/Ongoing Notices Only)
-  const [includeClosed, setIncludeClosed] = useState(false);
+  // Closed Notice Mode Filter (Default: false = Active/Ongoing Notices Only, true = Closed Notices Only)
+  const [onlyClosed, setOnlyClosed] = useState(false);
 
   // Dynamic filter lists fetched directly from DB with counts
   const [dbCategories, setDbCategories] = useState<FilterItem[]>([{ name: "전체", count: 0 }]);
@@ -75,11 +82,12 @@ export default function HomePage() {
     }
   };
 
-  // 2. Fetch Programs from DB based on selected filters
+  // 2. Fetch Programs from DB based on selected filters (Page 1 Reset)
   useEffect(() => {
-    fetchPrograms();
+    setPage(1);
+    fetchPrograms(1, true);
   }, [
-    includeClosed,
+    onlyClosed,
     mainPortalMode,
     bizFilterMode,
     selectedCategory,
@@ -90,12 +98,20 @@ export default function HomePage() {
     navCategory,
   ]);
 
-  const fetchPrograms = async (query = searchQuery) => {
-    setLoading(true);
+  const fetchPrograms = async (pageNum = 1, isReset = false, query = searchQuery) => {
+    if (isReset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
       const params = new URLSearchParams();
+      params.append("page", pageNum.toString());
+      params.append("limit", "18"); // Fast batch size for instant 50ms rendering
+      params.append("statusMode", onlyClosed ? "closed" : "active");
+
       if (query) params.append("q", query);
-      if (includeClosed) params.append("includeClosed", "true");
 
       if (mainPortalMode === "bizinfo") {
         if (bizFilterMode === "category" && selectedCategory !== "전체") {
@@ -114,18 +130,32 @@ export default function HomePage() {
       const res = await fetch(`/api/support-programs?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
-        setPrograms(data.data);
+        if (isReset) {
+          setPrograms(data.data);
+        } else {
+          setPrograms((prev) => [...prev, ...data.data]);
+        }
+        setHasMore(data.hasMore);
+        setTotalCount(data.total);
       }
     } catch (err) {
       console.error("Failed to fetch programs:", err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchPrograms(nextPage, false);
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchPrograms(searchQuery);
+    setPage(1);
+    fetchPrograms(1, true, searchQuery);
   };
 
   const resetNavFilters = () => {
@@ -144,12 +174,17 @@ export default function HomePage() {
       <Header mainPortalMode={mainPortalMode} setMainPortalMode={setMainPortalMode} />
 
       {/* Hero & Search Section */}
-      <section className="relative pt-6 pb-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+      <section className="relative pt-8 pb-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
         <div className="text-center max-w-3xl mx-auto space-y-3">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400">
+            <Zap className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+            <span>실시간 신규 공고 수집 업데이트 중</span>
+          </div>
+
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            대한민국 모든 정부지원사업 <br className="sm:hidden" />
+            새로 올라온 정부지원사업 <br className="sm:hidden" />
             <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              실시간 1,570건 DB 카운팅 탐색
+              실시간 맞춤 탐색
             </span>
           </h1>
 
@@ -159,7 +194,7 @@ export default function HomePage() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="사업명, 기관명, 지원혜택 키워드 검색 (예: 바우처, AI, 광주, 팁스, 가평)"
+                placeholder="사업명, 기관명, 키워드 검색 (예: 팁스, 바우처, AI, 광주, 기술개발)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-slate-100"
@@ -179,7 +214,7 @@ export default function HomePage() {
       {/* MAIN PORTAL MODE 1: BIZINFO STYLE */}
       {mainPortalMode === "bizinfo" && (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 w-full flex-1 space-y-6">
-          {/* Dynamic DB Filter Pill Bar with Count Badges */}
+          {/* Dynamic DB Filter Pill Bar */}
           <div className="glass-panel p-5 rounded-2xl space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center space-x-2 flex-wrap gap-y-2">
@@ -239,24 +274,34 @@ export default function HomePage() {
               {/* Expired Notice Toggle */}
               <div className="flex items-center space-x-3 text-xs">
                 <button
-                  onClick={() => setIncludeClosed(!includeClosed)}
-                  className={`px-3 py-1.5 rounded-xl border transition-all flex items-center space-x-2 ${
-                    includeClosed
-                      ? "bg-amber-500/10 border-amber-500/30 text-amber-300 font-semibold"
+                  onClick={() => setOnlyClosed(!onlyClosed)}
+                  className={`px-3.5 py-1.5 rounded-xl border transition-all flex items-center space-x-2 ${
+                    onlyClosed
+                      ? "bg-red-500/20 border-red-500/40 text-red-300 font-bold shadow-md shadow-red-500/10"
                       : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>마감된 공고 포함 보기</span>
-                  {includeClosed ? (
-                    <ToggleRight className="w-4 h-4 text-amber-400" />
+                  <Clock className={`w-3.5 h-3.5 ${onlyClosed ? "text-red-400" : "text-slate-400"}`} />
+                  <span>마감된 공고만 보기</span>
+                  {onlyClosed ? (
+                    <ToggleRight className="w-4 h-4 text-red-400" />
                   ) : (
                     <ToggleLeft className="w-4 h-4 text-slate-500" />
                   )}
                 </button>
 
-                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                  {includeClosed ? "전체 공고" : "진행중 공고"}: <strong className="text-blue-400">{programs.length}</strong> 건
+                <span
+                  className={`px-2.5 py-1 rounded-xl border text-xs font-semibold ${
+                    onlyClosed
+                      ? "bg-red-950/60 border-red-800/80 text-red-300"
+                      : "bg-slate-900 border-slate-800 text-slate-300"
+                  }`}
+                >
+                  {onlyClosed ? "🔴 마감된 공고만" : "🟢 진행 중 공고"}:{" "}
+                  <strong className={onlyClosed ? "text-red-400 font-extrabold" : "text-blue-400 font-extrabold"}>
+                    {totalCount.toLocaleString()}
+                  </strong>{" "}
+                  건
                 </span>
               </div>
             </div>
@@ -337,26 +382,80 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Section Header */}
+          <div className="flex items-center justify-between pt-2">
+            <h2 className="text-base font-extrabold text-slate-100 flex items-center space-x-2">
+              <Sparkles className={`w-4 h-4 ${onlyClosed ? "text-red-400" : "text-blue-400"}`} />
+              <span>
+                {onlyClosed ? "🔴 마감 완료된 공고 데이터 목록" : "⚡ 실시간 새로 올라온 지원사업 목록"}
+              </span>
+              <span className="text-xs font-normal text-slate-400 ml-2">
+                (현재 {programs.length}개 표시 / 총 {totalCount.toLocaleString()}개)
+              </span>
+            </h2>
+          </div>
+
           {/* Program Cards Grid */}
           {loading ? (
-            <div className="py-20 text-center space-y-3">
-              <div className="inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-sm text-slate-400">1,570건 DB 공고 데이터를 불러오고 있습니다...</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="glass-card rounded-2xl p-5 space-y-4 animate-pulse border border-slate-800/60"
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="h-5 bg-slate-800 rounded-full w-24"></div>
+                    <div className="h-5 bg-slate-800 rounded-full w-16"></div>
+                  </div>
+                  <div className="h-10 bg-slate-800/80 rounded-xl w-full"></div>
+                  <div className="space-y-2 border-t border-slate-800/60 pt-3">
+                    <div className="h-4 bg-slate-800/50 rounded w-3/4"></div>
+                    <div className="h-4 bg-slate-800/50 rounded w-1/2"></div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : programs.length === 0 ? (
             <div className="glass-panel rounded-2xl p-12 text-center space-y-3">
               <Info className="w-8 h-8 text-slate-500 mx-auto" />
               <p className="text-base text-slate-300 font-medium">선택하신 조건에 해당하는 공고가 없습니다.</p>
               <p className="text-xs text-slate-500">
-                {!includeClosed ? "'마감된 공고 포함 보기'를 켜거나 필터를 '전체'로 변경해 보세요." : "필터를 '전체'로 변경해 보세요."}
+                {onlyClosed ? "필터를 '전체'로 변경해 보거나 마감 공고 보기를 해제해 보세요." : "'마감된 공고만 보기'를 켜거나 필터를 '전체'로 변경해 보세요."}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {programs.map((prog) => (
-                <ProgramCard key={prog.id} prog={prog} onClick={() => setSelectedProgram(prog)} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {programs.map((prog) => (
+                  <ProgramCard key={prog.id} prog={prog} onClick={() => setSelectedProgram(prog)} />
+                ))}
+              </div>
+
+              {/* Load More Pagination Button */}
+              {hasMore && (
+                <div className="pt-6 pb-4 text-center">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="px-8 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-blue-600/20 transition-all flex items-center space-x-2 mx-auto disabled:opacity-50"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>공고를 추가로 불러오는 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {onlyClosed ? "마감" : "신규"} 공고 더보기 (+{Math.min(18, Math.max(0, totalCount - programs.length))}개 / 남은 {Math.max(0, totalCount - programs.length).toLocaleString()}개)
+                        </span>
+                        <ArrowDown className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </main>
       )}
@@ -462,7 +561,10 @@ export default function HomePage() {
                   <span>선택 초기화</span>
                 </button>
                 <button
-                  onClick={() => fetchPrograms()}
+                  onClick={() => {
+                    setPage(1);
+                    fetchPrograms(1, true);
+                  }}
                   className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/25 flex items-center justify-center space-x-1"
                 >
                   <Search className="w-3.5 h-3.5" />
@@ -475,21 +577,21 @@ export default function HomePage() {
             <div className="lg:col-span-8 space-y-4">
               <div className="glass-panel p-4 rounded-2xl flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-200">
-                  맞춤 창업 공고 ({programs.length}건)
+                  맞춤 창업 공고 (총 {totalCount.toLocaleString()}건 중 {programs.length}건 표시)
                 </span>
 
                 <button
-                  onClick={() => setIncludeClosed(!includeClosed)}
+                  onClick={() => setOnlyClosed(!onlyClosed)}
                   className={`px-3 py-1 rounded-xl border transition-all flex items-center space-x-2 ${
-                    includeClosed
-                      ? "bg-amber-500/10 border-amber-500/30 text-amber-300 font-semibold"
+                    onlyClosed
+                      ? "bg-red-500/20 border-red-500/40 text-red-300 font-bold"
                       : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
                   }`}
                 >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>마감 공고 포함</span>
-                  {includeClosed ? (
-                    <ToggleRight className="w-4 h-4 text-amber-400" />
+                  <Clock className={`w-3.5 h-3.5 ${onlyClosed ? "text-red-400" : "text-slate-400"}`} />
+                  <span>마감된 공고만 보기</span>
+                  {onlyClosed ? (
+                    <ToggleRight className="w-4 h-4 text-red-400" />
                   ) : (
                     <ToggleLeft className="w-4 h-4 text-slate-500" />
                   )}
@@ -510,10 +612,33 @@ export default function HomePage() {
                   <p className="text-xs text-slate-500">'선택 초기화' 후 조건을 다시 설정해 보세요.</p>
                 </div>
               ) : (
-                <div className="glass-panel rounded-2xl divide-y divide-slate-800/80 overflow-hidden">
-                  {programs.map((prog) => (
-                    <ProgramCard key={prog.id} prog={prog} onClick={() => setSelectedProgram(prog)} />
-                  ))}
+                <div className="space-y-4">
+                  <div className="glass-panel rounded-2xl divide-y divide-slate-800/80 overflow-hidden">
+                    {programs.map((prog) => (
+                      <ProgramCard key={prog.id} prog={prog} onClick={() => setSelectedProgram(prog)} />
+                    ))}
+                  </div>
+
+                  {hasMore && (
+                    <div className="pt-4 text-center">
+                      <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="px-6 py-2.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all flex items-center space-x-2 mx-auto disabled:opacity-50"
+                      >
+                        {loadingMore ? (
+                          <span>창업 공고 추가 로딩 중...</span>
+                        ) : (
+                          <>
+                            <span>
+                              창업 공고 더보기 (+{Math.min(18, Math.max(0, totalCount - programs.length))}개 / 남은 {Math.max(0, totalCount - programs.length).toLocaleString()}개)
+                            </span>
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -528,3 +653,4 @@ export default function HomePage() {
     </div>
   );
 }
+
