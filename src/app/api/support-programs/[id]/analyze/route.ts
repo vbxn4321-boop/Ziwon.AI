@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { analyzeProgramWithGemini } from "@/lib/ai/gemini-analyzer";
 import { scrapeMissingAttachments } from "@/lib/parser/attachment-scraper";
 
-export const maxDuration = 15; // Vercel Hobby Tier safe limit
+export const maxDuration = 60; // Vercel Serverless Function timeout limit
 
 export async function POST(
   req: NextRequest,
@@ -14,7 +14,7 @@ export async function POST(
     const { id } = await params;
 
     if (!id) {
-      return NextResponse.json({ success: false, error: "Missing program ID" });
+      return NextResponse.json({ success: false, error: "Missing program ID" }, { status: 400 });
     }
 
     // 2. Fetch support program, sources, and documents
@@ -31,10 +31,10 @@ export async function POST(
     });
 
     if (!program) {
-      return NextResponse.json({ success: false, error: "Program not found" });
+      return NextResponse.json({ success: false, error: "Program not found" }, { status: 404 });
     }
 
-    // 3. Dynamic Scraping: Safe try-catch wrapper to prevent Vercel Serverless timeouts/crashes
+    // 3. Dynamic Scraping: Safe try-catch wrapper with tight timeout
     let docs = program.documents;
     if (docs.length === 0 && program.sources.length > 0) {
       try {
@@ -101,7 +101,7 @@ ${documentTexts || "첨부파일 원문 텍스트 없음 (기본 공고 정보 �
       newAnalysis = await prisma.supportAnalysis.create({
         data: {
           supportProgramId: program.id,
-          model: process.env.AI_GENERAL_MODEL || "gemini-3.6-flash",
+          model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
           promptVersion: "v1.0",
           status: "COMPLETED",
           resultJson: JSON.stringify(aiResult),
@@ -116,7 +116,7 @@ ${documentTexts || "첨부파일 원문 텍스트 없음 (기본 공고 정보 �
       analysis: newAnalysis || {
         id: "temp",
         supportProgramId: program.id,
-        model: "gemini-3.6-flash",
+        model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
         promptVersion: "v1.0",
         status: "COMPLETED",
         resultJson: JSON.stringify(aiResult),
@@ -129,6 +129,6 @@ ${documentTexts || "첨부파일 원문 텍스트 없음 (기본 공고 정보 �
       success: false,
       error: error.message || "Failed to run AI analysis",
       details: String(error),
-    });
+    }, { status: 500 });
   }
 }

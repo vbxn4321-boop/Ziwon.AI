@@ -146,10 +146,16 @@ ${documentText.slice(0, 12000)}
 `;
 
   try {
-    const response = await ai.models.generateContent({
+    const aiPromise = ai.models.generateContent({
       model: modelName,
       contents: prompt,
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Gemini AI API response timeout")), 7000)
+    );
+
+    const response: any = await Promise.race([aiPromise, timeoutPromise]);
 
     const responseText = response.text || "";
     const jsonStr = cleanJsonString(responseText);

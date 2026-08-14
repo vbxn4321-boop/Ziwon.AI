@@ -1,6 +1,17 @@
-const pdfParse = require("pdf-parse");
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
+
+let pdfParse: any = null;
+function getPdfParse() {
+  if (!pdfParse) {
+    try {
+      pdfParse = require("pdf-parse");
+    } catch (err: any) {
+      console.warn("[pdf-parse] Failed to load pdf-parse library:", err.message);
+    }
+  }
+  return pdfParse;
+}
 
 /**
  * Extract plain text from HWPX (ZIP-compressed XML format)
@@ -60,7 +71,9 @@ export async function extractTextFromBuffer(buffer: Buffer, fileTypeOrName: stri
 
   try {
     if (ext.endsWith(".pdf") || ext === "pdf") {
-      const data = await pdfParse(buffer);
+      const parser = getPdfParse();
+      if (!parser) return "";
+      const data = await parser(buffer);
       return data.text ? data.text.trim() : "";
     }
 
@@ -100,6 +113,7 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
+      signal: AbortSignal.timeout(3500),
     });
 
     if (!res.ok) {
@@ -145,6 +159,7 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               Referer: fileUrl,
             },
+            signal: AbortSignal.timeout(3500),
           });
 
           if (binRes.ok) {
@@ -179,4 +194,3 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
     return "";
   }
 }
-

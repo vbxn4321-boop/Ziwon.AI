@@ -26,6 +26,7 @@ export async function scrapeMissingAttachments(
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
+      signal: AbortSignal.timeout(3500),
     });
 
     if (!res.ok) return [];
@@ -70,6 +71,7 @@ export async function scrapeMissingAttachments(
           fileType,
         });
       }
+      if (attachments.length >= 2) break; // Limit to max 2 attachments for fast Vercel execution
     }
 
     if (attachments.length > 0) {
