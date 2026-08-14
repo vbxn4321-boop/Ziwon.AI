@@ -64,11 +64,17 @@ export async function GET() {
         organizers,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("API /api/filters Error:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch dynamic DB filters" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      error: error.message || "Failed to fetch dynamic DB filters",
+      details: String(error),
+      data: {
+        categories: [{ name: "전체", count: 0 }],
+        regions: [{ name: "전체", count: 0 }],
+        organizers: [{ name: "전체", count: 0 }],
+      },
+    });
   }
 }

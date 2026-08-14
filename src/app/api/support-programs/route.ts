@@ -111,12 +111,19 @@ export async function GET(req: NextRequest) {
       statusMode,
       data: programs,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("API /api/support-programs Error:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch support programs" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      error: error.message || "Failed to fetch support programs",
+      details: String(error),
+      total: 0,
+      page: 1,
+      limit: 18,
+      hasMore: false,
+      statusMode: "active",
+      data: [],
+    });
   }
 }
 
