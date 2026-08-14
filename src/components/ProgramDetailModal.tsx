@@ -62,44 +62,40 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
         <div className="flex border-b border-slate-800 bg-slate-900/60 px-6 text-xs font-medium space-x-6">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-              activeTab === "overview"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "overview"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <Info className="w-3.5 h-3.5" />
             <span>공고 개요</span>
           </button>
           <button
             onClick={() => setActiveTab("sources")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-              activeTab === "sources"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "sources"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>원문 출처 ({selectedProgram.sources.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("docs")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-              activeTab === "docs"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "docs"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <FileText className="w-3.5 h-3.5" />
             <span>첨부 서류 ({selectedProgram.documents.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("ai")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
-              activeTab === "ai"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "ai"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
             <span>AI 공고 분석 캐시</span>
@@ -119,11 +115,10 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
                   <span className="text-slate-500 font-medium">접수기간</span>
                   <p className="text-slate-200 font-semibold text-xs">
                     {selectedProgram.startDate
-                      ? `${new Date(selectedProgram.startDate).toLocaleDateString()} ~ ${
-                          selectedProgram.endDate
-                            ? new Date(selectedProgram.endDate).toLocaleDateString()
-                            : "상시"
-                        }`
+                      ? `${new Date(selectedProgram.startDate).toLocaleDateString()} ~ ${selectedProgram.endDate
+                        ? new Date(selectedProgram.endDate).toLocaleDateString()
+                        : "상시"
+                      }`
                       : "공고문 참조"}
                   </p>
                 </div>
