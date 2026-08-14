@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Sparkles, Clock, Calendar } from "lucide-react";
 
 export interface SupportProgram {
   id: string;
@@ -16,6 +16,7 @@ export interface SupportProgram {
   budget?: string;
   officialNoticeNo?: string;
   duplicateStatus: string;
+  createdAt?: string;
   sources: { id: string; sourceType: string; sourceUrl: string; rawTitle: string }[];
   documents: { id: string; fileName: string; fileUrl: string; fileType: string }[];
   analyses: any[];
@@ -30,28 +31,65 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
   const getDDay = (endDateStr?: string) => {
     if (!endDateStr) return "상시모집";
     const end = new Date(endDateStr);
+    end.setHours(23, 59, 59, 999);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((end.getTime() - today.getTime()) / (1000 * 3600 * 24));
-    if (diffDays < 0) return "마감됨";
+
+    const diffDays = Math.floor((end.getTime() - today.getTime()) / (1000 * 3600 * 24));
+    if (diffDays < 0) return "마감완료";
     if (diffDays === 0) return "D-Day";
-    return `마감 ${diffDays}일전`;
+    return `D-${diffDays}`;
+  };
+
+  // Check if notice is newly added (e.g., created within 48 hours)
+  const isNew = (() => {
+    if (!prog.createdAt) return false;
+    const createdDate = new Date(prog.createdAt);
+    const now = new Date();
+    const diffHours = (now.getTime() - createdDate.getTime()) / (1000 * 3600);
+    return diffHours <= 72; // Within 3 days
+  })();
+
+  const formatCreatedTime = (createdAtStr?: string) => {
+    if (!createdAtStr) return null;
+    const created = new Date(createdAtStr);
+    const now = new Date();
+    const diffHours = Math.floor((now.getTime() - created.getTime()) / (1000 * 3600));
+
+    if (diffHours < 1) return "방금 전 등록";
+    if (diffHours < 24) return `${diffHours}시간 전`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays <= 7) return `${diffDays}일 전`;
+    return created.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
   };
 
   const dday = getDDay(prog.endDate);
-  const isUrgent = dday.includes("마감") && parseInt(dday.replace(/[^0-9]/g, "") || "99") <= 7;
-  const isClosed = dday === "마감됨";
+  const isClosed = dday === "마감완료";
+  const isUrgent = !isClosed && dday.includes("D-") && parseInt(dday.replace(/[^0-9]/g, "") || "99") <= 7;
+  const createdBadgeText = formatCreatedTime(prog.createdAt);
 
   return (
     <div
       onClick={onClick}
-      className={`glass-card rounded-2xl p-5 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden transition-all ${
+      className={`glass-card rounded-2xl p-5 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10 ${
         isClosed ? "opacity-60 bg-slate-950/40" : ""
       }`}
     >
-      <div className="space-y-3">
+      {/* Visual Accent Glow for NEW Items */}
+      {isNew && (
+        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-blue-500/20 via-indigo-500/10 to-transparent rounded-bl-full pointer-events-none" />
+      )}
+
+      <div className="space-y-3 relative z-10">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+            {isNew && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-sm flex items-center space-x-1">
+                <Sparkles className="w-3 h-3 animate-spin-slow" />
+                <span>NEW</span>
+              </span>
+            )}
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
               {prog.region}
             </span>
@@ -78,7 +116,7 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
         </h3>
       </div>
 
-      <div className="space-y-2 text-xs text-slate-400 border-t border-slate-800/80 pt-3">
+      <div className="space-y-2 text-xs text-slate-400 border-t border-slate-800/80 pt-3 relative z-10">
         <div className="flex items-center justify-between">
           <span className="text-slate-500">주관기관:</span>
           <span className="text-slate-300 font-medium truncate max-w-[180px]">{prog.organizer}</span>
@@ -91,7 +129,13 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
         )}
         <div className="flex items-center justify-between">
           <span className="text-slate-500">수집 출처:</span>
-          <div className="flex space-x-1">
+          <div className="flex items-center space-x-1.5">
+            {createdBadgeText && (
+              <span className="text-[10px] text-slate-400 flex items-center space-x-1 mr-1">
+                <Clock className="w-3 h-3 text-blue-400" />
+                <span>{createdBadgeText}</span>
+              </span>
+            )}
             {prog.sources.map((src) => (
               <span
                 key={src.id}
@@ -108,10 +152,11 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-blue-400 font-medium pt-1">
-        <span>공고 상세보기</span>
+      <div className="flex items-center justify-between text-xs text-blue-400 font-medium pt-1 relative z-10">
+        <span>공고 상세 리포트</span>
         <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
       </div>
     </div>
   );
 };
+
