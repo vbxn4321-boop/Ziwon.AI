@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processPendingDocumentsPipeline } from "@/lib/pipeline/document-processor";
 
-export const maxDuration = 60; // Max execution time for Vercel Serverless Function
+export const maxDuration = 15; // Safe maxDuration for Vercel Hobby Tier
 
 export async function POST(req: NextRequest) {
   try {
