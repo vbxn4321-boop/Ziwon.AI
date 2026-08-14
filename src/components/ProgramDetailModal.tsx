@@ -22,12 +22,25 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
       const res = await fetch(`/api/support-programs/${selectedProgram.id}/analyze`, {
         method: "POST",
       });
-      const json = await res.json();
-      if (json.success && json.analysis) {
-        setLiveAnalysis(json.analysis);
+
+      const rawText = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        json = null;
       }
-    } catch (err) {
-      console.error("Live AI analysis failed:", err);
+
+      if (json && json.success && json.analysis) {
+        setLiveAnalysis(json.analysis);
+      } else if (json && json.error) {
+        console.warn("API returned error message:", json.error);
+        alert(`AI 분석 결과: ${json.error}`);
+      } else {
+        console.warn("Unparsed response:", rawText.slice(0, 150));
+      }
+    } catch (err: any) {
+      console.error("Live AI analysis request error:", err.message || err);
     } finally {
       setIsAnalyzing(false);
     }
