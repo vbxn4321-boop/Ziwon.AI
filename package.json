@@ -13,11 +13,17 @@
     "test:collector": "tsx scripts/test-collector.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.17.1",
     "@prisma/client": "^6.3.0",
+    "@types/adm-zip": "^0.5.8",
+    "@types/pdf-parse": "^1.1.5",
+    "adm-zip": "^0.6.0",
     "clsx": "^2.1.1",
     "fast-xml-parser": "^4.5.1",
     "lucide-react": "^0.475.0",
+    "mammoth": "^1.12.1",
     "next": "^15.1.8",
+    "pdf-parse": "^2.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1",
