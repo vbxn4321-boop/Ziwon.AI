@@ -15,8 +15,16 @@ import {
   Calendar,
   Layers,
   AlertTriangle,
-  Building2,
   FileCheck,
+  Eye,
+  Search,
+  Copy,
+  Check,
+  FileCode,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { SupportProgram } from "./ProgramCard";
 
@@ -31,12 +39,17 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   onClose,
   onAnalysisComplete,
 }) => {
-  // Main view is default to AI Analysis ("ai")
-  const [activeTab, setActiveTab] = useState<"ai" | "docs" | "sources">("ai");
+  // Main tabs: AI Analysis ("ai"), Document Viewer ("viewer"), Attachments ("docs"), Official Sources ("sources")
+  const [activeTab, setActiveTab] = useState<"ai" | "viewer" | "docs" | "sources">("ai");
+  const [isMaximized, setIsMaximized] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [programDocs, setProgramDocs] = useState<any[]>(selectedProgram.documents || []);
+  const [selectedDocIndex, setSelectedDocIndex] = useState<number>(0);
+  const [showHwpText, setShowHwpText] = useState(false);
+  const [viewerSearchQuery, setViewerSearchQuery] = useState<string>("");
+  const [isCopied, setIsCopied] = useState(false);
   const [liveAnalysis, setLiveAnalysis] = useState<any>(
     selectedProgram.analyses && selectedProgram.analyses.length > 0 ? selectedProgram.analyses[0] : null
   );
@@ -52,6 +65,27 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
       return null;
     }
   }, [liveAnalysis]);
+
+  // Prioritize PDF documents first so PDF is shown by default in the viewer
+  const sortedDocs = useMemo(() => {
+    return [...programDocs].sort((a, b) => {
+      const aIsPdf = a.fileType?.toUpperCase() === "PDF" || a.fileName?.toLowerCase().endsWith(".pdf");
+      const bIsPdf = b.fileType?.toUpperCase() === "PDF" || b.fileName?.toLowerCase().endsWith(".pdf");
+      if (aIsPdf && !bIsPdf) return -1;
+      if (!aIsPdf && bIsPdf) return 1;
+      return 0;
+    });
+  }, [programDocs]);
+
+  // Current selected document in viewer
+  const currentDoc = sortedDocs[selectedDocIndex] || sortedDocs[0] || null;
+  const isCurrentPdf =
+    currentDoc?.fileType?.toUpperCase() === "PDF" || currentDoc?.fileName?.toLowerCase().endsWith(".pdf");
+
+  // First PDF document index in sortedDocs (which is always 0 if any PDF exists)
+  const firstPdfIndex = sortedDocs.findIndex(
+    (d) => d.fileType?.toUpperCase() === "PDF" || d.fileName?.toLowerCase().endsWith(".pdf")
+  );
 
   // Fetch updated direct download links when modal opens
   useEffect(() => {
@@ -114,11 +148,24 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
     }
   };
 
+  const handleCopyText = (text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="glass-panel w-full max-w-3xl max-h-[88vh] rounded-3xl overflow-hidden flex flex-col border border-slate-700/80 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-all">
+      <div
+        className={`glass-panel w-full transition-all duration-200 overflow-hidden flex flex-col border border-slate-700/80 shadow-2xl ${
+          isMaximized
+            ? "max-w-[98vw] h-[96vh] rounded-2xl"
+            : "max-w-4xl max-h-[90vh] rounded-3xl"
+        }`}
+      >
         {/* Modal Header */}
-        <div className="p-6 border-b border-slate-800 flex items-start justify-between gap-4">
+        <div className="p-5 sm:p-6 border-b border-slate-800 flex items-start justify-between gap-4 flex-shrink-0">
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -134,22 +181,33 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                 </span>
               )}
             </div>
-            <h2 className="text-xl font-bold text-slate-100">{selectedProgram.title}</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-100">{selectedProgram.title}</h2>
             <p className="text-xs text-slate-400">주관기관: {selectedProgram.organizer}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center space-x-1.5 flex-shrink-0">
+            {/* Maximize / Minimize Toggle Button */}
+            <button
+              onClick={() => setIsMaximized((prev) => !prev)}
+              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors"
+              title={isMaximized ? "기본 크기로 축소" : "전체화면으로 크게 보기"}
+            >
+              {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Modal Tab Nav - AI Analysis as Main Default */}
-        <div className="flex border-b border-slate-800 bg-slate-900/60 px-6 text-xs font-medium space-x-6">
+        {/* Modal Tab Nav - AI Analysis & Notice Viewer as Main Tabs */}
+        <div className="flex border-b border-slate-800 bg-slate-900/60 px-6 text-xs font-medium space-x-6 overflow-x-auto flex-shrink-0">
           <button
             onClick={() => setActiveTab("ai")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === "ai"
                 ? "border-indigo-500 text-indigo-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
@@ -159,34 +217,45 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
             <span>AI 공고 심층 분석</span>
           </button>
           <button
+            onClick={() => setActiveTab("viewer")}
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === "viewer"
+                ? "border-blue-500 text-blue-400 font-bold"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5 text-blue-400" />
+            <span>공고문 뷰어 ({sortedDocs.length})</span>
+          </button>
+          <button
             onClick={() => setActiveTab("docs")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === "docs"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>첨부 서류 및 다운로드 ({programDocs.length})</span>
+            <span>첨부 서류 ({sortedDocs.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("sources")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 whitespace-nowrap ${
               activeTab === "sources"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span>공식 원문 출처 ({selectedProgram.sources.length})</span>
+            <span>원문 출처 ({selectedProgram.sources.length})</span>
           </button>
         </div>
 
         {/* Modal Body Content */}
-        <div className="p-6 overflow-y-auto space-y-4 text-sm flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-sm flex-1 flex flex-col">
           {/* 1. Main Tab: AI Deep Analysis */}
           {activeTab === "ai" && (
-            <div className="space-y-4 text-xs">
+            <div className="space-y-4 text-xs flex-1">
               {/* Error Notice Banner if any */}
               {analysisError && (
                 <div className="bg-rose-950/40 border border-rose-500/40 p-4 rounded-2xl flex items-center justify-between gap-3 text-rose-300">
@@ -212,7 +281,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       <Sparkles className="w-5 h-5 text-indigo-400" />
                       <div>
                         <h3 className="font-bold text-sm text-indigo-200">
-                          Gemini 3.6 Flash 공고 구조화 분석 결과
+                          Gemini AI 공고 구조화 분석 결과
                         </h3>
                         <p className="text-[11px] text-slate-400">
                           공고문 전문 및 첨부 문서를 정밀 분석한 구조화 리포트입니다.
@@ -220,14 +289,23 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       </div>
                     </div>
 
-                    <button
-                      onClick={handleRunLiveAnalysis}
-                      disabled={isAnalyzing}
-                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center space-x-1.5 disabled:opacity-50"
-                    >
-                      <Sparkles className={`w-3.5 h-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
-                      <span>{isAnalyzing ? "실시간 분석 중..." : "AI 재분석 실행"}</span>
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setActiveTab("viewer")}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center space-x-1.5"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-blue-400" />
+                        <span>공고문 원문 보기</span>
+                      </button>
+                      <button
+                        onClick={handleRunLiveAnalysis}
+                        disabled={isAnalyzing}
+                        className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center space-x-1.5 disabled:opacity-50"
+                      >
+                        <Sparkles className={`w-3.5 h-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
+                        <span>{isAnalyzing ? "실시간 분석 중..." : "AI 재분석 실행"}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* 3 Sentences Executive Summary */}
@@ -457,7 +535,202 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
             </div>
           )}
 
-          {/* 2. Documents & Download Tab */}
+          {/* 2. Notice Document Viewer (Prioritizes PDF, Direct Download for HWP) */}
+          {activeTab === "viewer" && (
+            <div className="space-y-3 flex flex-col flex-1 min-h-[480px]">
+              {sortedDocs.length === 0 ? (
+                <div className="bg-slate-900/60 p-8 rounded-2xl border border-slate-800 text-center space-y-3 my-auto">
+                  <FileText className="w-8 h-8 text-slate-500 mx-auto" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-300">열람 가능한 첨부 문서가 없습니다.</p>
+                    <p className="text-xs text-slate-500">본 공고의 첨부파일 링크를 동기화해 보세요.</p>
+                  </div>
+                  <button
+                    onClick={fetchLatestProgramDetails}
+                    className="px-3.5 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-colors inline-flex items-center space-x-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>첨부파일 검색 및 동기화</span>
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* File Selector Tabs (PDF listed first) */}
+                  <div className="flex items-center justify-between flex-wrap gap-2 pb-1 flex-shrink-0">
+                    <div className="flex items-center space-x-1.5 overflow-x-auto max-w-full pb-1">
+                      {sortedDocs.map((doc, idx) => {
+                        const isSelected = selectedDocIndex === idx;
+                        const isPdf =
+                          doc.fileType?.toUpperCase() === "PDF" || doc.fileName?.toLowerCase().endsWith(".pdf");
+                        return (
+                          <button
+                            key={doc.id || idx}
+                            onClick={() => {
+                              setSelectedDocIndex(idx);
+                              setShowHwpText(false);
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+                              isSelected
+                                ? isPdf
+                                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                                  : "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                                : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
+                            }`}
+                          >
+                            <span
+                              className={`text-[10px] px-1 py-0.2 rounded font-bold ${
+                                isPdf ? "bg-blue-900/60 text-blue-200" : "bg-purple-900/60 text-purple-200"
+                              }`}
+                            >
+                              {isPdf ? "PDF 공고문" : "HWP 서식"}
+                            </span>
+                            <span className="truncate max-w-[180px]">{doc.fileName}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Viewer Controls Toolbar */}
+                    {currentDoc && (
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        {isCurrentPdf && (
+                          <a
+                            href={`/api/download?url=${encodeURIComponent(
+                              currentDoc.fileUrl
+                            )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors flex items-center space-x-1 text-xs"
+                            title="새 창으로 크게 열기"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                            <span className="text-[11px] hidden sm:inline">새 창 열기</span>
+                          </a>
+                        )}
+
+                        <a
+                          href={`/api/download?url=${encodeURIComponent(currentDoc.fileUrl)}&filename=${encodeURIComponent(
+                            currentDoc.fileName
+                          )}`}
+                          download={currentDoc.fileName}
+                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors flex items-center space-x-1.5 shadow-md shadow-blue-600/20"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">다운로드</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Viewer Content Area */}
+                  {currentDoc && (
+                    <div className="flex-1 bg-slate-950/70 rounded-2xl border border-slate-800 overflow-hidden flex flex-col min-h-[480px]">
+                      {isCurrentPdf ? (
+                        /* 1. PDF Documents: Full Viewport PDF Viewer */
+                        <div className="w-full h-full flex-1 flex flex-col min-h-[520px]">
+                          <iframe
+                            src={`/api/download?url=${encodeURIComponent(
+                              currentDoc.fileUrl
+                            )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                            className="w-full h-full flex-1 border-0 rounded-2xl bg-slate-900 min-h-[520px]"
+                            title={currentDoc.fileName}
+                          />
+                        </div>
+                      ) : (
+                        /* 2. HWP / HWPX / Other Forms: Download-First Action Card */
+                        <div className="flex flex-col flex-1 p-6 sm:p-8 items-center justify-center text-center space-y-5 my-auto">
+                          <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-xl shadow-purple-500/10">
+                            <FileCode className="w-12 h-12" />
+                          </div>
+
+                          <div className="space-y-1.5 max-w-md">
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                              {currentDoc.fileType || "HWP"} 신청 서식 파일
+                            </span>
+                            <h3 className="text-base font-bold text-slate-100 break-all pt-1">
+                              {currentDoc.fileName}
+                            </h3>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                              한글(HWP/HWPX) 파일은 직접 작성하고 편집하는 공식 제출 서식입니다.
+                              아래 다운로드 버튼을 눌러 원본 파일을 작성하세요.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                            <a
+                              href={`/api/download?url=${encodeURIComponent(
+                                currentDoc.fileUrl
+                              )}&filename=${encodeURIComponent(currentDoc.fileName)}`}
+                              download={currentDoc.fileName}
+                              className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all shadow-lg shadow-purple-600/30 flex items-center space-x-2"
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>{currentDoc.fileType || "한글"} 서식 파일 다운로드</span>
+                            </a>
+
+                            {firstPdfIndex !== -1 && (
+                              <button
+                                onClick={() => setSelectedDocIndex(firstPdfIndex)}
+                                className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition-colors flex items-center space-x-1.5"
+                              >
+                                <Eye className="w-4 h-4 text-blue-400" />
+                                <span>공고문(PDF) 원본 보기</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Optional parsed text preview accordion */}
+                          {currentDoc.extractedText && currentDoc.extractedText.length > 50 && (
+                            <div className="w-full max-w-2xl pt-4 border-t border-slate-800/80 text-left">
+                              <button
+                                onClick={() => setShowHwpText((prev) => !prev)}
+                                className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 p-2 rounded-lg bg-slate-900/60 border border-slate-800 transition-colors"
+                              >
+                                <span className="flex items-center space-x-1.5">
+                                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>파싱된 서식 텍스트 미리보기 ({currentDoc.extractedText.length.toLocaleString()}자)</span>
+                                </span>
+                                {showHwpText ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+
+                              {showHwpText && (
+                                <div className="mt-2 p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] text-slate-500">서식 텍스트 내용</span>
+                                    <button
+                                      onClick={() => handleCopyText(currentDoc.extractedText)}
+                                      className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center space-x-1"
+                                    >
+                                      {isCopied ? (
+                                        <>
+                                          <Check className="w-3 h-3 text-emerald-400" />
+                                          <span className="text-emerald-400">복사됨!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-3 h-3" />
+                                          <span>텍스트 복사</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap select-text">
+                                    {currentDoc.extractedText}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* 3. Documents & Download Tab */}
           {activeTab === "docs" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -472,7 +745,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                 )}
               </div>
 
-              {programDocs.length === 0 ? (
+              {sortedDocs.length === 0 ? (
                 <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 text-center space-y-2">
                   <p className="text-xs text-slate-400">등록된 첨부 문서 파일이 아직 없습니다.</p>
                   <button
@@ -484,7 +757,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   </button>
                 </div>
               ) : (
-                programDocs.map((doc) => {
+                sortedDocs.map((doc, idx) => {
                   const isDirectDownload =
                     doc.fileUrl &&
                     (doc.fileUrl.includes("fileDown.do") ||
@@ -497,20 +770,33 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       )}`
                     : doc.fileUrl;
 
+                  const isPdf =
+                    doc.fileType?.toUpperCase() === "PDF" || doc.fileName?.toLowerCase().endsWith(".pdf");
+
                   return (
                     <div
-                      key={doc.id}
+                      key={doc.id || idx}
                       className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between text-xs gap-3"
                     >
                       <div className="flex items-center space-x-3 overflow-hidden">
-                        <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex-shrink-0">
+                        <div
+                          className={`p-2 rounded-lg border flex-shrink-0 ${
+                            isPdf
+                              ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                              : "bg-purple-500/10 border-purple-500/20 text-purple-400"
+                          }`}
+                        >
                           <FileText className="w-4 h-4" />
                         </div>
                         <div className="space-y-0.5 truncate">
                           <div className="flex items-center space-x-2">
                             <span className="font-semibold text-slate-200 truncate">{doc.fileName}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                              {doc.fileType}
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                isPdf ? "bg-blue-900/60 text-blue-300" : "bg-purple-900/60 text-purple-300"
+                              }`}
+                            >
+                              {doc.fileType || (isPdf ? "PDF" : "HWP")}
                             </span>
                           </div>
                           {doc.extractedText && doc.extractedText.length > 50 && (
@@ -522,26 +808,45 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {isDirectDownload ? (
-                        <a
-                          href={downloadHref}
-                          download={doc.fileName}
-                          className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-md shadow-blue-600/20 flex items-center space-x-1.5 flex-shrink-0"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>파일 다운로드</span>
-                        </a>
-                      ) : (
-                        <a
-                          href={doc.fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center space-x-1.5 flex-shrink-0"
-                        >
-                          <span>공고 페이지 열기</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      )}
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        {isPdf && (
+                          <button
+                            onClick={() => {
+                              setSelectedDocIndex(idx);
+                              setActiveTab("viewer");
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center space-x-1"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-blue-400" />
+                            <span>뷰어로 보기</span>
+                          </button>
+                        )}
+
+                        {isDirectDownload ? (
+                          <a
+                            href={downloadHref}
+                            download={doc.fileName}
+                            className={`px-3.5 py-1.5 rounded-lg text-white font-bold transition-all shadow-md flex items-center space-x-1.5 ${
+                              isPdf
+                                ? "bg-blue-600 hover:bg-blue-500 shadow-blue-600/20"
+                                : "bg-purple-600 hover:bg-purple-500 shadow-purple-600/20"
+                            }`}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>다운로드</span>
+                          </a>
+                        ) : (
+                          <a
+                            href={doc.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center space-x-1.5"
+                          >
+                            <span>공고 링크</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -549,7 +854,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
             </div>
           )}
 
-          {/* 3. Official Source Portals Tab */}
+          {/* 4. Official Source Portals Tab */}
           {activeTab === "sources" && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">

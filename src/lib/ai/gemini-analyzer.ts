@@ -47,7 +47,19 @@ function cleanJsonString(str: string): string {
 }
 
 /**
- * Analyze Support Program Notice Document using Gemini 3.6 Flash AI
+ * Tiered Cascade Candidate Models (Ordered from Highest Quality to Lighter Fallbacks)
+ */
+const CASCADE_MODELS = [
+  process.env.AI_GENERAL_MODEL || "gemini-3.7-flash",
+  "gemini-3.7-flash",
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-flash-latest",
+  "gemini-3.6-flash",
+];
+
+/**
+ * Analyze Support Program Notice Document using Gemini AI with Adaptive Tiered Cascade Fallback
  */
 export async function analyzeProgramWithGemini(
   programTitle: string,
@@ -56,11 +68,13 @@ export async function analyzeProgramWithGemini(
 ): Promise<ProgramAnalysisResult> {
   const apiKey = process.env.GEMINI_API_KEY || "";
   if (!apiKey) {
-    throw new Error("AI 분석 API 키가 설정되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+    throw new Error("AI 분석 API 키(GEMINI_API_KEY)가 설정되지 않았습니다. 환경 변수를 확인해 주세요.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelName = process.env.AI_GENERAL_MODEL || "gemini-3.6-flash";
+
+  // Deduplicated candidate cascade models
+  const candidateModels = CASCADE_MODELS.filter((v, i, a) => a.indexOf(v) === i && !!v);
 
   const prompt = `
 [역할]
@@ -133,19 +147,38 @@ ${documentText.slice(0, 60000)}
 }
 `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-    });
+  let lastError: any = null;
 
-    const responseText = response.text || "";
-    const jsonStr = cleanJsonString(responseText);
-    const parsed = JSON.parse(jsonStr) as ProgramAnalysisResult;
+  for (let i = 0; i < candidateModels.length; i++) {
+    const modelName = candidateModels[i];
+    try {
+      console.log(`🤖 [Gemini Cascade Tier ${i + 1}/${candidateModels.length}] Requesting model: ${modelName}`);
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: prompt,
+      });
 
-    return parsed;
-  } catch (error: any) {
-    console.error("Gemini AI Analysis Error:", error.message);
-    throw new Error("AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      const responseText = response.text || "";
+      const jsonStr = cleanJsonString(responseText);
+      const parsed = JSON.parse(jsonStr) as ProgramAnalysisResult;
+
+      console.log(`✅ [Gemini Cascade] Tier ${i + 1} (${modelName}) succeeded!`);
+      return parsed;
+    } catch (error: any) {
+      console.warn(
+        `⚠️ [Gemini Cascade Tier ${i + 1} Failed] ${modelName}: ${
+          error.message?.slice(0, 120) || error
+        }. Cascading to next tier...`
+      );
+      lastError = error;
+      // Loop continues to next tier automatically
+    }
   }
+
+  // If all candidate models failed
+  console.error("Gemini AI Analysis Error (all cascade models failed):", lastError?.message);
+  if (lastError?.message?.includes("429") || lastError?.message?.includes("quota")) {
+    throw new Error("AI API 일일/분당 호출 한도(Rate Limit)에 도달했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  throw new Error("AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.");
 }
