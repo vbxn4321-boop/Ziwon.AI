@@ -32,10 +32,16 @@ export async function GET(
       );
     }
 
-    // Auto-resolve real binary attachment links if missing or pointing to webpage URL
+    // Auto-resolve real binary attachment links if missing, pointing to webpage URL, or having corrupted text
     const needsScraping =
       program.documents.length === 0 ||
-      program.documents.some((d) => d.fileUrl.includes("selectSIIA200Detail") || d.fileUrl.includes("k-startup.go.kr"));
+      program.documents.some(
+        (d) =>
+          d.fileUrl.includes("selectSIIA200Detail") ||
+          d.fileUrl.includes("k-startup.go.kr") ||
+          (d.extractedText && d.extractedText.includes("html lang style")) ||
+          (d.extractedText && d.extractedText.includes(".basic-btn"))
+      );
 
     if (needsScraping && program.sources.length > 0) {
       try {

@@ -1,5 +1,7 @@
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
+import * as CFB from "cfb";
+import zlib from "zlib";
 import path from "path";
 import { pathToFileURL } from "url";
 
@@ -7,13 +9,14 @@ let isWorkerConfigured = false;
 function ensurePdfWorkerConfigured(PDFParse: any) {
   if (isWorkerConfigured) return;
   try {
-    const workerPath = path.resolve(process.cwd(), "node_modules/pdfjs-dist/build/pdf.worker.mjs");
+    const workerPath = path.resolve(process.cwd(), "node_modules/pdf-parse/dist/pdf-parse/web/pdf.worker.mjs");
     const fileUrl = pathToFileURL(workerPath).href;
     PDFParse.setWorker(fileUrl);
     isWorkerConfigured = true;
   } catch (err: any) {
     try {
-      PDFParse.setWorker("https://cdn.jsdelivr.net/npm/pdf-parse@latest/dist/pdf-parse/web/pdf.worker.mjs");
+      const fallbackPath = path.resolve(process.cwd(), "node_modules/pdfjs-dist/build/pdf.worker.mjs");
+      PDFParse.setWorker(pathToFileURL(fallbackPath).href);
       isWorkerConfigured = true;
     } catch {}
   }
@@ -32,53 +35,158 @@ export function sanitizeUtf8(str: string): string {
 
 /**
  * Extract plain text from HWPX (ZIP-compressed XML format)
+ * Preserves paragraph breaks (<hp:p>) and text blocks (<hp:t>)
  */
-function extractTextFromHWPX(buffer: Buffer): string {
+export function extractTextFromHWPX(buffer: Buffer): string {
   try {
     const zip = new AdmZip(buffer);
     const zipEntries = zip.getEntries();
     let fullText = "";
 
-    // Search for section XML files in contents/ or Contents/ directory
     for (const entry of zipEntries) {
-      if (entry.entryName.toLowerCase().includes("section") && entry.entryName.endsWith(".xml")) {
-        const xmlContent = entry.getData().toString("utf-8");
-        // Extract text nodes between XML tags
-        const cleanedText = xmlContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-        fullText += cleanedText + "\n\n";
+      const name = entry.entryName.toLowerCase();
+      if ((name.includes("section") || name.includes("content") || name.includes("header")) && name.endsWith(".xml")) {
+        const xml = entry.getData().toString("utf-8");
+        // Extract paragraph <hp:p> and text <hp:t> or <hh:t>
+        const paragraphs = xml.match(/<h[p|h]:p[\s\S]*?<\/h[p|h]:p>/gi) || [xml];
+        for (const p of paragraphs) {
+          const tMatches = [...p.matchAll(/<h[p|h]:t[^>]*>([\s\S]*?)<\/h[p|h]:t>/gi)];
+          if (tMatches.length > 0) {
+            const line = tMatches
+              .map((m) => m[1].replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"))
+              .join(" ")
+              .trim();
+            if (line) fullText += line + "\n";
+          }
+        }
       }
     }
 
     return sanitizeUtf8(fullText);
-  } catch {
+  } catch (err: any) {
     return "";
   }
 }
 
 /**
- * Text extraction for binary HWP (OLE5) streams
+ * High-accuracy binary HWP 5.0 (OLE5 CFBF Compound Document) Text Extractor
+ * Decompresses Section streams using zlib, skips extended control binary headers,
+ * and decodes clean UTF-16LE Korean & ASCII text without garbage tokens.
  */
-function extractTextFromHWP(buffer: Buffer): string {
+export function extractTextFromHWP(buffer: Buffer): string {
   try {
-    // Attempt HWPX ZIP extraction first if file happens to be HWPX renamed to HWP
-    const textFromHWPX = extractTextFromHWPX(buffer);
-    if (textFromHWPX && textFromHWPX.length > 50) {
-      return textFromHWPX;
+    // 1. If HWP file is actually an HWPX (ZIP) with .hwp extension
+    const hwpxAttempt = extractTextFromHWPX(buffer);
+    if (hwpxAttempt && hwpxAttempt.length > 50) {
+      return hwpxAttempt;
     }
 
-    // Extract printable Korean/ASCII text strings from binary stream
-    const rawStr = buffer.toString("utf-8");
-    const matches = rawStr.match(/[가-힣0-9a-zA-Z\s,.():~%\-·\[\]<>/&_]{4,}/g);
-    if (matches && matches.length > 0) {
-      const filtered = matches
-        .map((m) => m.trim())
-        .filter((m) => m.length >= 4 && /[가-힣]/.test(m)); // Must contain Korean hangul
-      return sanitizeUtf8(filtered.join("\n").replace(/\s+/g, " "));
+    // 2. Parse OLE Compound Document
+    const cfb = CFB.read(buffer, { type: "buffer" });
+    const sectionEntries = cfb.FileIndex.filter((entry) =>
+      entry.name.includes("BodyText/Section") || entry.name.includes("Section")
+    );
+
+    if (sectionEntries.length === 0) {
+      return "";
     }
+
+    let fullText = "";
+
+    for (const entry of sectionEntries) {
+      if (!entry.content || entry.content.length === 0) continue;
+
+      const rawBuf = Buffer.from(entry.content);
+      let decompressed: Buffer;
+
+      try {
+        decompressed = zlib.inflateRawSync(rawBuf);
+      } catch {
+        try {
+          decompressed = zlib.inflateSync(rawBuf);
+        } catch {
+          decompressed = rawBuf;
+        }
+      }
+
+      // Parse HWP 5.0 Paragraph records from decompressed buffer
+      let text = "";
+      let offset = 0;
+
+      while (offset + 4 <= decompressed.length) {
+        const header = decompressed.readUInt32LE(offset);
+        offset += 4;
+
+        const tagId = header & 0x3ff;
+        let size = (header >> 20) & 0xfff;
+
+        if (size === 0xfff) {
+          if (offset + 4 <= decompressed.length) {
+            size = decompressed.readUInt32LE(offset);
+            offset += 4;
+          }
+        }
+
+        if (offset + size > decompressed.length) {
+          break;
+        }
+
+        // Tag ID 67: HWPTAG_PARA_TEXT (Paragraph text content in UTF-16LE)
+        if (tagId === 67) {
+          const textBuf = decompressed.slice(offset, offset + size);
+          let paraText = "";
+          let i = 0;
+
+          while (i < textBuf.length - 1) {
+            const charCode = textBuf.readUInt16LE(i);
+            i += 2;
+
+            if (charCode === 10 || charCode === 13) {
+              paraText += "\n";
+            } else if (charCode === 9) {
+              paraText += "  ";
+            } else if (charCode < 32) {
+              // Skip 12 words (24 bytes) of extended control properties
+              i += 24;
+              continue;
+            } else {
+              // Accept only valid Hangul, ASCII, Numbers, and Korean special punctuation & symbols
+              const isHangul =
+                (charCode >= 0xac00 && charCode <= 0xd7af) ||
+                (charCode >= 0x3130 && charCode <= 0x318f) ||
+                (charCode >= 0x1100 && charCode <= 0x11ff);
+              const isAscii = charCode >= 0x20 && charCode <= 0x7e;
+              const isPunctuation =
+                (charCode >= 0x2000 && charCode <= 0x206f) ||
+                (charCode >= 0x2190 && charCode <= 0x26ff) ||
+                (charCode >= 0x3000 && charCode <= 0x303f) ||
+                (charCode >= 0x3200 && charCode <= 0x33ff) ||
+                (charCode >= 0xff00 && charCode <= 0xffef);
+
+              if (isHangul || isAscii || isPunctuation) {
+                paraText += String.fromCharCode(charCode);
+              }
+            }
+          }
+
+          const cleanedLine = paraText.replace(/[\r\n]+/g, "\n").trim();
+          if (cleanedLine) {
+            text += cleanedLine + "\n";
+          }
+        }
+
+        offset += size;
+      }
+
+      if (text) {
+        fullText += text + "\n";
+      }
+    }
+
+    return sanitizeUtf8(fullText);
   } catch (err: any) {
-    console.error("HWP stream extraction fallback error:", err.message);
+    return "";
   }
-  return "";
 }
 
 /**
@@ -135,7 +243,6 @@ export async function extractTextFromBuffer(buffer: Buffer, fileTypeOrName: stri
 
 /**
  * Download document from URL and extract text.
- * Automatically resolves direct binary download links (fileDown.do / .pdf / .hwp) if fileUrl points to an HTML notice webpage.
  */
 export async function extractTextFromUrl(fileUrl: string, fileType: string): Promise<string> {
   try {
@@ -143,8 +250,9 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Referer: "https://www.bizinfo.go.kr",
       },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!res.ok) {
@@ -156,107 +264,15 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
 
     // Detect if fetched URL returned an HTML Webpage instead of binary document
     const textHeader = buffer.slice(0, 150).toString("utf-8").toLowerCase();
-    const isHtmlPage =
-      textHeader.includes("<html") ||
-      textHeader.includes("<!doctype") ||
-      textHeader.includes("<head") ||
-      textHeader.includes("<body");
+    const isHtmlPage = textHeader.includes("<html") || textHeader.includes("<!doctype");
 
     if (isHtmlPage) {
-      const htmlContent = buffer.toString("utf-8");
-      const urlObj = new URL(fileUrl);
-
-      // 1. Search for actual binary file download links in HTML page (e.g., /cmm/fms/fileDown.do, FileDown.do, direct files)
-      const linkMatches = [
-        ...htmlContent.matchAll(
-          /href=["']([^"']*(?:fileDown\.do|FileDown\.do|download\.do|\.pdf|\.hwp|\.hwpx|\.docx)[^"']*)["']/gi
-        ),
-      ];
-
-      // Also search for fileBlank onclick patterns: onclick="fileBlank('path', 'name')"
-      const fileBlankMatches = [
-        ...htmlContent.matchAll(/fileBlank\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi),
-      ];
-
-      const candidateLinks: string[] = [];
-
-      for (const m of linkMatches) {
-        let rawHref = m[1].replace(/&amp;/g, "&");
-        if (rawHref.startsWith("/")) {
-          rawHref = `${urlObj.origin}${rawHref}`;
-        } else if (!rawHref.startsWith("http")) {
-          rawHref = `${urlObj.origin}/${rawHref}`;
-        }
-        if (!candidateLinks.includes(rawHref)) candidateLinks.push(rawHref);
-      }
-
-      for (const m of fileBlankMatches) {
-        let path = m[1].trim();
-        if (path.startsWith("/")) {
-          path = `${urlObj.origin}${path}`;
-        } else if (!path.startsWith("http")) {
-          path = `${urlObj.origin}/${path}`;
-        }
-        if (!candidateLinks.includes(path)) candidateLinks.push(path);
-      }
-
-      // Prioritize PDF and HWP notices for main text extraction
-      const sortedCandidates = candidateLinks.sort((a, b) => {
-        const aPdf = a.toLowerCase().includes(".pdf") ? 1 : 0;
-        const bPdf = b.toLowerCase().includes(".pdf") ? 1 : 0;
-        return bPdf - aPdf;
-      });
-
-      for (const targetLink of sortedCandidates) {
-        console.log(`[Smart File Link Resolver] Resolving binary download link: ${targetLink}`);
-        try {
-          const binRes = await fetch(targetLink, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              Referer: fileUrl,
-            },
-            signal: AbortSignal.timeout(6000),
-          });
-
-          if (binRes.ok) {
-            const binArrayBuffer = await binRes.arrayBuffer();
-            const binBuffer = Buffer.from(binArrayBuffer);
-
-            const binHeader = binBuffer.slice(0, 100).toString("utf-8").toLowerCase();
-            if (!binHeader.includes("<html") && !binHeader.includes("<!doctype")) {
-              const contentDisp = binRes.headers.get("content-disposition") || "";
-              const detectedType = contentDisp.toLowerCase().includes(".pdf") || targetLink.toLowerCase().includes(".pdf")
-                ? "PDF"
-                : fileType;
-
-              const extracted = await extractTextFromBuffer(binBuffer, detectedType);
-              if (extracted && extracted.length > 50) {
-                console.log(`✅ [Smart Resolver] Successfully extracted ${extracted.length} chars from binary: ${targetLink}`);
-                return extracted;
-              }
-            }
-          }
-        } catch (binErr: any) {
-          console.warn("[Smart File Link Resolver] Binary download error:", binErr.message);
-        }
-      }
-
-      // 2. Fallback: Extract main notice content text directly from Webpage HTML DOM
-      const cleanedHtmlText = htmlContent
-        .replace(/<script[\s\S]*?<\/script>/gi, " ")
-        .replace(/<style[\s\S]*?<\/style>/gi, " ")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      return sanitizeUtf8(cleanedHtmlText);
+      return "";
     }
 
-    // Direct Binary Buffer Parsing
     return await extractTextFromBuffer(buffer, fileType);
-  } catch (err: any) {
-    console.error(`Error downloading and extracting ${fileUrl}:`, err.message);
+  } catch (error: any) {
+    console.error(`ExtractTextFromUrl error for ${fileUrl}:`, error.message);
     return "";
   }
 }

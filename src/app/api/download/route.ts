@@ -53,6 +53,10 @@ export async function GET(req: NextRequest) {
     if (fileName.toLowerCase().endsWith(".hwpx")) contentType = "application/hwp+zip";
     if (fileName.toLowerCase().endsWith(".docx")) contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+    // Determine Content-Disposition (inline for PDF viewer, attachment for download)
+    const isViewMode = searchParams.get("view") === "true" || searchParams.get("inline") === "true";
+    const dispositionType = isViewMode && contentType === "application/pdf" ? "inline" : "attachment";
+
     // Encode filename for RFC 5987 standard
     const encodedFileName = encodeURIComponent(fileName);
 
@@ -60,7 +64,7 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`,
+        "Content-Disposition": `${dispositionType}; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`,
         "Content-Length": buffer.length.toString(),
       },
     });
