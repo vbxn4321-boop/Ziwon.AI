@@ -1,7 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Info, ExternalLink, FileText, Sparkles, Download } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  X,
+  Info,
+  ExternalLink,
+  FileText,
+  Sparkles,
+  Download,
+  CheckCircle2,
+  RefreshCw,
+  Scale,
+  Award,
+  AlertOctagon,
+  Calendar,
+  Layers,
+} from "lucide-react";
 import { SupportProgram } from "./ProgramCard";
 
 interface ProgramDetailModalProps {
@@ -12,9 +26,38 @@ interface ProgramDetailModalProps {
 export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selectedProgram, onClose }) => {
   const [activeTab, setActiveTab] = useState<"overview" | "sources" | "docs" | "ai">("overview");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+  const [programDocs, setProgramDocs] = useState<any[]>(selectedProgram.documents || []);
   const [liveAnalysis, setLiveAnalysis] = useState<any>(
     selectedProgram.analyses && selectedProgram.analyses.length > 0 ? selectedProgram.analyses[0] : null
   );
+
+  // Fetch updated direct download links when modal opens
+  useEffect(() => {
+    fetchLatestProgramDetails();
+  }, [selectedProgram.id]);
+
+  const fetchLatestProgramDetails = async () => {
+    try {
+      setIsLoadingDocs(true);
+      const res = await fetch(`/api/support-programs/${selectedProgram.id}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          if (json.data.documents) {
+            setProgramDocs(json.data.documents);
+          }
+          if (json.data.analyses && json.data.analyses.length > 0) {
+            setLiveAnalysis(json.data.analyses[0]);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch latest program details:", err);
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  };
 
   const handleRunLiveAnalysis = async () => {
     setIsAnalyzing(true);
@@ -33,6 +76,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
 
       if (json && json.success && json.analysis) {
         setLiveAnalysis(json.analysis);
+        fetchLatestProgramDetails();
       } else if (json && json.error) {
         console.warn("API returned error message:", json.error);
         alert(`AI 분석 결과: ${json.error}`);
@@ -48,7 +92,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="glass-panel w-full max-w-3xl max-h-[85vh] rounded-3xl overflow-hidden flex flex-col border border-slate-700/80 shadow-2xl">
+      <div className="glass-panel w-full max-w-3xl max-h-[88vh] rounded-3xl overflow-hidden flex flex-col border border-slate-700/80 shadow-2xl">
         {/* Modal Header */}
         <div className="p-6 border-b border-slate-800 flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -75,43 +119,47 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
         <div className="flex border-b border-slate-800 bg-slate-900/60 px-6 text-xs font-medium space-x-6">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "overview"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+              activeTab === "overview"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-              }`}
+            }`}
           >
             <Info className="w-3.5 h-3.5" />
             <span>공고 개요</span>
           </button>
           <button
             onClick={() => setActiveTab("sources")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "sources"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+              activeTab === "sources"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-              }`}
+            }`}
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>원문 출처 ({selectedProgram.sources.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("docs")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "docs"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+              activeTab === "docs"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-              }`}
+            }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>첨부 서류 ({selectedProgram.documents.length})</span>
+            <span>첨부 서류 ({programDocs.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("ai")}
-            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${activeTab === "ai"
+            className={`py-3 border-b-2 transition-colors flex items-center space-x-1.5 ${
+              activeTab === "ai"
                 ? "border-blue-500 text-blue-400 font-bold"
                 : "border-transparent text-slate-400 hover:text-slate-200"
-              }`}
+            }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span>AI 공고 분석 캐시</span>
+            <span>AI 공고 심층 분석</span>
           </button>
         </div>
 
@@ -128,10 +176,11 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
                   <span className="text-slate-500 font-medium">접수기간</span>
                   <p className="text-slate-200 font-semibold text-xs">
                     {selectedProgram.startDate
-                      ? `${new Date(selectedProgram.startDate).toLocaleDateString()} ~ ${selectedProgram.endDate
-                        ? new Date(selectedProgram.endDate).toLocaleDateString()
-                        : "상시"
-                      }`
+                      ? `${new Date(selectedProgram.startDate).toLocaleDateString()} ~ ${
+                          selectedProgram.endDate
+                            ? new Date(selectedProgram.endDate).toLocaleDateString()
+                            : "상시"
+                        }`
                       : "공고문 참조"}
                   </p>
                 </div>
@@ -178,32 +227,91 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
 
           {activeTab === "docs" && (
             <div className="space-y-3">
-              {selectedProgram.documents.length === 0 ? (
-                <p className="text-xs text-slate-500 py-4 text-center">등록된 첨부 문서 파일이 없습니다.</p>
-              ) : (
-                selectedProgram.documents.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs"
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-400">
+                  공고에 첨부된 신청서식 및 공고문 파일을 직접 다운로드할 수 있습니다:
+                </p>
+                {isLoadingDocs && (
+                  <span className="text-[11px] text-blue-400 flex items-center space-x-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>다운로드 링크 동기화 중...</span>
+                  </span>
+                )}
+              </div>
+
+              {programDocs.length === 0 ? (
+                <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 text-center space-y-2">
+                  <p className="text-xs text-slate-400">등록된 첨부 문서 파일이 아직 없습니다.</p>
+                  <button
+                    onClick={fetchLatestProgramDetails}
+                    className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors inline-flex items-center space-x-1"
                   >
-                    <div className="flex items-center space-x-3">
-                      <FileText className="w-4 h-4 text-blue-400" />
-                      <span className="font-medium text-slate-200">{doc.fileName}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
-                        {doc.fileType}
-                      </span>
-                    </div>
-                    <a
-                      href={doc.fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 transition-colors flex items-center space-x-1.5"
+                    <RefreshCw className="w-3 h-3" />
+                    <span>첨부파일 검색 및 동기화</span>
+                  </button>
+                </div>
+              ) : (
+                programDocs.map((doc) => {
+                  const isDirectDownload =
+                    doc.fileUrl &&
+                    (doc.fileUrl.includes("fileDown.do") ||
+                      doc.fileUrl.includes("FileDown.do") ||
+                      doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip)$/i));
+
+                  const downloadHref = isDirectDownload
+                    ? `/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
+                        doc.fileName
+                      )}`
+                    : doc.fileUrl;
+
+                  return (
+                    <div
+                      key={doc.id}
+                      className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between text-xs gap-3"
                     >
-                      <span>공고 페이지에서 파일 다운로드</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                ))
+                      <div className="flex items-center space-x-3 overflow-hidden">
+                        <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex-shrink-0">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                        <div className="space-y-0.5 truncate">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-slate-200 truncate">{doc.fileName}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                              {doc.fileType}
+                            </span>
+                          </div>
+                          {doc.extractedText && doc.extractedText.length > 50 && (
+                            <div className="flex items-center space-x-1 text-[10px] text-emerald-400">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>AI 텍스트 분석 완료 ({doc.extractedText.length.toLocaleString()}자)</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {isDirectDownload ? (
+                        <a
+                          href={downloadHref}
+                          download={doc.fileName}
+                          className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-md shadow-blue-600/20 flex items-center space-x-1.5 flex-shrink-0"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>파일 다운로드</span>
+                        </a>
+                      ) : (
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center space-x-1.5 flex-shrink-0"
+                        >
+                          <span>공고 페이지 열기</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
@@ -214,9 +322,10 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
                 (() => {
                   let aiData: any = null;
                   try {
-                    aiData = typeof liveAnalysis.resultJson === "string"
-                      ? JSON.parse(liveAnalysis.resultJson)
-                      : liveAnalysis.resultJson;
+                    aiData =
+                      typeof liveAnalysis.resultJson === "string"
+                        ? JSON.parse(liveAnalysis.resultJson)
+                        : liveAnalysis.resultJson;
                   } catch (e) {
                     aiData = null;
                   }
@@ -236,8 +345,12 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
                         <div className="flex items-center space-x-2">
                           <Sparkles className="w-5 h-5 text-indigo-400" />
                           <div>
-                            <h3 className="font-bold text-sm text-indigo-200">Gemini 3.6 Flash 공고 구조화 분석 결과</h3>
-                            <p className="text-[11px] text-slate-400">AI가 공고문 원문을 요약 분석한 정규 리포트입니다.</p>
+                            <h3 className="font-bold text-sm text-indigo-200">
+                              Gemini 3.6 Flash 공고 구조화 분석 결과
+                            </h3>
+                            <p className="text-[11px] text-slate-400">
+                              공고문 전문 및 첨부 문서를 정밀 분석한 구조화 리포트입니다.
+                            </p>
                           </div>
                         </div>
 
@@ -247,139 +360,200 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
                           className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center space-x-1.5 disabled:opacity-50"
                         >
                           <Sparkles className={`w-3.5 h-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
-                          <span>{isAnalyzing ? "실시간 분석 요청 중..." : "AI 재분석 실행 (POST API)"}</span>
+                          <span>{isAnalyzing ? "실시간 분석 중..." : "AI 재분석 실행"}</span>
                         </button>
                       </div>
 
-                      {/* 3-Line Summary Report */}
-                      {aiData.summaryReport && (
-                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                          <h4 className="font-bold text-slate-300 flex items-center space-x-1.5 text-xs">
-                            <span>💡 핵심 요약 리포트</span>
+                      {/* 3 Sentences Executive Summary */}
+                      {aiData.summaryReport && Array.isArray(aiData.summaryReport) && (
+                        <div className="space-y-2">
+                          <h4 className="font-bold text-xs text-indigo-300 uppercase tracking-wider flex items-center space-x-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>핵심 요약 (3문장)</span>
                           </h4>
-                          <ul className="space-y-1.5 text-slate-300 pl-1">
-                            {aiData.summaryReport.map((line: string, i: number) => (
-                              <li key={i} className="flex items-start space-x-2">
-                                <span className="text-indigo-400 font-bold">•</span>
-                                <span className="leading-snug">{line}</span>
-                              </li>
+                          <div className="bg-indigo-950/20 p-4 rounded-xl border border-indigo-500/20 space-y-2">
+                            {aiData.summaryReport.map((sentence: string, idx: number) => (
+                              <div key={idx} className="flex items-start space-x-2 text-slate-200">
+                                <span className="font-bold text-indigo-400 text-xs mt-0.5">{idx + 1}.</span>
+                                <p className="leading-relaxed">{sentence}</p>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         </div>
                       )}
 
-                      {/* Grid Sections */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Target Eligibility */}
-                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                          <h4 className="font-bold text-blue-300 flex items-center space-x-1.5 text-xs">
-                            <span>🎯 지원자격 & 요건</span>
-                          </h4>
-                          <p className="text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-850">
+                      {/* Key Cards Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-1.5">
+                          <span className="text-slate-400 font-semibold flex items-center space-x-1">
+                            <span>🎯</span>
+                            <span>지원 자격 요건</span>
+                          </span>
+                          <p className="text-slate-200 text-xs leading-relaxed">
                             {aiData.targetEligibility?.summary || "공고문 참조"}
                           </p>
                         </div>
 
-                        {/* Budget & Amount */}
-                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                          <h4 className="font-bold text-emerald-300 flex items-center space-x-1.5 text-xs">
-                            <span>💰 지원규모 & 혜택</span>
-                          </h4>
-                          <p className="text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-850">
-                            {aiData.budgetAndAmount?.summary || selectedProgram.budget || "공고문 참조"}
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-1.5">
+                          <span className="text-slate-400 font-semibold flex items-center space-x-1">
+                            <span>💰</span>
+                            <span>지원 규모 및 자부담 비율</span>
+                          </span>
+                          <p className="text-blue-300 font-semibold text-xs leading-relaxed">
+                            {aiData.budgetAndAmount?.summary || "공고문 참조"}
                           </p>
                         </div>
-
-                        {/* Extra Points */}
-                        {aiData.extraPoints && (
-                          <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                            <h4 className="font-bold text-purple-300 flex items-center space-x-1.5 text-xs">
-                              <span>⭐ 우대사항 & 가점 항목</span>
-                            </h4>
-                            <p className="text-slate-400 text-[11px]">{aiData.extraPoints.summary}</p>
-                            {aiData.extraPoints.items && aiData.extraPoints.items.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 pt-1">
-                                {aiData.extraPoints.items.map((item: string, idx: number) => (
-                                  <span key={idx} className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[11px]">
-                                    + {item}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Excluded Conditions */}
-                        {aiData.excludedConditions && (
-                          <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                            <h4 className="font-bold text-red-300 flex items-center space-x-1.5 text-xs">
-                              <span>🚫 지원 제외 조건</span>
-                            </h4>
-                            <p className="text-slate-400 text-[11px]">{aiData.excludedConditions.summary}</p>
-                            {aiData.excludedConditions.items && aiData.excludedConditions.items.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 pt-1">
-                                {aiData.excludedConditions.items.map((item: string, idx: number) => (
-                                  <span key={idx} className="px-2 py-0.5 rounded-md bg-red-500/10 text-red-300 border border-red-500/20 text-[11px]">
-                                    ✕ {item}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
 
-                      {/* Required Documents */}
-                      {aiData.requiredDocuments && aiData.requiredDocuments.length > 0 && (
-                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2">
-                          <h4 className="font-bold text-amber-300 flex items-center space-x-1.5 text-xs">
-                            <span>📝 필수 제출 서류 목록</span>
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                            {aiData.requiredDocuments.map((docItem: string, idx: number) => (
-                              <div key={idx} className="bg-slate-950/60 px-3 py-2 rounded-xl border border-slate-800 text-slate-300 text-xs flex items-center space-x-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                                <span>{docItem}</span>
+                      {/* Evaluation & Review Criteria Section (NEW) */}
+                      <div className="bg-gradient-to-br from-slate-900 via-indigo-950/20 to-slate-900 p-4 rounded-2xl border border-indigo-500/30 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-indigo-300 font-bold text-xs flex items-center space-x-1.5">
+                            <Scale className="w-4 h-4 text-indigo-400" />
+                            <span>심사 및 검토·평가 기준</span>
+                          </span>
+                          {aiData.evaluationCriteria?.summary && (
+                            <span className="text-[11px] text-slate-400">
+                              {aiData.evaluationCriteria.summary}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Steps flow */}
+                        {aiData.evaluationCriteria?.steps && aiData.evaluationCriteria.steps.length > 0 && (
+                          <div className="flex items-center flex-wrap gap-2 pt-1 pb-1">
+                            {aiData.evaluationCriteria.steps.map((step: string, idx: number) => (
+                              <div key={idx} className="flex items-center space-x-1.5">
+                                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold text-[11px] flex items-center space-x-1">
+                                  <Layers className="w-3 h-3 text-indigo-400" />
+                                  <span>{step}</span>
+                                </span>
+                                {idx < aiData.evaluationCriteria.steps.length - 1 && (
+                                  <span className="text-slate-600 text-xs">➔</span>
+                                )}
                               </div>
                             ))}
                           </div>
+                        )}
+
+                        {/* Detailed evaluation items */}
+                        {aiData.evaluationCriteria?.items && aiData.evaluationCriteria.items.length > 0 ? (
+                          <ul className="list-disc list-inside space-y-1 text-slate-200 text-xs bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
+                            {aiData.evaluationCriteria.items.map((item: string, idx: number) => (
+                              <li key={idx} className="leading-relaxed">
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-slate-400 text-xs">
+                            {aiData.evaluationCriteria?.summary || "공고문 내 평가 세부 기준표 참조"}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Extra Points / Priority Selection & Exclusions */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-emerald-950/20 p-4 rounded-xl border border-emerald-500/20 space-y-2">
+                          <div className="flex items-center space-x-1.5">
+                            <Award className="w-4 h-4 text-emerald-400" />
+                            <span className="text-emerald-400 font-bold text-xs">가점 및 우선선정·우대 요건</span>
+                          </div>
+                          {aiData.extraPoints?.items && aiData.extraPoints.items.length > 0 ? (
+                            <ul className="list-disc list-inside space-y-1 text-emerald-200/90 text-xs">
+                              {aiData.extraPoints.items.map((pt: string, idx: number) => (
+                                <li key={idx} className="leading-relaxed">
+                                  {pt}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-slate-400 text-xs">
+                              {aiData.extraPoints?.summary || "별도 가점/우대 항목 없음"}
+                            </p>
+                          )}
+                          {aiData.extraPoints?.summary && aiData.extraPoints.items?.length > 0 && (
+                            <p className="text-[11px] text-emerald-400/80 border-t border-emerald-500/20 pt-1.5">
+                              💡 {aiData.extraPoints.summary}
+                            </p>
+                          )}
                         </div>
-                      )}
+
+                        <div className="bg-rose-950/20 p-4 rounded-xl border border-rose-500/20 space-y-2">
+                          <div className="flex items-center space-x-1.5">
+                            <AlertOctagon className="w-4 h-4 text-rose-400" />
+                            <span className="text-rose-400 font-bold text-xs">지원 제외 및 결격 요건</span>
+                          </div>
+                          {aiData.excludedConditions?.items && aiData.excludedConditions.items.length > 0 ? (
+                            <ul className="list-disc list-inside space-y-1 text-rose-200/90 text-xs">
+                              {aiData.excludedConditions.items.map((cond: string, idx: number) => (
+                                <li key={idx} className="leading-relaxed">
+                                  {cond}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-slate-400 text-xs">
+                              {aiData.excludedConditions?.summary || "공고문 세부 유의사항 참조"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Schedule & Documents */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-1.5">
+                          <span className="text-slate-400 font-semibold flex items-center space-x-1">
+                            <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                            <span>접수 일정 및 방법</span>
+                          </span>
+                          <p className="text-slate-200 text-xs leading-relaxed">
+                            {aiData.keySchedule?.summary || "공고문 참조"}
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-1.5">
+                          <span className="text-slate-400 font-semibold flex items-center space-x-1">
+                            <span>📑</span>
+                            <span>필수 제출 서류</span>
+                          </span>
+                          {aiData.requiredDocuments && aiData.requiredDocuments.length > 0 ? (
+                            <ul className="list-disc list-inside space-y-1 text-slate-300 text-xs">
+                              {aiData.requiredDocuments.map((doc: string, idx: number) => (
+                                <li key={idx} className="truncate">
+                                  {doc}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-slate-400 text-xs">공고문 참조</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   );
                 })()
               ) : (
-                <div className="bg-indigo-950/30 border border-indigo-500/20 p-6 rounded-2xl space-y-4 text-xs text-center">
-                  <Sparkles className="w-8 h-8 text-indigo-400 mx-auto animate-pulse" />
+                <div className="bg-slate-900/80 p-6 rounded-2xl border border-slate-800 text-center space-y-4">
+                  <Sparkles className="w-8 h-8 text-indigo-400 mx-auto" />
                   <div className="space-y-1">
-                    <span className="font-bold text-indigo-200 block text-sm">Gemini AI 실시간 분석 실행</span>
-                    <p className="text-slate-400 max-w-md mx-auto leading-relaxed text-xs">
-                      버튼을 누르면 브라우저에서 서버 API를 통해 Gemini AI가 첨부 공고문을 즉시 파싱 및 요약합니다.
+                    <h3 className="font-bold text-slate-200 text-sm">아직 AI 분석 리포트가 생성되지 않았습니다.</h3>
+                    <p className="text-slate-400 text-xs">
+                      아래 버튼을 누르면 첨부문서 전문을 분석하여 심사기준, 우선선정/가점표, 필수서류를 즉시 구조화합니다.
                     </p>
                   </div>
                   <button
                     onClick={handleRunLiveAnalysis}
                     disabled={isAnalyzing}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all inline-flex items-center space-x-2 disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30 inline-flex items-center space-x-2 disabled:opacity-50"
                   >
                     <Sparkles className={`w-4 h-4 ${isAnalyzing ? "animate-spin" : ""}`} />
-                    <span>{isAnalyzing ? "Gemini AI 분석 진행 중 (Network POST)..." : "✨ AI 실시간 요약 분석 실행 (Network POST)"}</span>
+                    <span>{isAnalyzing ? "AI 정밀 분석 중..." : "Google Gemini AI 분석 시작"}</span>
                   </button>
                 </div>
               )}
             </div>
           )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs">
-          <span className="text-slate-500">ID: {selectedProgram.id}</span>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition-colors"
-          >
-            닫기
-          </button>
         </div>
       </div>
     </div>

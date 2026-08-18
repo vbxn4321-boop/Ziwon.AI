@@ -1,16 +1,33 @@
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
+import path from "path";
+import { pathToFileURL } from "url";
 
-let pdfParse: any = null;
-function getPdfParse() {
-  if (!pdfParse) {
+let isWorkerConfigured = false;
+function ensurePdfWorkerConfigured(PDFParse: any) {
+  if (isWorkerConfigured) return;
+  try {
+    const workerPath = path.resolve(process.cwd(), "node_modules/pdfjs-dist/build/pdf.worker.mjs");
+    const fileUrl = pathToFileURL(workerPath).href;
+    PDFParse.setWorker(fileUrl);
+    isWorkerConfigured = true;
+  } catch (err: any) {
     try {
-      pdfParse = require("pdf-parse");
-    } catch (err: any) {
-      console.warn("[pdf-parse] Failed to load pdf-parse library:", err.message);
-    }
+      PDFParse.setWorker("https://cdn.jsdelivr.net/npm/pdf-parse@latest/dist/pdf-parse/web/pdf.worker.mjs");
+      isWorkerConfigured = true;
+    } catch {}
   }
-  return pdfParse;
+}
+
+/**
+ * Remove PostgreSQL-incompatible null bytes (0x00) and unprintable control characters
+ */
+export function sanitizeUtf8(str: string): string {
+  if (!str) return "";
+  return str
+    .replace(/\0/g, "")
+    .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F]/g, "")
+    .trim();
 }
 
 /**
@@ -32,15 +49,14 @@ function extractTextFromHWPX(buffer: Buffer): string {
       }
     }
 
-    return fullText.trim();
-  } catch (err: any) {
-    console.error("HWPX parsing failed:", err.message);
+    return sanitizeUtf8(fullText);
+  } catch {
     return "";
   }
 }
 
 /**
- * Basic text extraction fallback for binary HWP (OLE5) streams
+ * Text extraction for binary HWP (OLE5) streams
  */
 function extractTextFromHWP(buffer: Buffer): string {
   try {
@@ -52,9 +68,12 @@ function extractTextFromHWP(buffer: Buffer): string {
 
     // Extract printable Korean/ASCII text strings from binary stream
     const rawStr = buffer.toString("utf-8");
-    const matches = rawStr.match(/[\uAC00-\uD7A30-9a-zA-Z가-힣\s,.():~-]{5,}/g);
+    const matches = rawStr.match(/[가-힣0-9a-zA-Z\s,.():~%\-·\[\]<>/&_]{4,}/g);
     if (matches && matches.length > 0) {
-      return matches.join("\n").replace(/\s+/g, " ").trim();
+      const filtered = matches
+        .map((m) => m.trim())
+        .filter((m) => m.length >= 4 && /[가-힣]/.test(m)); // Must contain Korean hangul
+      return sanitizeUtf8(filtered.join("\n").replace(/\s+/g, " "));
     }
   } catch (err: any) {
     console.error("HWP stream extraction fallback error:", err.message);
@@ -71,15 +90,25 @@ export async function extractTextFromBuffer(buffer: Buffer, fileTypeOrName: stri
 
   try {
     if (ext.endsWith(".pdf") || ext === "pdf") {
-      const parser = getPdfParse();
-      if (!parser) return "";
-      const data = await parser(buffer);
-      return data.text ? data.text.trim() : "";
+      try {
+        const { PDFParse } = require("pdf-parse");
+        ensurePdfWorkerConfigured(PDFParse);
+
+        const uint8 = new Uint8Array(buffer);
+        const parser = new PDFParse(uint8);
+        const textResult = await parser.getText();
+        if (textResult && typeof textResult.text === "string") {
+          return sanitizeUtf8(textResult.text);
+        }
+      } catch (pdfErr: any) {
+        console.warn("[pdf-parse] PDF extraction error:", pdfErr.message);
+      }
+      return "";
     }
 
     if (ext.endsWith(".docx") || ext === "docx") {
       const result = await mammoth.extractRawText({ buffer });
-      return result.value ? result.value.trim() : "";
+      return result.value ? sanitizeUtf8(result.value) : "";
     }
 
     if (ext.endsWith(".hwpx") || ext === "hwpx") {
@@ -92,11 +121,12 @@ export async function extractTextFromBuffer(buffer: Buffer, fileTypeOrName: stri
 
     if (ext.endsWith(".html") || ext.endsWith(".htm") || ext === "html") {
       const rawHtml = buffer.toString("utf-8");
-      return rawHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const cleaned = rawHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      return sanitizeUtf8(cleaned);
     }
 
     // Plain Text fallback
-    return buffer.toString("utf-8").trim();
+    return sanitizeUtf8(buffer.toString("utf-8"));
   } catch (error: any) {
     console.error(`Failed to extract text from ${fileTypeOrName}:`, error.message);
     return "";
@@ -105,15 +135,16 @@ export async function extractTextFromBuffer(buffer: Buffer, fileTypeOrName: stri
 
 /**
  * Download document from URL and extract text.
- * Automatically resolves direct binary download links (FileDown.do / .pdf / .hwp) if fileUrl points to an HTML notice webpage.
+ * Automatically resolves direct binary download links (fileDown.do / .pdf / .hwp) if fileUrl points to an HTML notice webpage.
  */
 export async function extractTextFromUrl(fileUrl: string, fileType: string): Promise<string> {
   try {
     const res = await fetch(fileUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
-      signal: AbortSignal.timeout(3500),
+      signal: AbortSignal.timeout(6000),
     });
 
     if (!res.ok) {
@@ -133,24 +164,50 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
 
     if (isHtmlPage) {
       const htmlContent = buffer.toString("utf-8");
+      const urlObj = new URL(fileUrl);
 
-      // 1. Search for actual binary file download links in HTML page
+      // 1. Search for actual binary file download links in HTML page (e.g., /cmm/fms/fileDown.do, FileDown.do, direct files)
       const linkMatches = [
         ...htmlContent.matchAll(
-          /href=["']([^"']*(?:FileDown\.do|fileDownload\.do|download\.do|\.pdf|\.hwp|\.hwpx|\.docx)[^"']*)["']/gi
+          /href=["']([^"']*(?:fileDown\.do|FileDown\.do|download\.do|\.pdf|\.hwp|\.hwpx|\.docx)[^"']*)["']/gi
         ),
       ];
 
-      if (linkMatches.length > 0) {
-        let targetLink = linkMatches[0][1].replace(/&amp;/g, "&");
-        if (targetLink.startsWith("/")) {
-          const urlObj = new URL(fileUrl);
-          targetLink = `${urlObj.origin}${targetLink}`;
-        } else if (!targetLink.startsWith("http")) {
-          const urlObj = new URL(fileUrl);
-          targetLink = `${urlObj.origin}/${targetLink}`;
-        }
+      // Also search for fileBlank onclick patterns: onclick="fileBlank('path', 'name')"
+      const fileBlankMatches = [
+        ...htmlContent.matchAll(/fileBlank\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi),
+      ];
 
+      const candidateLinks: string[] = [];
+
+      for (const m of linkMatches) {
+        let rawHref = m[1].replace(/&amp;/g, "&");
+        if (rawHref.startsWith("/")) {
+          rawHref = `${urlObj.origin}${rawHref}`;
+        } else if (!rawHref.startsWith("http")) {
+          rawHref = `${urlObj.origin}/${rawHref}`;
+        }
+        if (!candidateLinks.includes(rawHref)) candidateLinks.push(rawHref);
+      }
+
+      for (const m of fileBlankMatches) {
+        let path = m[1].trim();
+        if (path.startsWith("/")) {
+          path = `${urlObj.origin}${path}`;
+        } else if (!path.startsWith("http")) {
+          path = `${urlObj.origin}/${path}`;
+        }
+        if (!candidateLinks.includes(path)) candidateLinks.push(path);
+      }
+
+      // Prioritize PDF and HWP notices for main text extraction
+      const sortedCandidates = candidateLinks.sort((a, b) => {
+        const aPdf = a.toLowerCase().includes(".pdf") ? 1 : 0;
+        const bPdf = b.toLowerCase().includes(".pdf") ? 1 : 0;
+        return bPdf - aPdf;
+      });
+
+      for (const targetLink of sortedCandidates) {
         console.log(`[Smart File Link Resolver] Resolving binary download link: ${targetLink}`);
         try {
           const binRes = await fetch(targetLink, {
@@ -159,7 +216,7 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               Referer: fileUrl,
             },
-            signal: AbortSignal.timeout(3500),
+            signal: AbortSignal.timeout(6000),
           });
 
           if (binRes.ok) {
@@ -168,7 +225,16 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
 
             const binHeader = binBuffer.slice(0, 100).toString("utf-8").toLowerCase();
             if (!binHeader.includes("<html") && !binHeader.includes("<!doctype")) {
-              return await extractTextFromBuffer(binBuffer, fileType);
+              const contentDisp = binRes.headers.get("content-disposition") || "";
+              const detectedType = contentDisp.toLowerCase().includes(".pdf") || targetLink.toLowerCase().includes(".pdf")
+                ? "PDF"
+                : fileType;
+
+              const extracted = await extractTextFromBuffer(binBuffer, detectedType);
+              if (extracted && extracted.length > 50) {
+                console.log(`✅ [Smart Resolver] Successfully extracted ${extracted.length} chars from binary: ${targetLink}`);
+                return extracted;
+              }
             }
           }
         } catch (binErr: any) {
@@ -184,7 +250,7 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
         .replace(/\s+/g, " ")
         .trim();
 
-      return cleanedHtmlText;
+      return sanitizeUtf8(cleanedHtmlText);
     }
 
     // Direct Binary Buffer Parsing

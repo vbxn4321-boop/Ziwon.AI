@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { extractTextFromUrl } from "@/lib/parser/document-parser";
 import { chunkDocumentText } from "@/lib/parser/chunker";
 import { analyzeProgramWithGemini } from "@/lib/ai/gemini-analyzer";
+import { scrapeMissingAttachments } from "@/lib/parser/attachment-scraper";
 
 export interface ProcessingReport {
   totalProcessed: number;
@@ -26,7 +27,11 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
   const pendingDocs = await prisma.supportDocument.findMany({
     where: { status: "PENDING" },
     include: {
-      supportProgram: true,
+      supportProgram: {
+        include: {
+          sources: true,
+        },
+      },
     },
     take: limit,
   });
@@ -47,9 +52,23 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
     console.log(`\n📄 Processing document: ${doc.fileName} (${doc.fileType}) [ID: ${doc.id}]`);
 
     try {
-      // 1. Extract plain text from file URL or fallback to raw title/target text if download is not accessible
-      let extractedText = await extractTextFromUrl(doc.fileUrl, doc.fileType);
+      // 1. If fileUrl is pointing to the notice webpage, attempt dynamic scraping for direct binary files
+      let extractedText = "";
 
+      if (doc.fileUrl.includes("selectSIIA200Detail") || doc.fileUrl.includes("k-startup.go.kr")) {
+        const scraped = await scrapeMissingAttachments(doc.supportProgramId, doc.fileUrl);
+        const parsedOne = scraped.find((s) => s.extractedText && s.extractedText.length > 50);
+        if (parsedOne && parsedOne.extractedText) {
+          extractedText = parsedOne.extractedText;
+        }
+      }
+
+      // 2. Direct binary download & extraction if not yet extracted
+      if (!extractedText || extractedText.length < 50) {
+        extractedText = await extractTextFromUrl(doc.fileUrl, doc.fileType);
+      }
+
+      // 3. Fallback to program summary only if text extraction completely failed
       if (!extractedText || extractedText.length < 30) {
         console.log(`⚠️ Document text extraction empty for ${doc.fileName}. Utilizing program summary text fallback.`);
         extractedText = `
@@ -62,7 +81,7 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
 `.trim();
       }
 
-      // 2. Save extracted text & update status to PARSED
+      // 4. Save extracted text & update status to PARSED
       await prisma.supportDocument.update({
         where: { id: doc.id },
         data: {
@@ -71,10 +90,9 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
         },
       });
 
-      // 3. Perform RAG Chunking
+      // 5. Perform RAG Chunking
       const chunks = chunkDocumentText(extractedText, 1000, 150);
       if (chunks.length > 0) {
-        // Clear old chunks if re-processing
         await prisma.documentChunk.deleteMany({ where: { documentId: doc.id } });
 
         await prisma.documentChunk.createMany({
@@ -89,7 +107,7 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
         });
       }
 
-      // 4. Perform Gemini AI Structured Analysis
+      // 6. Perform Gemini AI Structured Analysis
       const aiAnalysisResult = await analyzeProgramWithGemini(
         doc.supportProgram.title,
         doc.supportProgram.organizer,
@@ -100,7 +118,7 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
       await prisma.supportAnalysis.create({
         data: {
           supportProgramId: doc.supportProgramId,
-          model: process.env.AI_GENERAL_MODEL || "gemini-3.6-flash",
+          model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
           promptVersion: "v1.0",
           status: "COMPLETED",
           resultJson: JSON.stringify(aiAnalysisResult),
@@ -117,7 +135,7 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
         aiAnalyzed: true,
       });
 
-      console.log(`✅ Successfully processed ${doc.fileName} (${chunks.length} chunks, AI Analysis Completed)`);
+      console.log(`✅ Successfully processed ${doc.fileName} (${chunks.length} chunks, textLength: ${extractedText.length}, AI Analysis Completed)`);
     } catch (err: any) {
       console.error(`❌ Failed to process document ${doc.id}:`, err.message);
       await prisma.supportDocument.update({
