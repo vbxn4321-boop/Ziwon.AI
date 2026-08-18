@@ -99,53 +99,31 @@ ${documentTexts || "첨부파일 원문 텍스트 없음 (기본 공고 정보 �
 
     console.log(`🤖 [On-Demand AI] Triggering Gemini AI for Program: ${program.title} (Text Length: ${textToAnalyze.length})...`);
 
-    // 4. Execute Gemini AI Analysis with fail-safe wrapper
-    let aiResult;
-    try {
-      aiResult = await analyzeProgramWithGemini(
-        program.title,
-        program.organizer,
-        textToAnalyze
-      );
-    } catch (aiErr: any) {
-      console.warn("[Vercel Analyze API] AI Analysis fallback triggered:", aiErr.message);
-      aiResult = {
-        targetEligibility: { summary: program.targetDescription || "공고문 참조" },
-        budgetAndAmount: { summary: program.budget || "공고문 참조" },
-        keySchedule: { summary: "공고문 내 접수 일정 확인 필요" },
-        extraPoints: { items: [], summary: "공고문 참조" },
-        excludedConditions: { items: [], summary: "공고문 참조" },
-        requiredDocuments: ["사업신청서 및 사업계획서", "사업자등록증명원"],
-        summaryReport: [`${program.title} 공고 파싱 완료.`, "상세 요약은 원문 공고를 확인하세요."],
-      };
-    }
+    // 4. Execute Gemini AI Analysis
+    const aiResult = await analyzeProgramWithGemini(
+      program.title,
+      program.organizer,
+      textToAnalyze
+    );
 
-    // 5. Save/Update Analysis in DB
-    let newAnalysis = null;
-    try {
-      newAnalysis = await prisma.supportAnalysis.create({
-        data: {
-          supportProgramId: program.id,
-          model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
-          promptVersion: "v1.0",
-          status: "COMPLETED",
-          resultJson: JSON.stringify(aiResult),
-        },
-      });
-    } catch (dbErr: any) {
-      console.warn("[Vercel DB Save] SupportAnalysis save warning:", dbErr.message);
-    }
+    // 5. Save/Update Analysis in DB (replace older records so the latest is always clean)
+    await prisma.supportAnalysis.deleteMany({
+      where: { supportProgramId: program.id },
+    });
 
-    return NextResponse.json({
-      success: true,
-      analysis: newAnalysis || {
-        id: "temp",
+    const newAnalysis = await prisma.supportAnalysis.create({
+      data: {
         supportProgramId: program.id,
-        model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
+        model: process.env.AI_GENERAL_MODEL || "gemini-3.6-flash",
         promptVersion: "v1.0",
         status: "COMPLETED",
         resultJson: JSON.stringify(aiResult),
       },
+    });
+
+    return NextResponse.json({
+      success: true,
+      analysis: newAnalysis,
       result: aiResult,
     });
   } catch (error: any) {
@@ -153,8 +131,7 @@ ${documentTexts || "첨부파일 원문 텍스트 없음 (기본 공고 정보 �
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed to run AI analysis",
-        details: String(error),
+        error: error.message || "AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.",
       },
       { status: 500 }
     );

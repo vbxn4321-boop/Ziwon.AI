@@ -36,10 +36,6 @@ export interface ProgramAnalysisResult {
   summaryReport: string[];
 }
 
-// Initialize Gemini GenAI client
-const apiKey = process.env.GEMINI_API_KEY || "";
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-
 /**
  * Clean JSON output from LLM markdown code blocks
  */
@@ -51,55 +47,20 @@ function cleanJsonString(str: string): string {
 }
 
 /**
- * Fallback Analysis Mock when GEMINI_API_KEY is missing or API errors
- */
-function generateFallbackAnalysis(programTitle: string, documentText: string): ProgramAnalysisResult {
-  return {
-    targetEligibility: {
-      summary: "중소기업, 소상공인 및 스타트업 대상 (공고문 세부 요건 참조)",
-    },
-    budgetAndAmount: {
-      summary: "공고문 참조 (사업별 상이)",
-    },
-    keySchedule: {
-      summary: "공고문 내 접수 일정 확인 필요",
-    },
-    evaluationCriteria: {
-      steps: ["1차 서류 적격성 검토", "2차 선정 심사/평가", "최종 선정 및 협약"],
-      items: ["사업계획서 타당성", "수행역량 및 성장잠재력", "예산 계획의 적정성"],
-      summary: "공고문 내 평가 항목 및 배점표에 따른 정량/정성 평가",
-    },
-    extraPoints: {
-      items: ["우선선정 대상 기업", "벤처/이노비즈 인증 기업", "특허 및 지식재산권 보유 기업"],
-      summary: "공고문 내 우선선정 및 우대 요건 확인 필요",
-    },
-    excludedConditions: {
-      items: ["국세/지방세 체납 기업", "휴·폐업 중인 기업", "동일 사업 중복 수혜 기업"],
-      summary: "체납 및 휴폐업 기업 지원 불가",
-    },
-    requiredDocuments: ["사업신청서 및 사업계획서", "사업자등록증명원", "국세/지방세 납세증명서"],
-    summaryReport: [
-      `${programTitle} 공고 분석 완료.`,
-      "제출 서류 및 자격요건을 사전 점검 후 신청해 주세요.",
-      "자세한 사항은 첨부파일 공고문을 확인 바랍니다.",
-    ],
-  };
-}
-
-/**
- * Analyze Support Program Notice Document using Gemini 2.5/3.6 Flash AI
+ * Analyze Support Program Notice Document using Gemini 3.6 Flash AI
  */
 export async function analyzeProgramWithGemini(
   programTitle: string,
   organizer: string,
   documentText: string
 ): Promise<ProgramAnalysisResult> {
-  if (!ai || !apiKey) {
-    console.warn("⚠️ GEMINI_API_KEY is not configured. Returning structured fallback analysis.");
-    return generateFallbackAnalysis(programTitle, documentText);
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  if (!apiKey) {
+    throw new Error("AI 분석 API 키가 설정되지 않았습니다. 잠시 후 다시 시도해 주세요.");
   }
 
-  const modelName = process.env.AI_GENERAL_MODEL || "gemini-2.5-flash";
+  const ai = new GoogleGenAI({ apiKey });
+  const modelName = process.env.AI_GENERAL_MODEL || "gemini-3.6-flash";
 
   const prompt = `
 [역할]
@@ -180,6 +141,6 @@ ${documentText.slice(0, 60000)}
     return parsed;
   } catch (error: any) {
     console.error("Gemini AI Analysis Error:", error.message);
-    return generateFallbackAnalysis(programTitle, documentText);
+    throw new Error("AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.");
   }
 }

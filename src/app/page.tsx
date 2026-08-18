@@ -648,7 +648,24 @@ export default function HomePage() {
 
       {/* Detail Modal Component */}
       {selectedProgram && (
-        <ProgramDetailModal selectedProgram={selectedProgram} onClose={() => setSelectedProgram(null)} />
+        <ProgramDetailModal
+          selectedProgram={selectedProgram}
+          onClose={() => setSelectedProgram(null)}
+          onAnalysisComplete={(progId, newAnalysis) => {
+            setPrograms((prev) =>
+              prev.map((p) =>
+                p.id === progId
+                  ? { ...p, analyses: [newAnalysis, ...(p.analyses || [])] }
+                  : p
+              )
+            );
+            setSelectedProgram((prev) =>
+              prev && prev.id === progId
+                ? { ...prev, analyses: [newAnalysis, ...(prev.analyses || [])] }
+                : prev
+            );
+          }}
+        />
       )}
     </div>
   );

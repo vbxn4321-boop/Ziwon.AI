@@ -15,17 +15,24 @@ import {
   AlertOctagon,
   Calendar,
   Layers,
+  AlertTriangle,
 } from "lucide-react";
 import { SupportProgram } from "./ProgramCard";
 
 interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
   onClose: () => void;
+  onAnalysisComplete?: (programId: string, updatedAnalysis: any) => void;
 }
 
-export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selectedProgram, onClose }) => {
+export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
+  selectedProgram,
+  onClose,
+  onAnalysisComplete,
+}) => {
   const [activeTab, setActiveTab] = useState<"overview" | "sources" | "docs" | "ai">("overview");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [programDocs, setProgramDocs] = useState<any[]>(selectedProgram.documents || []);
   const [liveAnalysis, setLiveAnalysis] = useState<any>(
@@ -61,6 +68,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
 
   const handleRunLiveAnalysis = async () => {
     setIsAnalyzing(true);
+    setAnalysisError(null);
     try {
       const res = await fetch(`/api/support-programs/${selectedProgram.id}/analyze`, {
         method: "POST",
@@ -76,15 +84,17 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
 
       if (json && json.success && json.analysis) {
         setLiveAnalysis(json.analysis);
+        setAnalysisError(null);
+        if (onAnalysisComplete) {
+          onAnalysisComplete(selectedProgram.id, json.analysis);
+        }
         fetchLatestProgramDetails();
-      } else if (json && json.error) {
-        console.warn("API returned error message:", json.error);
-        alert(`AI 분석 결과: ${json.error}`);
       } else {
-        console.warn("Unparsed response:", rawText.slice(0, 150));
+        const errMsg = json?.error || "AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+        setAnalysisError(errMsg);
       }
     } catch (err: any) {
-      console.error("Live AI analysis request error:", err.message || err);
+      setAnalysisError("AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -318,6 +328,23 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
 
           {activeTab === "ai" && (
             <div className="space-y-4 text-xs">
+              {/* Error Notice Banner if any */}
+              {analysisError && (
+                <div className="bg-rose-950/40 border border-rose-500/40 p-4 rounded-2xl flex items-center justify-between gap-3 text-rose-300">
+                  <div className="flex items-center space-x-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                    <span>{analysisError}</span>
+                  </div>
+                  <button
+                    onClick={handleRunLiveAnalysis}
+                    disabled={isAnalyzing}
+                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-colors flex-shrink-0"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              )}
+
               {liveAnalysis ? (
                 (() => {
                   let aiData: any = null;
@@ -333,7 +360,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
                   if (!aiData) {
                     return (
                       <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 text-slate-400">
-                        Gemini AI 분석 데이터 형식을 파싱하는 중입니다...
+                        Gemini AI 분석 데이터를 불러오는 중입니다...
                       </div>
                     );
                   }
@@ -405,7 +432,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({ selected
                         </div>
                       </div>
 
-                      {/* Evaluation & Review Criteria Section (NEW) */}
+                      {/* Evaluation & Review Criteria Section */}
                       <div className="bg-gradient-to-br from-slate-900 via-indigo-950/20 to-slate-900 p-4 rounded-2xl border border-indigo-500/30 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="text-indigo-300 font-bold text-xs flex items-center space-x-1.5">
