@@ -128,6 +128,30 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
   const [chatInput, setChatInput] = useState("");
   const [isChatSending, setIsChatSending] = useState(false);
 
+  // Interactive Suggestion Pills and Checklist Progress
+  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([
+    "🌱 스마트팜 원격 온습도 모니터링",
+    "📦 친환경 생분해 완충재 포장",
+    "🩺 AI 헬스케어 비대면 건강관리",
+  ]);
+  const [interviewProgress, setInterviewProgress] = useState<{
+    itemTarget: boolean;
+    problem: boolean;
+    solution: boolean;
+    scaleUp: boolean;
+    team: boolean;
+    currentStep: number;
+    completedCount: number;
+  }>({
+    itemTarget: false,
+    problem: false,
+    solution: false,
+    scaleUp: false,
+    team: false,
+    currentStep: 1,
+    completedCount: 0,
+  });
+
   // Business Plan Result State
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResult, setGeneratedResult] = useState<PsstBusinessPlanResult | null>(null);
@@ -156,6 +180,45 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     evaluation: useRef<HTMLDivElement>(null),
   };
 
+  // Reset to brand new business plan session
+  const handleResetNew = () => {
+    setFormData({
+      companyName: "",
+      itemName: "",
+      industry: "",
+      targetCustomer: "",
+      itemDescription: "",
+      coreStrengths: "",
+      targetProgramTitle: initialProgramTitle || "2026년 중소벤처기업부 초기창업패키지",
+      budget: "",
+    });
+    setChatMessages([
+      {
+        id: `msg-${Date.now()}`,
+        role: "assistant",
+        content:
+          "안녕하세요! Ziwon.AI 사업계획서 전문 컨설턴트입니다. 😊\n\n구상 중이신 **창업 아이템명**과 **어떤 서비스/제품인지 핵심 아이디어**를 편하게 한 줄로 말씀해 주시면, 제가 심층 인터뷰를 통해 대한민국 표준 PSST 사업계획서를 완성해 드릴게요!",
+        timestamp: "방금 전",
+      },
+    ]);
+    setGeneratedResult(null);
+    setInterviewProgress({
+      itemTarget: false,
+      problem: false,
+      solution: false,
+      scaleUp: false,
+      team: false,
+      currentStep: 1,
+      completedCount: 0,
+    });
+    setCurrentSuggestions([
+      "🌱 스마트팜 원격 온습도 모니터링",
+      "📦 친환경 생분해 완충재 포장",
+      "🩺 AI 헬스케어 비대면 건강관리",
+    ]);
+    setErrorMessage(null);
+  };
+
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
@@ -170,7 +233,10 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     }
   };
 
-
+  // Quick Suggestion Click Handler (Populates input bar safely)
+  const handleQuickSuggestion = (suggestion: string) => {
+    setChatInput(suggestion);
+  };
 
   // 1. Send Chat Message in Interview Mode
   const handleSendChat = async (e: React.FormEvent) => {
@@ -198,6 +264,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
         body: JSON.stringify({
           messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
           targetProgramTitle: formData.targetProgramTitle,
+          currentPlan: generatedResult || undefined,
         }),
       });
 
@@ -212,6 +279,14 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
             timestamp: "방금 전",
           },
         ]);
+
+        if (json.suggestions && Array.isArray(json.suggestions)) {
+          setCurrentSuggestions(json.suggestions);
+        }
+
+        if (json.progress) {
+          setInterviewProgress(json.progress);
+        }
 
         if (json.plan) {
           setGeneratedResult(json.plan);
@@ -363,20 +438,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     }
   };
 
-  const handleResetNew = () => {
-    setGeneratedResult(null);
-    setIsDirectEditing(false);
-    setModificationText("");
-    setChatMessages([
-      {
-        id: "msg-1",
-        role: "assistant",
-        content:
-          "새로운 사업계획서 작성을 시작합니다! 😊\n\n구상 중이신 **새로운 창업 아이템명**과 **핵심 아이디어**를 편하게 말씀해 주세요.",
-        timestamp: "방금 전",
-      },
-    ]);
-  };
+
 
   const handleCopyFullText = () => {
     if (!generatedResult) return;
@@ -508,15 +570,6 @@ ${r.evaluationReport.expectedQuestions
               <span>평가리포트</span>
             </button>
           </nav>
-        </div>
-
-        {/* Bottom Credits Badge */}
-        <div className="flex flex-col items-center space-y-1 text-center">
-          <div className="flex items-center space-x-0.5 text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full border border-amber-500/20">
-            <Zap className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-            <span>1,000,000</span>
-          </div>
-          <span className="text-[9px] text-slate-500 font-semibold">P</span>
         </div>
       </aside>
 
@@ -663,25 +716,50 @@ ${r.evaluationReport.expectedQuestions
                   </button>
                 </div>
 
-                {/* PSST 4-Step Interactive Interview Progress Bar */}
-                <div className="px-3 py-2 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between text-[10px] overflow-x-auto gap-1">
-                  {[
-                    { step: 1, label: "1. 아이템/타겟", active: chatMessages.filter(m => m.role === "user").length <= 1 },
-                    { step: 2, label: "2. 문제인식 (P)", active: chatMessages.filter(m => m.role === "user").length === 2 },
-                    { step: 3, label: "3. 실현기술 (S)", active: chatMessages.filter(m => m.role === "user").length === 3 },
-                    { step: 4, label: "4. BM/팀역량 (S·T)", active: chatMessages.filter(m => m.role === "user").length >= 4 },
-                  ].map((s) => (
+                {/* PSST 5-Step Interactive Interview Progress Bar & Checklist */}
+                <div className="px-3 py-2 bg-slate-950/95 border-b border-slate-800/80 space-y-1.5 flex-shrink-0">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-bold text-slate-300 flex items-center space-x-1">
+                      <Sparkles className="w-3 h-3 text-indigo-400" />
+                      <span>PSST 필수 인터뷰 수집도</span>
+                    </span>
+                    <span className="text-indigo-400 font-extrabold">
+                      {interviewProgress.completedCount} / 5단계 완료 ({Math.round((interviewProgress.completedCount / 5) * 100)}%)
+                    </span>
+                  </div>
+
+                  {/* Visual Progress Bar */}
+                  <div className="w-full bg-slate-900 rounded-full h-1 overflow-hidden">
                     <div
-                      key={s.step}
-                      className={`px-2 py-0.5 rounded-md font-bold transition-colors whitespace-nowrap flex items-center space-x-1 ${
-                        s.active
-                          ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/40"
-                          : "bg-slate-900 text-slate-500 border border-slate-800"
-                      }`}
-                    >
-                      <span>{s.label}</span>
-                    </div>
-                  ))}
+                      className="bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-400 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.max(10, (interviewProgress.completedCount / 5) * 100)}%` }}
+                    />
+                  </div>
+
+                  {/* 5-Step Badges */}
+                  <div className="flex items-center justify-between text-[10px] overflow-x-auto gap-1 pt-0.5">
+                    {[
+                      { step: 1, label: "1.아이템/타겟", done: interviewProgress.itemTarget, current: interviewProgress.currentStep === 1 },
+                      { step: 2, label: "2.문제인식(P)", done: interviewProgress.problem, current: interviewProgress.currentStep === 2 },
+                      { step: 3, label: "3.실현기술(S)", done: interviewProgress.solution, current: interviewProgress.currentStep === 3 },
+                      { step: 4, label: "4.BM(Scale-up)", done: interviewProgress.scaleUp, current: interviewProgress.currentStep === 4 },
+                      { step: 5, label: "5.팀역량(Team)", done: interviewProgress.team, current: interviewProgress.currentStep === 5 },
+                    ].map((s) => (
+                      <div
+                        key={s.step}
+                        className={`px-1.5 py-0.5 rounded-md font-bold transition-all whitespace-nowrap flex items-center space-x-1 ${
+                          s.done
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : s.current
+                            ? "bg-indigo-600/30 text-indigo-200 border border-indigo-500/50 shadow-sm"
+                            : "bg-slate-900 text-slate-500 border border-slate-800"
+                        }`}
+                      >
+                        <span>{s.done ? "✓" : s.current ? "⏳" : "○"}</span>
+                        <span>{s.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Scrollable Chat Area */}
@@ -714,7 +792,14 @@ ${r.evaluationReport.expectedQuestions
                               : "bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none shadow-sm"
                             }`}
                         >
-                          {msg.content}
+                          {msg.content
+                            .replace(/<<<SUGGESTIONS>>>[\s\S]*?(?:<<<PROGRESS>>>|PROGRESS|\{|```|$)/gi, "")
+                            .replace(/<<<PROGRESS>>>[\s\S]*?$/gi, "")
+                            .replace(/PROGRESS:?\s*\{[\s\S]*?\}/gi, "")
+                            .replace(/\{[\s\S]*?"itemTarget"[\s\S]*?\}/gi, "")
+                            .replace(/\{[\s\S]*?"currentStep"[\s\S]*?\}/gi, "")
+                            .replace(/```json[\s\S]*?```/gi, "")
+                            .trim()}
                         </div>
                       </div>
 
@@ -763,48 +848,52 @@ ${r.evaluationReport.expectedQuestions
                   )}
                 </div>
 
-                {/* Quick Action Suggestion Chips */}
-                {!generatedResult && (
-                  <div className="px-3 py-2 bg-slate-900/80 border-t border-slate-800 flex items-center justify-between overflow-x-auto gap-2">
-                    <span className="text-[10px] text-slate-400 font-medium flex items-center space-x-1 flex-shrink-0">
-                      <Flame className="w-3 h-3 text-amber-400" />
-                      <span>{chatMessages.length <= 3 ? "예시 아이템:" : "추천 액션:"}</span>
-                    </span>
-                    {chatMessages.length <= 3 ? (
-                      <div className="flex items-center space-x-1.5 overflow-x-auto">
+                {/* 1-Click Action Suggestion Pills (Smart Tap to Answer or Revise) */}
+                <div className="px-3 py-2 bg-slate-900/95 border-t border-slate-800 flex items-center justify-between overflow-x-auto gap-2">
+                  <span className="text-[10px] text-slate-400 font-medium flex items-center space-x-1 flex-shrink-0">
+                    <Flame className="w-3 h-3 text-amber-400" />
+                    <span>{generatedResult ? "✏️ 실시간 수정 추천:" : "💡 원클릭 빠른 답변:"}</span>
+                  </span>
+
+                  <div className="flex items-center space-x-1.5 overflow-x-auto">
+                    {generatedResult ? (
+                      <>
                         <button
                           type="button"
-                          onClick={() => {
-                            setChatInput("IoT 센서 및 Vision AI 기반 스마트팜 원격 생육 관리 솔루션 구상 중입니다.");
-                          }}
-                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] whitespace-nowrap transition-colors border border-slate-700"
+                          onClick={() => handleQuickSuggestion("2-1 핵심 기술 사양과 특허 차별성을 좀 더 전문적으로 보강해줘")}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-900/50 hover:text-indigo-200 text-slate-300 text-[10px] whitespace-nowrap transition-colors border border-slate-700"
                         >
-                          🌱 스마트팜 AI 솔루션
+                          🔧 기술 사양 보강
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setChatInput("버섯 균사체를 활용한 100% 생분해성 친환경 완충 포장재를 개발 중입니다.");
-                          }}
-                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] whitespace-nowrap transition-colors border border-slate-700"
+                          onClick={() => handleQuickSuggestion("3-1 과금 모델을 월 39,000원 구독형 SaaS로 수정해줘")}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-900/50 hover:text-indigo-200 text-slate-300 text-[10px] whitespace-nowrap transition-colors border border-slate-700"
                         >
-                          📦 친환경 생분해 포장재
+                          💰 BM/가격 수정
                         </button>
-                      </div>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickSuggestion("3-3 예산 계획표에서 인건비와 시제품 제작비 비중을 조정해줘")}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-900/50 hover:text-indigo-200 text-slate-300 text-[10px] whitespace-nowrap transition-colors border border-slate-700"
+                        >
+                          📊 예산표 조정
+                        </button>
+                      </>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setChatInput("지금까지 나눈 대화 내용을 바탕으로 PSST 사업계획서를 작성해줘");
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold transition-colors flex items-center space-x-1 whitespace-nowrap"
-                      >
-                        <Sparkles className="w-3 h-3 text-indigo-400" />
-                        <span>&quot;사업계획서 작성해줘&quot; 전송</span>
-                      </button>
+                      currentSuggestions.map((sugg, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleQuickSuggestion(sugg)}
+                          className="px-2 py-1 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/70 text-indigo-300 hover:text-white text-[10px] whitespace-nowrap transition-all border border-indigo-500/30 flex items-center space-x-1 shadow-sm"
+                        >
+                          <span>{sugg}</span>
+                        </button>
+                      ))
                     )}
                   </div>
-                )}
+                </div>
 
                 {/* Chat Input Bar */}
                 <form
@@ -1051,34 +1140,63 @@ ${r.evaluationReport.expectedQuestions
                     </div>
 
                     <div className="space-y-1.5">
-                      <h3 className="text-sm font-bold text-indigo-300">범주</h3>
-                      <p className="text-xs pl-1">
-                        인공지능(AI) 기반 <b>{generatedResult.overview.industry}</b> 솔루션 분야
+                      <h3 className="text-sm font-bold text-indigo-300">산업 분야</h3>
+                      <p className="text-xs pl-1 text-slate-300">
+                        <b>{generatedResult.overview.industry}</b>
                       </p>
                     </div>
 
                     <div className="space-y-1.5">
-                      <h3 className="text-sm font-bold text-indigo-300">아이템 개요</h3>
+                      <h3 className="text-sm font-bold text-indigo-300">아이템 핵심 개요</h3>
                       <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
                         {generatedResult.overview.itemSummary}
                       </p>
                     </div>
 
-                    <div className="space-y-2 pt-2">
-                      <h3 className="text-sm font-bold text-indigo-300">배경 및 필요성</h3>
-                      <div
-                        className={`p-4 rounded-2xl border text-xs leading-relaxed space-y-2.5 ${canvasTheme === "dark"
-                            ? "bg-slate-950/60 border-slate-800 text-slate-300"
-                            : "bg-slate-50 border-slate-200 text-slate-700"
-                          }`}
-                      >
-                        <p>
-                          <b>SPRi 조사</b>에 따르면 관련 인공지능 및 디지털 자동화 시장은 <b>연평균 12.5% 이상</b>{" "}
-                          고속 성장하고 있으며, 스타트업과 중소기업의 서류 행정 소요 시간 단축에 대한 수요가 급증하고
-                          있습니다.
-                        </p>
-                        <p>{generatedResult.problem.developmentNecessity}</p>
+                    {/* Government Standard 2-Column Summary Table */}
+                    {generatedResult.overview.summaryTable && (
+                      <div className="space-y-2 pt-1">
+                        <h3 className="text-sm font-bold text-indigo-300">📋 사업 요약 규격표</h3>
+                        <div className="overflow-x-auto rounded-xl border border-indigo-500/30 bg-slate-950/70">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-indigo-950/60 text-indigo-200 border-b border-indigo-500/20 font-bold">
+                              <tr>
+                                <th className="p-2.5 w-28">항목 구분</th>
+                                <th className="p-2.5">공식 등록 내용</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                              <tr>
+                                <td className="p-2.5 font-bold text-indigo-400 bg-slate-900/60">아이템 범주</td>
+                                <td className="p-2.5">{generatedResult.overview.summaryTable.itemCategory}</td>
+                              </tr>
+                              <tr>
+                                <td className="p-2.5 font-bold text-indigo-400 bg-slate-900/60">주요 타겟</td>
+                                <td className="p-2.5">{generatedResult.overview.summaryTable.targetUsers}</td>
+                              </tr>
+                              <tr>
+                                <td className="p-2.5 font-bold text-indigo-400 bg-slate-900/60">핵심 기능</td>
+                                <td className="p-2.5">{generatedResult.overview.summaryTable.coreFeature}</td>
+                              </tr>
+                              <tr>
+                                <td className="p-2.5 font-bold text-indigo-400 bg-slate-900/60">수익 모델</td>
+                                <td className="p-2.5">{generatedResult.overview.summaryTable.monetization}</td>
+                              </tr>
+                              <tr>
+                                <td className="p-2.5 font-bold text-indigo-400 bg-slate-900/60">신청 예산</td>
+                                <td className="p-2.5 font-semibold text-emerald-400">{generatedResult.overview.summaryTable.targetBudget}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
+                    )}
+
+                    <div className="space-y-1.5 pt-1">
+                      <h3 className="text-sm font-bold text-indigo-300">개발 배경 및 시급성</h3>
+                      <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                        {generatedResult.problem.developmentNecessity}
+                      </p>
                     </div>
                   </div>
 
@@ -1106,8 +1224,29 @@ ${r.evaluationReport.expectedQuestions
                       </p>
                     </div>
 
+                    {/* TAM - SAM - SOM Market Size Diagram Card */}
+                    {generatedResult.problem.tamSamSom && (
+                      <div className="space-y-2 pt-1">
+                        <h3 className="text-sm font-bold text-rose-300">📊 타겟 시장 규모 (TAM - SAM - SOM)</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                            <div className="text-[11px] font-bold text-blue-400">TAM (전체 시장)</div>
+                            <div className="text-xs font-semibold text-slate-200 leading-relaxed">{generatedResult.problem.tamSamSom.tam}</div>
+                          </div>
+                          <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                            <div className="text-[11px] font-bold text-purple-400">SAM (유효 시장)</div>
+                            <div className="text-xs font-semibold text-slate-200 leading-relaxed">{generatedResult.problem.tamSamSom.sam}</div>
+                          </div>
+                          <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                            <div className="text-[11px] font-bold text-emerald-400">SOM (수익 시장)</div>
+                            <div className="text-xs font-semibold text-slate-200 leading-relaxed">{generatedResult.problem.tamSamSom.som}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
-                      <h3 className="text-sm font-bold text-slate-300">1-3. 개발 및 사업화의 필요성</h3>
+                      <h3 className="text-sm font-bold text-slate-300">1-3. 개발 및 사업화의 필요성과 시급성</h3>
                       <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
                         {generatedResult.problem.developmentNecessity}
                       </p>
@@ -1138,12 +1277,70 @@ ${r.evaluationReport.expectedQuestions
                       </p>
                     </div>
 
-                    <div className="space-y-1.5">
+                    {/* Competitor Comparative Matrix Table */}
+                    {generatedResult.solution.competitorTable && generatedResult.solution.competitorTable.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h3 className="text-sm font-bold text-blue-300">⚔️ 경쟁 제품/대체재 비교 분석표</h3>
+                        <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
+                              <tr>
+                                <th className="p-2.5">비교 구분</th>
+                                <th className="p-2.5 text-emerald-400 font-extrabold bg-emerald-950/30">당사 솔루션 (Ziwon)</th>
+                                <th className="p-2.5 text-slate-300">경쟁사 A (기존 외산)</th>
+                                <th className="p-2.5 text-slate-300">대체재 B</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                              {generatedResult.solution.competitorTable.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-900/50">
+                                  <td className="p-2.5 font-bold text-blue-400 bg-slate-900/50">{row.category}</td>
+                                  <td className="p-2.5 font-semibold text-emerald-300 bg-emerald-950/15">{row.ourItem}</td>
+                                  <td className="p-2.5 text-slate-400">{row.competitorA}</td>
+                                  <td className="p-2.5 text-slate-400">{row.competitorB}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 pt-2">
                       <h3 className="text-sm font-bold text-slate-300">2-3. 개발 및 사업화 로드맵</h3>
                       <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
                         {generatedResult.solution.implementationPlan}
                       </p>
                     </div>
+
+                    {/* Q1~Q4 Development Roadmap Milestone Table */}
+                    {generatedResult.solution.roadmapTable && generatedResult.solution.roadmapTable.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h3 className="text-sm font-bold text-blue-300">🗓️ 협약 기간 내 개발 및 사업화 마일스톤 로드맵</h3>
+                        <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
+                              <tr>
+                                <th className="p-2.5 w-32">추진 기간</th>
+                                <th className="p-2.5">목표 마일스톤</th>
+                                <th className="p-2.5">주요 개발/실증 활동</th>
+                                <th className="p-2.5 text-emerald-400">최종 산출물</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                              {generatedResult.solution.roadmapTable.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-900/50">
+                                  <td className="p-2.5 font-bold text-blue-400 bg-slate-900/50">{row.quarter}</td>
+                                  <td className="p-2.5 font-semibold text-slate-200">{row.milestone}</td>
+                                  <td className="p-2.5 text-slate-400">{row.keyActivities}</td>
+                                  <td className="p-2.5 font-semibold text-emerald-300">{row.output}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* ── 4. Scale-up Section ── */}
@@ -1176,6 +1373,35 @@ ${r.evaluationReport.expectedQuestions
                         {generatedResult.scaleUp.fundingAndBudgetPlan}
                       </p>
                     </div>
+
+                    {/* Government Subsidy Budget Allocation Table */}
+                    {generatedResult.scaleUp.budgetTable && generatedResult.scaleUp.budgetTable.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h3 className="text-sm font-bold text-purple-300">💰 정부지원금 비목별 소요 예산 집행 계획표</h3>
+                        <div className="overflow-x-auto rounded-xl border border-purple-500/20 bg-slate-950/70">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-purple-950/60 text-purple-200 border-b border-purple-500/20 font-bold">
+                              <tr>
+                                <th className="p-2.5">비목 구분</th>
+                                <th className="p-2.5 text-right">집행 금액 (원)</th>
+                                <th className="p-2.5 text-center">비중</th>
+                                <th className="p-2.5">세부 산출 근거 및 내역</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                              {generatedResult.scaleUp.budgetTable.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-900/50">
+                                  <td className="p-2.5 font-bold text-purple-300 bg-slate-900/50">{row.category}</td>
+                                  <td className="p-2.5 font-semibold text-right text-emerald-400">{row.amount}</td>
+                                  <td className="p-2.5 text-center font-bold text-purple-400">{row.ratio}%</td>
+                                  <td className="p-2.5 text-slate-400">{row.description}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* ── 5. Team Section ── */}
@@ -1195,7 +1421,36 @@ ${r.evaluationReport.expectedQuestions
                       </p>
                     </div>
 
-                    <div className="space-y-1.5">
+                    {/* Team Personnel R&R Matrix Table */}
+                    {generatedResult.team.memberList && generatedResult.team.memberList.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h3 className="text-sm font-bold text-emerald-300">👥 핵심 인력 구성 및 업무 분장 (R&R)</h3>
+                        <div className="overflow-x-auto rounded-xl border border-emerald-500/20 bg-slate-950/70">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-emerald-950/60 text-emerald-200 border-b border-emerald-500/20 font-bold">
+                              <tr>
+                                <th className="p-2.5 w-28">직책 / 역할</th>
+                                <th className="p-2.5 w-28">성명 / 구분</th>
+                                <th className="p-2.5">주요 역량 및 실무 경력</th>
+                                <th className="p-2.5">담당 주요 업무</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                              {generatedResult.team.memberList.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-900/50">
+                                  <td className="p-2.5 font-bold text-emerald-400 bg-slate-900/50">{row.role}</td>
+                                  <td className="p-2.5 font-semibold text-slate-200">{row.nameOrAlias}</td>
+                                  <td className="p-2.5 text-slate-300">{row.competency}</td>
+                                  <td className="p-2.5 text-slate-400">{row.mainTask}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 pt-2">
                       <h3 className="text-sm font-bold text-slate-300">4-2. 역할 분장 및 조직 구성</h3>
                       <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
                         {generatedResult.team.rolesAndResponsibilities}
