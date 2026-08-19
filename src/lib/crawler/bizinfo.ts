@@ -39,7 +39,7 @@ export async function fetchBizinfoNotices(limit?: number): Promise<RawNoticeItem
       `[Bizinfo Live Ingestion] Requesting Full API Feed: ${jsonUrl.replace(apiKey, "***REDACTED***")}`
     );
 
-    const res = await fetch(jsonUrl, { next: { revalidate: 1800 } });
+    const res = await fetch(jsonUrl, { cache: "no-store" });
 
     if (res.ok) {
       const json = await res.json();
