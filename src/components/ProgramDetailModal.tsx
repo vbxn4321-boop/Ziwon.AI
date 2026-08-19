@@ -32,12 +32,14 @@ interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
   onClose: () => void;
   onAnalysisComplete?: (programId: string, updatedAnalysis: any) => void;
+  onCreatePsstPlan?: (programTitle: string) => void;
 }
 
 export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   selectedProgram,
   onClose,
   onAnalysisComplete,
+  onCreatePsstPlan,
 }) => {
   // Main tabs: AI Analysis ("ai"), Document Viewer ("viewer"), Attachments ("docs"), Official Sources ("sources")
   const [activeTab, setActiveTab] = useState<"ai" | "viewer" | "docs" | "sources">("ai");
@@ -115,6 +117,9 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   };
 
   const handleRunLiveAnalysis = async () => {
+    if (isLoadingDocs) {
+      return;
+    }
     setIsAnalyzing(true);
     setAnalysisError(null);
     try {
@@ -273,8 +278,8 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   </div>
                   <button
                     onClick={handleRunLiveAnalysis}
-                    disabled={isAnalyzing}
-                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-colors flex-shrink-0"
+                    disabled={isAnalyzing || isLoadingDocs}
+                    className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-colors flex-shrink-0 disabled:opacity-50"
                   >
                     다시 시도
                   </button>
@@ -297,7 +302,19 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+                      {onCreatePsstPlan && (
+                        <button
+                          onClick={() => {
+                            onCreatePsstPlan(selectedProgram.title);
+                            onClose();
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs transition-all flex items-center space-x-1.5 shadow-md shadow-purple-600/30"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>PSST 사업계획서 생성</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => setActiveTab("viewer")}
                         className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center space-x-1.5"
@@ -307,11 +324,15 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       </button>
                       <button
                         onClick={handleRunLiveAnalysis}
-                        disabled={isAnalyzing}
-                        className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center space-x-1.5 disabled:opacity-50"
+                        disabled={isAnalyzing || isLoadingDocs}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                          isLoadingDocs
+                            ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed"
+                            : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30"
+                        } disabled:opacity-50`}
                       >
-                        <Sparkles className={`w-3.5 h-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
-                        <span>{isAnalyzing ? "실시간 분석 중..." : "AI 재분석 실행"}</span>
+                        <Sparkles className={`w-3.5 h-3.5 ${isAnalyzing || isLoadingDocs ? "animate-spin" : ""}`} />
+                        <span>{isLoadingDocs ? "서류 동기화 중..." : isAnalyzing ? "분석 중..." : "AI 재분석"}</span>
                       </button>
                     </div>
                   </div>
@@ -576,11 +597,24 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     ) : (
                       <button
                         onClick={handleRunLiveAnalysis}
-                        disabled={isAnalyzing}
-                        className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30 inline-flex items-center space-x-2 disabled:opacity-50"
+                        disabled={isAnalyzing || isLoadingDocs}
+                        className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
+                          isLoadingDocs
+                            ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed mx-auto"
+                            : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 mx-auto"
+                        } disabled:opacity-60`}
                       >
-                        <Sparkles className="w-4 h-4" />
-                        <span>Google Gemini AI 분석 시작</span>
+                        {isLoadingDocs ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+                            <span>공식 서류 동기화 중 (완료 후 AI 분석 가능)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            <span>Google Gemini AI 분석 시작</span>
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
