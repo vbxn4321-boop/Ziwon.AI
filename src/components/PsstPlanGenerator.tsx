@@ -170,19 +170,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     }
   };
 
-  const handleApplyPreset = (preset: typeof PRESET_TEMPLATES[0]) => {
-    setFormData({
-      companyName: preset.companyName,
-      itemName: preset.itemName,
-      industry: preset.industry,
-      targetCustomer: preset.targetCustomer,
-      itemDescription: preset.itemDescription,
-      coreStrengths: preset.coreStrengths,
-      targetProgramTitle: preset.targetProgramTitle,
-      budget: preset.budget,
-    });
-    setErrorMessage(null);
-  };
+
 
   // 1. Send Chat Message in Interview Mode
   const handleSendChat = async (e: React.FormEvent) => {
