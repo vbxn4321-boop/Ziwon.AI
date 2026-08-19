@@ -86,25 +86,23 @@ export async function scrapeMissingAttachments(
       }
     }
 
-    const attachments: ScrapedAttachment[] = [];
-
-    for (const entry of candidateEntries.slice(0, 4)) {
+    const downloadPromises = candidateEntries.slice(0, 4).map(async (entry) => {
       try {
-        console.log(`[Scraper] Fetching binary attachment: ${entry.url}`);
+        console.log(`[Scraper] Fetching binary attachment in parallel: ${entry.url}`);
         const binRes = await fetch(entry.url, {
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             Referer: sourceUrl,
           },
-          signal: AbortSignal.timeout(6000),
+          signal: AbortSignal.timeout(3500),
         });
 
-        if (!binRes.ok) continue;
+        if (!binRes.ok) return null;
 
         const buf = Buffer.from(await binRes.arrayBuffer());
         const binHeader = buf.slice(0, 100).toString("utf-8").toLowerCase();
-        if (binHeader.includes("<html") || binHeader.includes("<!doctype")) continue;
+        if (binHeader.includes("<html") || binHeader.includes("<!doctype")) return null;
 
         // Decode actual filename from Content-Disposition header
         const contentDisp = binRes.headers.get("content-disposition") || "";
@@ -140,16 +138,20 @@ export async function scrapeMissingAttachments(
         // Extract text
         const extractedText = await extractTextFromBuffer(buf, fileType);
 
-        attachments.push({
+        return {
           fileName: sanitizeUtf8(finalFileName),
           fileUrl: entry.url,
           fileType,
           extractedText: sanitizeUtf8(extractedText),
-        });
+        } as ScrapedAttachment;
       } catch (err: any) {
         console.warn(`[Dynamic Scraper] Failed to process ${entry.url}:`, err.message);
+        return null;
       }
-    }
+    });
+
+    const results = await Promise.all(downloadPromises);
+    const attachments = results.filter((att): att is ScrapedAttachment => att !== null);
 
     if (attachments.length > 0) {
       console.log(`✅ [Dynamic Scraper] Successfully extracted ${attachments.length} attachment files! Saving to DB...`);

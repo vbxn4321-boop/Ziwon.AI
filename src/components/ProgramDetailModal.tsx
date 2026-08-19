@@ -224,8 +224,12 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            <Eye className="w-3.5 h-3.5 text-blue-400" />
-            <span>공고문 뷰어 ({sortedDocs.length})</span>
+            {isLoadingDocs ? (
+              <RefreshCw className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+            ) : (
+              <Eye className="w-3.5 h-3.5 text-blue-400" />
+            )}
+            <span>공고문 뷰어 {isLoadingDocs ? "(가져오는 중...)" : `(${sortedDocs.length})`}</span>
           </button>
           <button
             onClick={() => setActiveTab("docs")}
@@ -235,8 +239,12 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>첨부 서류 ({sortedDocs.length})</span>
+            {isLoadingDocs ? (
+              <RefreshCw className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+            ) : (
+              <FileText className="w-3.5 h-3.5" />
+            )}
+            <span>첨부 서류 {isLoadingDocs ? "(가져오는 중...)" : `(${sortedDocs.length})`}</span>
           </button>
           <button
             onClick={() => setActiveTab("sources")}
@@ -512,6 +520,36 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     </p>
                   </div>
 
+                  {/* Document Fetching / Ready Status Banner */}
+                  {isLoadingDocs ? (
+                    <div className="bg-gradient-to-r from-blue-950/50 via-slate-900 to-blue-950/30 border border-blue-500/30 p-3.5 rounded-2xl flex items-center justify-between text-xs text-blue-300 shadow-md">
+                      <div className="flex items-center space-x-2.5">
+                        <RefreshCw className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold text-slate-100">원문 공고 웹페이지에서 공식 첨부서류를 가져오는 중입니다...</p>
+                          <p className="text-[11px] text-blue-400/80">공고문(PDF/HWP) 서류를 실시간으로 동기화하고 있습니다.</p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold text-[10px] border border-blue-500/30 hidden sm:inline">
+                        서류 가져오는 중
+                      </span>
+                    </div>
+                  ) : sortedDocs.length > 0 ? (
+                    <div className="bg-emerald-950/20 border border-emerald-500/20 p-3 rounded-2xl flex items-center justify-between text-xs text-emerald-300">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <span>공식 첨부서류 ({sortedDocs.length}개) 준비 완료 — 원문 공고문 기반 정밀 AI 분석이 가능합니다.</span>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab("viewer")}
+                        className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-2 flex items-center space-x-1 flex-shrink-0"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>서류 확인</span>
+                      </button>
+                    </div>
+                  ) : null}
+
                   {/* AI Analysis CTA */}
                   <div className="bg-gradient-to-br from-indigo-950/40 via-purple-950/30 to-slate-900 p-6 rounded-2xl border border-indigo-500/30 text-center space-y-4">
                     <Sparkles className="w-8 h-8 text-indigo-400 mx-auto" />
@@ -521,14 +559,30 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                         공고문 전문과 첨부파일을 Gemini AI로 정밀 분석하여 심사·평가기준, 우선선정/가점표, 필수 제출서류를 즉시 구조화합니다.
                       </p>
                     </div>
-                    <button
-                      onClick={handleRunLiveAnalysis}
-                      disabled={isAnalyzing}
-                      className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30 inline-flex items-center space-x-2 disabled:opacity-50"
-                    >
-                      <Sparkles className={`w-4 h-4 ${isAnalyzing ? "animate-spin" : ""}`} />
-                      <span>{isAnalyzing ? "AI 정밀 분석 중..." : "Google Gemini AI 분석 시작"}</span>
-                    </button>
+
+                    {isAnalyzing ? (
+                      <div className="max-w-md mx-auto bg-slate-950/60 p-4 rounded-2xl border border-indigo-500/30 space-y-2.5">
+                        <div className="flex items-center justify-center space-x-2 text-indigo-300 font-bold text-xs">
+                          <Sparkles className="w-4 h-4 text-indigo-400 animate-spin" />
+                          <span>Gemini AI 심층 분석 진행 중...</span>
+                        </div>
+                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-full w-full animate-pulse rounded-full" />
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          공고문 전문 및 첨부 서식에서 핵심 심사 기준표를 도출하고 있습니다.
+                        </p>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleRunLiveAnalysis}
+                        disabled={isAnalyzing}
+                        className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30 inline-flex items-center space-x-2 disabled:opacity-50"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>Google Gemini AI 분석 시작</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -539,20 +593,35 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
           {activeTab === "viewer" && (
             <div className="space-y-3 flex flex-col flex-1 min-h-[480px]">
               {sortedDocs.length === 0 ? (
-                <div className="bg-slate-900/60 p-8 rounded-2xl border border-slate-800 text-center space-y-3 my-auto">
-                  <FileText className="w-8 h-8 text-slate-500 mx-auto" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-slate-300">열람 가능한 첨부 문서가 없습니다.</p>
-                    <p className="text-xs text-slate-500">본 공고의 첨부파일 링크를 동기화해 보세요.</p>
+                isLoadingDocs ? (
+                  /* Loading State when documents are being fetched */
+                  <div className="bg-slate-900/60 p-10 rounded-2xl border border-blue-500/20 text-center space-y-4 my-auto">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto text-blue-400 shadow-lg shadow-blue-500/10">
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-bold text-slate-100">공식 첨부서류 및 공고문을 가져오는 중입니다...</p>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                        원문 공고 웹페이지에 연결하여 최신 공고문(PDF)과 신청 서식 파일을 실시간으로 동기화하고 있습니다. 잠시만 기다려주세요.
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={fetchLatestProgramDetails}
-                    className="px-3.5 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-colors inline-flex items-center space-x-1.5"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>첨부파일 검색 및 동기화</span>
-                  </button>
-                </div>
+                ) : (
+                  <div className="bg-slate-900/60 p-8 rounded-2xl border border-slate-800 text-center space-y-3 my-auto">
+                    <FileText className="w-8 h-8 text-slate-500 mx-auto" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-300">열람 가능한 첨부 문서가 없습니다.</p>
+                      <p className="text-xs text-slate-500">본 공고의 첨부파일 링크를 동기화해 보세요.</p>
+                    </div>
+                    <button
+                      onClick={fetchLatestProgramDetails}
+                      className="px-3.5 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-colors inline-flex items-center space-x-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>첨부파일 검색 및 동기화</span>
+                    </button>
+                  </div>
+                )
               ) : (
                 <>
                   {/* File Selector Tabs (PDF listed first) */}
@@ -746,16 +815,30 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
               </div>
 
               {sortedDocs.length === 0 ? (
-                <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 text-center space-y-2">
-                  <p className="text-xs text-slate-400">등록된 첨부 문서 파일이 아직 없습니다.</p>
-                  <button
-                    onClick={fetchLatestProgramDetails}
-                    className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors inline-flex items-center space-x-1"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>첨부파일 검색 및 동기화</span>
-                  </button>
-                </div>
+                isLoadingDocs ? (
+                  <div className="bg-slate-900/60 p-10 rounded-2xl border border-blue-500/20 text-center space-y-4 my-auto">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto text-blue-400 shadow-lg shadow-blue-500/10">
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-bold text-slate-100">공식 첨부서류를 가져오는 중입니다...</p>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                        공고 원문 페이지에서 첨부 서류(신청서식, 공고문) 다운로드 링크를 추출하고 있습니다. 잠시만 기다려주세요.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 text-center space-y-2">
+                    <p className="text-xs text-slate-400">등록된 첨부 문서 파일이 아직 없습니다.</p>
+                    <button
+                      onClick={fetchLatestProgramDetails}
+                      className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors inline-flex items-center space-x-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>첨부파일 검색 및 동기화</span>
+                    </button>
+                  </div>
+                )
               ) : (
                 sortedDocs.map((doc, idx) => {
                   const isDirectDownload =
