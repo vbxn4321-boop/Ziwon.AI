@@ -1,0 +1,187 @@
+// Ziwon.AI Prisma Schema Model Specification (PostgreSQL Engine for Supabase & Vercel)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String              @id @default(uuid())
+  email         String              @unique
+  passwordHash  String?             // PBKDF2 salted password hash
+  name          String?
+  avatarUrl     String?
+  role          String              @default("USER") // USER, CONSULTANT, ADMIN
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  userCompanies UserCompany[]
+  savedPlans    SavedPsstPlan[]
+  bookmarks     BookmarkedProgram[]
+}
+
+model Company {
+  id                String           @id @default(uuid())
+  name              String
+  bizRegNo          String?          // 사업자등록번호
+  industryCode      String?          // 표준산업분류코드
+  industry          String?          // 산업분야 (예: AI SaaS, 스마트팜)
+  region            String           // 소재지 (예: 서울특별시, 경기도)
+  foundedDate       DateTime?        // 창업일 (업력 계산용)
+  revenue           Decimal?         // 최근 매출액 (원)
+  employeeCount     Int              @default(1) // 상시 근로자 수
+  isExporting       Boolean          @default(false)
+  hasPatents        Boolean          @default(false)
+  hasCertifications Boolean          @default(false) // 벤처기업, 여성기업 등
+  coreItemSummary   String?          // 핵심 아이템 설명
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  userCompanies     UserCompany[]
+  recommendations   Recommendation[]
+}
+
+model UserCompany {
+  id        String   @id @default(uuid())
+  userId    String
+  companyId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId])
+}
+
+model SavedPsstPlan {
+  id                 String          @id @default(uuid())
+  userId             String
+  title              String          // 사업계획서 제목
+  targetProgramTitle String?         // 목표 지원사업 서식명
+  supportProgramId   String?         // 연계된 지원사업 ID (선택)
+  planJson           String          // PSST 사업계획서 전체 JSON
+  score              Int?            // 심사위원 점수
+  grade              String?         // S, A, B 등급
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supportProgram     SupportProgram? @relation(fields: [supportProgramId], references: [id], onDelete: SetNull)
+}
+
+model BookmarkedProgram {
+  id               String         @id @default(uuid())
+  userId           String
+  supportProgramId String
+  createdAt        DateTime       @default(now())
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supportProgram   SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, supportProgramId])
+}
+
+model SupportProgram {
+  id                String              @id @default(uuid())
+  title             String              // 통합 정규화 사업명
+  organizer         String              // 주관기관 (예: 중소벤처기업부)
+  executingAgency   String?             // 수행기관 (예: 창업진흥원)
+  category          String              // 지원분야 (창업/R&D/수출/인력/금융 등)
+  region            String              // 지원지역 (전국, 광주, 서울 등)
+  targetDescription String?             // 지원대상 요약
+  startDate         DateTime?           // 신청 시작일
+  endDate           DateTime?           // 신청 마감일
+  budget            String?             // 지원규모/금액 요약
+  officialNoticeNo  String?             // 공식 공고번호
+  duplicateStatus   String              @default("UNIQUE") // UNIQUE, MERGE_CANDIDATE
+  canonicalId       String?             // 중복일 경우 대표 사업 ID
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  sources           SupportSource[]
+  documents         SupportDocument[]
+  analyses          SupportAnalysis[]
+  recommendations   Recommendation[]
+  savedPlans        SavedPsstPlan[]
+  bookmarks         BookmarkedProgram[]
+}
+
+model SupportSource {
+  id               String         @id @default(uuid())
+  supportProgramId String
+  sourceType       String         // K_STARTUP, BIZINFO, NAVER
+  externalId       String         // 외부 출처 고유 ID
+  sourceUrl        String         // 원문 공고 URL
+  rawTitle         String         // 원문 사업명
+  rawData          String         // 수집 원본 raw JSON 데이터
+  createdAt        DateTime       @default(now())
+  supportProgram   SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceType, externalId])
+}
+
+model SupportDocument {
+  id               String          @id @default(uuid())
+  supportProgramId String
+  fileName         String          // 첨부파일명
+  fileUrl          String          // 첨부파일 다운로드 URL
+  fileType         String          // HWP, PDF, HTML, DOCX
+  fileHash         String?         // 문서 변경 검증용 SHA256 해시
+  status           String          @default("PENDING") // PENDING, PARSED, FAILED
+  extractedText    String?         // 파싱된 전체 원문 텍스트
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  supportProgram   SupportProgram  @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+  chunks           DocumentChunk[]
+}
+
+model DocumentChunk {
+  id           String          @id @default(uuid())
+  documentId   String
+  chunkIndex   Int
+  pageNumber   Int?
+  sectionTitle String?
+  content      String
+  startOffset  Int?
+  endOffset    Int?
+  createdAt    DateTime        @default(now())
+  document     SupportDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model SupportAnalysis {
+  id                 String         @id @default(uuid())
+  supportProgramId   String
+  model              String         // gemini-3.6-flash
+  promptVersion      String         // v1.0
+  sourceDocumentHash String?        // 캐시 무효화 검증용
+  status             String         @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  resultJson         String         // Gemini AI 분석 결과 JSON
+  createdAt          DateTime       @default(now())
+  supportProgram     SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+}
+
+model Recommendation {
+  id               String         @id @default(uuid())
+  companyId        String
+  supportProgramId String
+  totalScore       Float          // 0 ~ 100점
+  hardEligibility  Boolean        @default(true) // 1차 Rule Engine 통과 여부
+  breakdownJson    String         // 항목별 득점표 JSON
+  passedConditions String         // 충족한 조건 목록
+  warningNotices   String?        // 주의/불이익 항목
+  aiReasoning      String?        // 2차 AI 추천 사유 요약
+  createdAt        DateTime       @default(now())
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supportProgram   SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, supportProgramId])
+}
+
+model CrawlLog {
+  id           String   @id @default(uuid())
+  sourceType   String   // K_STARTUP, BIZINFO
+  status       String   // SUCCESS, FAILED
+  itemCount    Int      @default(0)
+  errorMessage String?
+  executedAt   DateTime @default(now())
+}

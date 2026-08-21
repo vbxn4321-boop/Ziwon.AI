@@ -1,21 +1,30 @@
-# dependencies
-/node_modules
-/.pnpm
-/.yarn
+# Dependencies (All directories)
+node_modules/
+**/node_modules/
+.pnpm/
+**/.pnpm/
+.yarn/
+**/.yarn/
 
 # Next.js build output
-/.next/
-/out/
+.next/
+**/.next/
+out/
+**/out/
 
 # Production build
-/build
-/dist
+build/
+dist/
+**/*.tsbuildinfo
 
 # Environment variables & secrets
 .env
 .env*.local
 .env.production
 .env.development
+**/.env
+**/.env.local
+**/.env.*
 
 # Databases & local sqlite
 *.db
@@ -31,6 +40,16 @@ kstartup-sample.html
 kstartup-tab-sample.html
 bizinfo-board-sample.html
 bizinfo-pbanc-list.html
+
+# Python & Backend
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+venv/
+**/venv/
+.venv/
+**/.venv/
 
 # IDE & OS files
 .DS_Store
