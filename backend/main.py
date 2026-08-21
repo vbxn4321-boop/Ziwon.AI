@@ -1,5 +1,12 @@
 import sys
+import os
 from contextlib import asynccontextmanager
+
+# Guarantee current directory in python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
