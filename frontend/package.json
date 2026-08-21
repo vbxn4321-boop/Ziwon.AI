@@ -4,13 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npx prisma generate && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "db:push": "npx prisma db push",
-    "db:studio": "npx prisma studio",
-    "db:seed": "npx tsx scripts/seed.ts",
-    "test:collector": "npx tsx scripts/test-collector.ts"
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx scripts/seed.ts",
+    "test:collector": "tsx scripts/test-collector.ts"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",
@@ -30,7 +30,6 @@
     "next": "^15.1.8",
     "nodemailer": "^9.0.5",
     "pdf-parse": "^2.4.5",
-    "prisma": "^6.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1",
@@ -42,6 +41,7 @@
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.1",
+    "prisma": "^6.3.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

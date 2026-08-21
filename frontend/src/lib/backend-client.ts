@@ -1,6 +1,9 @@
-// Frontend Auth & Backend API Client
-
-const BACKEND_BASE_URL = process.env.BACKEND_API_URL || "http://localhost:8000/api/v1";
+const BACKEND_BASE_URL =
+  process.env.NEXT_PUBLIC_BACKEND_API_URL ||
+  process.env.BACKEND_API_URL ||
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000/api/v1"
+    : "https://ziwonai-production.up.railway.app/api/v1");
 
 function authHeaders(token?: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, LayoutGrid, ShieldCheck, Database, Server, User, LogIn, LogOut, Building2, FolderHeart } from "lucide-react";
 import { supabase, clearLocalAuth } from "@/lib/supabase-client";
+import { checkBackendHealth } from "@/lib/backend-client";
 import AuthModal from "@/components/auth/AuthModal";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
@@ -50,17 +51,14 @@ export const Header: React.FC<HeaderProps> = ({
     // Check Python FastAPI backend status
     const checkBackend = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/v1/health", {
-          method: "GET",
-          signal: AbortSignal.timeout(2000),
-        });
-        setBackendOnline(res.ok);
+        const health = await checkBackendHealth();
+        setBackendOnline(health.online);
       } catch {
         setBackendOnline(false);
       }
     };
     checkBackend();
-    const interval = setInterval(checkBackend, 10000);
+    const interval = setInterval(checkBackend, 30000);
 
     syncCurrentUser();
 
