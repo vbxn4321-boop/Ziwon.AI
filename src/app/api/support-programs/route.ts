@@ -11,9 +11,11 @@ export async function GET(req: NextRequest) {
     const targetAge = searchParams.get("targetAge") || "";
     const founderStage = searchParams.get("founderStage") || "";
     const statusMode = searchParams.get("statusMode") || (searchParams.get("onlyClosed") === "true" ? "closed" : "active");
+    const sort = searchParams.get("sort") || "latest"; // latest, deadline, startDate
+    const timeFilter = searchParams.get("timeFilter") || "all"; // all, today, recent, urgent
 
     // Pagination & Limit for ultra-fast response
-    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "20"), 1), 100);
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "18"), 1), 100);
     const page = Math.max(parseInt(searchParams.get("page") || "1"), 1);
     const skip = (page - 1) * limit;
 
@@ -42,8 +44,23 @@ export async function GET(req: NextRequest) {
     }
     // statusMode === "all" 인 경우 별도 날짜 조건 없음
 
+    // 2. Time Filter (today, recent 3 days, urgent 7 days)
+    if (timeFilter === "today") {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      whereClause.createdAt = { gte: oneDayAgo };
+    } else if (timeFilter === "recent") {
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      whereClause.createdAt = { gte: threeDaysAgo };
+    } else if (timeFilter === "urgent") {
+      const sevenDaysLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      sevenDaysLater.setHours(23, 59, 59, 999);
+      whereClause.endDate = {
+        gte: today,
+        lte: sevenDaysLater,
+      };
+    }
 
-    // 2. Keyword Search Filter
+    // 3. Keyword Search Filter
     if (query) {
       const searchOR = [
         { title: { contains: query } },
@@ -59,12 +76,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 3. Region Filter
+    // 4. Region Filter
     if (region && region !== "전체") {
       whereClause.region = { contains: region };
     }
 
-    // 4. Category Filter
+    // 5. Category Filter
     if (category && category !== "전체") {
       if (category.includes("R&D") || category.includes("기술")) {
         whereClause.category = { contains: "기술" };
@@ -73,14 +90,28 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 5. Organizer Filter
+    // 6. Organizer Filter
     if (organizer && organizer !== "전체") {
       whereClause.organizer = { contains: organizer };
     }
 
-    // 6. Founder Stage Filter
+    // 7. Founder Stage Filter
     if (founderStage && founderStage !== "전체") {
       whereClause.targetDescription = { contains: founderStage };
+    }
+
+    // Determine Order By Clause
+    let orderByClause: any = { createdAt: "desc" };
+    if (sort === "deadline") {
+      orderByClause = [
+        { endDate: "asc" },
+        { createdAt: "desc" },
+      ];
+    } else if (sort === "startDate") {
+      orderByClause = [
+        { startDate: "desc" },
+        { createdAt: "desc" },
+      ];
     }
 
     // Execute count and paginated query concurrently
@@ -96,7 +127,7 @@ export async function GET(req: NextRequest) {
             orderBy: { createdAt: "desc" },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: orderByClause,
         take: limit,
         skip: skip,
       }),
@@ -109,6 +140,8 @@ export async function GET(req: NextRequest) {
       limit,
       hasMore: skip + programs.length < total,
       statusMode,
+      sort,
+      timeFilter,
       data: programs,
     });
   } catch (error: any) {
