@@ -25,10 +25,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Setup CORS Middleware
+# Setup CORS Middleware (Support all origins, Vercel & localhost, Preflight 200)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins or ["*"],
+    allow_origin_regex=r"^https?:\/\/.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
