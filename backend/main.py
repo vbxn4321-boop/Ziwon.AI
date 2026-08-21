@@ -55,4 +55,6 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=settings.PORT, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    print(f"[Ziwon.AI Engine] Starting on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)
