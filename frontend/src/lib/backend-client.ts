@@ -225,24 +225,24 @@ export async function chatCoachWithBackend(messages: any[], targetProgramTitle: 
 
 // ----------------- User Profile & Company Profile CRUD -----------------
 
-export async function fetchMyProfile(token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/users/me`, {
+export async function fetchMyProfile(token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/users/me`, {
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error("프로필 조회 실패");
   return res.json();
 }
 
-export async function fetchMyCompany(token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/companies/me`, {
+export async function fetchMyCompany(token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/companies/me`, {
     headers: authHeaders(token),
   });
   if (!res.ok) return null;
   return res.json();
 }
 
-export async function saveMyCompany(data: any, token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/companies/me`, {
+export async function saveMyCompany(data: any, token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/companies/me`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(data),
@@ -253,16 +253,16 @@ export async function saveMyCompany(data: any, token: string) {
 
 // ----------------- Saved PSST Business Plans CRUD -----------------
 
-export async function fetchMyPlans(token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/plans`, {
+export async function fetchMyPlans(token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/plans`, {
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error("사업계획서 목록 조회 실패");
   return res.json();
 }
 
-export async function savePlanToBackend(data: any, token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/plans`, {
+export async function savePlanToBackend(data: any, token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/plans`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(data),
@@ -271,16 +271,16 @@ export async function savePlanToBackend(data: any, token: string) {
   return res.json();
 }
 
-export async function fetchPlanDetail(planId: string, token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/plans/${planId}`, {
+export async function fetchPlanDetail(planId: string, token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/plans/${planId}`, {
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error("사업계획서 상세 조회 실패");
   return res.json();
 }
 
-export async function deletePlanFromBackend(planId: string, token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/plans/${planId}`, {
+export async function deletePlanFromBackend(planId: string, token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/plans/${planId}`, {
     method: "DELETE",
     headers: authHeaders(token),
   });
@@ -290,19 +290,20 @@ export async function deletePlanFromBackend(planId: string, token: string) {
 
 // ----------------- Bookmarks / Scraps CRUD -----------------
 
-export async function fetchMyBookmarks(token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/bookmarks`, {
+export async function fetchMyBookmarks(token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/bookmarks`, {
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error("관심 공고 목록 조회 실패");
   return res.json();
 }
 
-export async function toggleBookmarkOnBackend(programId: string, token: string) {
-  const res = await fetch(`${BACKEND_BASE_URL}/bookmarks/${programId}/toggle`, {
+export async function toggleBookmarkOnBackend(programId: string, token?: string) {
+  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/bookmarks/${programId}/toggle`, {
     method: "POST",
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error("관심 공고 처리 실패");
   return res.json();
 }
+
