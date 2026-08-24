@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Sparkles, LayoutGrid, ShieldCheck, Database, Server, User, LogIn, LogOut, Building2, FolderHeart } from "lucide-react";
-import { supabase, clearLocalAuth } from "@/lib/supabase-client";
-import { checkBackendHealth } from "@/lib/backend-client";
+import { supabase, clearLocalAuth, getJwtToken } from "@/lib/supabase-client";
+import { checkBackendHealth, backendLogout } from "@/lib/backend-client";
 import AuthModal from "@/components/auth/AuthModal";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
@@ -25,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [sessionUser, setSessionUser] = useState<any>(null);
+  const [mounted, setMounted] = useState(false);
 
   // Modals state
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -43,7 +44,14 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSessionUser(session?.user || null);
+      if (session?.user) {
+        setSessionUser(session.user);
+      } else {
+        const localUserStr = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
+        if (!localUserStr) {
+          setSessionUser(null);
+        }
+      }
     });
   };
 
@@ -60,13 +68,22 @@ export const Header: React.FC<HeaderProps> = ({
     checkBackend();
     const interval = setInterval(checkBackend, 30000);
 
+    setMounted(true);
     syncCurrentUser();
 
     const handleLocalAuthChange = () => syncCurrentUser();
     window.addEventListener("ziwon_auth_change", handleLocalAuthChange);
 
+    // Supabase onAuthStateChange가 null을 반환해도 local JWT 유저를 덮어쓰지 않도록 방어
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSessionUser(session?.user || null);
+      if (session?.user) {
+        setSessionUser(session.user);
+      } else {
+        const localUserStr = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
+        if (!localUserStr) {
+          setSessionUser(null);
+        }
+      }
     });
 
     return () => {
@@ -77,6 +94,14 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleLogout = async () => {
+    try {
+      const token = await getJwtToken();
+      if (token) {
+        await backendLogout(token);
+      }
+    } catch (e) {
+      console.warn("Logout error:", e);
+    }
     clearLocalAuth();
     await supabase.auth.signOut();
     setSessionUser(null);
@@ -95,50 +120,27 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Left: Logo & DB Live Badge & Backend Status */}
           <div className="flex items-center space-x-3">
             <div
-              className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-500 p-[1px] cursor-pointer"
               onClick={() => setActiveNavTab("notices")}
+              className="flex items-center space-x-2 cursor-pointer group"
             >
-              <div className="h-full w-full bg-slate-950 rounded-[11px] flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-blue-400" />
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                <span className="text-white font-black text-sm tracking-wider">Z</span>
               </div>
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span
-                  onClick={() => setActiveNavTab("notices")}
-                  className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent cursor-pointer"
-                >
-                  Ziwon.AI
-                </span>
-                <span className="hidden sm:inline-flex text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 items-center space-x-1">
-                  <Database className="w-3 h-3 text-blue-400" />
-                  <span>{totalCount ? `${totalCount.toLocaleString()}건` : "1,570건"} 실시간 DB</span>
-                </span>
-
-                {/* FastAPI Backend Status Live Indicator */}
-                <span
-                  className={`hidden md:inline-flex text-[10.5px] font-semibold px-2.5 py-0.5 rounded-full border items-center space-x-1 transition-all ${
-                    backendOnline
-                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-sm"
-                      : "bg-slate-800/80 text-slate-400 border-slate-700"
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      backendOnline ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
-                    }`}
-                  />
-                  <Server className="w-3 h-3" />
-                  <span>{backendOnline ? "FastAPI 백엔드 연동됨" : "백엔드 대기 중"}</span>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-base tracking-tight text-white flex items-center">
+                  Ziwon<span className="text-purple-400">.AI</span>
+                  <span className="ml-1.5 px-1.5 py-0.2 rounded-md bg-blue-500/10 text-blue-400 text-[10px] font-bold border border-blue-500/20">
+                    2026
+                  </span>
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Center / Right: Main Navigation Tabs & User Profile */}
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            {/* Main Service Switcher */}
-            <div className="bg-slate-900/90 p-1 rounded-2xl border border-slate-800 flex space-x-1 text-xs">
+          {/* Right: Navigation, Stats & Auth */}
+          <div className="flex items-center space-x-3">
+            {/* Top Main Navigation Tabs */}
+            <div className="flex items-center p-1 bg-slate-900/90 border border-slate-800/80 rounded-2xl text-xs">
               <button
                 onClick={() => setActiveNavTab("notices")}
                 className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-medium transition-all flex items-center space-x-1.5 ${
@@ -168,7 +170,9 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* User Auth Buttons / Profile Menu */}
-            {sessionUser ? (
+            {!mounted ? (
+              <div className="h-8 w-24 bg-slate-900/60 rounded-xl" />
+            ) : sessionUser ? (
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setShowSavedPlansModal(true)}

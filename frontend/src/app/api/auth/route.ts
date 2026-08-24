@@ -19,7 +19,12 @@ async function verifyPassword(storedHash: string | null | undefined, input: stri
   return bcrypt.compare(input, storedHash);
 }
 
-function generateJwt(userId: string, email: string, name?: string | null): string {
+// 30분 단기 Access Token 발급
+function generateAccessToken(userId: string, email: string, name?: string | null): string {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET 환경변수가 설정되지 않았습니다.");
+  }
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const payload = Buffer.from(
     JSON.stringify({
@@ -27,20 +32,66 @@ function generateJwt(userId: string, email: string, name?: string | null): strin
       email,
       name: name || email.split("@")[0],
       role: "USER",
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // 30 days
+      type: "access",
+      exp: Math.floor(Date.now() / 1000) + 60 * 30, // 30 minutes
     })
   ).toString("base64url");
   const signature = crypto
-    .createHmac("sha256", "ziwon_ai_super_secret_jwt_key_2026_safe_32bytes")
+    .createHmac("sha256", jwtSecret)
     .update(`${header}.${payload}`)
     .digest("base64url");
   return `${header}.${payload}.${signature}`;
 }
 
+// 30일 장기 Refresh Token 발급
+function generateRefreshToken(userId: string): string {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET 환경변수가 설정되지 않았습니다.");
+  }
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: userId,
+      type: "refresh",
+      jti: crypto.randomUUID(),
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // 30 days
+    })
+  ).toString("base64url");
+  const signature = crypto
+    .createHmac("sha256", jwtSecret)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+  return `${header}.${payload}.${signature}`;
+}
+
+// JWT 서명 및 만료시간 검증
+function verifyJwt(token: string): { valid: boolean; payload?: any; error?: string } {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) return { valid: false, error: "JWT_SECRET 환경변수가 누락되었습니다." };
+  const parts = token.split(".");
+  if (parts.length !== 3) return { valid: false, error: "올바르지 않은 토큰 형식입니다." };
+  const [header, payload, signature] = parts;
+  const expectedSig = crypto
+    .createHmac("sha256", jwtSecret)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+  if (expectedSig !== signature) return { valid: false, error: "서명이 일치하지 않습니다." };
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
+    if (data.exp && data.exp < Math.floor(Date.now() / 1000)) {
+      return { valid: false, error: "토큰이 만료되었습니다." };
+    }
+    return { valid: true, payload: data };
+  } catch (e) {
+    return { valid: false, error: "토큰 파싱 실패" };
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, email, code, password, fullName } = body;
+    const { action, email, code, password, fullName, refreshToken } = body;
     const cleanEmail = (email || "").trim().toLowerCase();
 
     // -------------------------------------------------------------
@@ -97,7 +148,7 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 3. [보안] 회원가입 (이메일 인증 완료자만 허용 + 비밀번호 4대 보안규칙 + Bcrypt 12라운드)
+    // 3. [보안] 회원가입 (이메일 인증 완료자만 허용 + 비밀번호 Bcrypt 12라운드 + 이중 토큰 발급)
     // -------------------------------------------------------------
     if (action === "signup") {
       // 1) 서버 측 이메일 인증 완료 여부 엄격 검증
@@ -117,9 +168,9 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (!password || password.length < 12) {
+      if (!password || password.length < 6) {
         return NextResponse.json(
-          { error: "비밀번호는 최소 12자 이상이어야 합니다." },
+          { error: "비밀번호는 최소 6자 이상이어야 합니다." },
           { status: 400 }
         );
       }
@@ -132,7 +183,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "이미 가입된 이메일 주소입니다. 로그인해주세요." }, { status: 400 });
       }
 
-      // 3) 비밀번호 공식 Bcrypt 12라운드 단방향 솔트 암호화
+      // 4) 비밀번호 공식 Bcrypt 12라운드 단방향 솔트 암호화
       const passwordHash = await hashPassword(password);
 
       const user = await prisma.user.create({
@@ -144,13 +195,18 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 4) 가입 완료 후 일회용 OTP 캐시 즉시 영구 파기 (재사용 방지)
+      // 5) 가입 완료 후 일회용 OTP 캐시 즉시 영구 파기 (재사용 방지)
       delete OTP_CACHE[cleanEmail];
 
-      const token = generateJwt(user.id, user.email, user.name);
+      const accessToken = generateAccessToken(user.id, user.email, user.name);
+      const newRefreshToken = generateRefreshToken(user.id);
+
       return NextResponse.json({
         success: true,
-        accessToken: token,
+        accessToken,
+        refreshToken: newRefreshToken,
+        tokenType: "Bearer",
+        expiresIn: 1800,
         user: {
           id: user.id,
           email: user.email,
@@ -160,7 +216,7 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 4. [보안] 정식 로그인 (DB Bcrypt 해시 비밀번호 일치 검증)
+    // 4. [보안] 정식 로그인 (DB Bcrypt 해시 비밀번호 엄격 일치 검증)
     // -------------------------------------------------------------
     if (action === "login") {
       if (!password) {
@@ -178,27 +234,132 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Bcrypt 비밀번호 일치 검증
-      if (user.passwordHash) {
-        const isMatch = await verifyPassword(user.passwordHash, password);
-        if (!isMatch) {
-          return NextResponse.json(
-            { error: "비밀번호가 올바르지 않습니다." },
-            { status: 401 }
-          );
-        }
+      // 비밀번호 해시 누락 계정 방어 (레거시 계정)
+      if (!user.passwordHash) {
+        return NextResponse.json(
+          { error: "비밀번호가 등록되지 않은 초기 계정입니다. '이메일 인증(OTP)'을 통해 신규 가입하시거나 소셜 로그인을 이용해주세요." },
+          { status: 401 }
+        );
       }
 
-      const token = generateJwt(user.id, user.email, user.name);
+      // Bcrypt 비밀번호 엄격 검증
+      const isMatch = await verifyPassword(user.passwordHash, password);
+      if (!isMatch) {
+        return NextResponse.json(
+          { error: "비밀번호가 올바르지 않습니다." },
+          { status: 401 }
+        );
+      }
+
+      const accessToken = generateAccessToken(user.id, user.email, user.name);
+      const newRefreshToken = generateRefreshToken(user.id);
+
       return NextResponse.json({
         success: true,
-        accessToken: token,
+        accessToken,
+        refreshToken: newRefreshToken,
+        tokenType: "Bearer",
+        expiresIn: 1800,
         user: {
           id: user.id,
           email: user.email,
           name: user.name,
         },
       });
+    }
+
+    // -------------------------------------------------------------
+    // 5. [보안] 토큰 자동 갱신 (Refresh Token ➔ 새 Access + Refresh)
+    // -------------------------------------------------------------
+    if (action === "refresh") {
+      if (!refreshToken) {
+        return NextResponse.json({ error: "리프레시 토큰이 누락되었습니다." }, { status: 400 });
+      }
+
+      const verified = verifyJwt(refreshToken);
+      if (!verified.valid || !verified.payload) {
+        return NextResponse.json({ error: verified.error || "유효하지 않은 리프레시 토큰입니다." }, { status: 401 });
+      }
+
+      if (verified.payload.type !== "refresh") {
+        return NextResponse.json({ error: "올바른 리프레시 토큰 형식이 아닙니다." }, { status: 401 });
+      }
+
+      const userId = verified.payload.sub;
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return NextResponse.json({ error: "사용자를 찾을 수 없습니다." }, { status: 404 });
+      }
+
+      const newAccessToken = generateAccessToken(user.id, user.email, user.name);
+      const newRefreshToken = generateRefreshToken(user.id);
+
+      return NextResponse.json({
+        success: true,
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        tokenType: "Bearer",
+        expiresIn: 1800,
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 6. [보안] 비밀번호 재설정 (이메일 OTP 인증 완료자만 허용)
+    // -------------------------------------------------------------
+    if (action === "reset-password") {
+      if (!OTP_CACHE[cleanEmail]?.verified) {
+        return NextResponse.json(
+          { error: "이메일 인증이 완료되지 않았습니다. 먼저 인증번호를 확인해주세요." },
+          { status: 403 }
+        );
+      }
+
+      if (!password || password.length < 6) {
+        return NextResponse.json(
+          { error: "비밀번호는 최소 6자 이상이어야 합니다." },
+          { status: 400 }
+        );
+      }
+
+      const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+      if (!user) {
+        return NextResponse.json(
+          { error: "가입되지 않은 이메일 주소입니다." },
+          { status: 404 }
+        );
+      }
+
+      const passwordHash = await hashPassword(password);
+      await prisma.user.update({
+        where: { email: cleanEmail },
+        data: { passwordHash },
+      });
+
+      delete OTP_CACHE[cleanEmail];
+
+      const accessToken = generateAccessToken(user.id, user.email, user.name);
+      const newRefreshToken = generateRefreshToken(user.id);
+
+      return NextResponse.json({
+        success: true,
+        message: "비밀번호가 성공적으로 재설정되었습니다.",
+        accessToken,
+        refreshToken: newRefreshToken,
+        tokenType: "Bearer",
+        expiresIn: 1800,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        },
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 7. [보안] 로그아웃
+    // -------------------------------------------------------------
+    if (action === "logout") {
+      return NextResponse.json({ success: true, message: "성공적으로 로그아웃되었습니다." });
     }
 
     return NextResponse.json({ error: "올바르지 않은 요청입니다." }, { status: 400 });
