@@ -7,6 +7,7 @@ import {
   backendVerifyOtp,
   backendSignup,
   backendLogin,
+  backendResetPassword,
 } from "@/lib/backend-client";
 import { validatePasswordSecurity, PasswordValidationResult } from "@/lib/password-validator";
 import {
@@ -54,6 +55,26 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
 
   // 실시간 비밀번호 4대 보안 정책 검증
   const pwdSecurity: PasswordValidationResult = validatePasswordSecurity(password);
+
+  // 모달이 열릴 때 모든 폼 상태 및 에러/성공 메시지를 완전 초기화 (로그인 모드로 리셋)
+  useEffect(() => {
+    if (isOpen) {
+      setMode("login");
+      setEmail("");
+      setPassword("");
+      setPasswordConfirm("");
+      setFullName("");
+      setIsOtpSent(false);
+      setOtpCode("");
+      setIsEmailVerified(false);
+      setTimeLeft(180);
+      setSendingOtp(false);
+      setVerifyingOtp(false);
+      setLoading(false);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+    }
+  }, [isOpen]);
 
   // 3분 카운트다운 타이머
   useEffect(() => {
@@ -176,7 +197,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
       if (mode === "signup") {
         const res = await backendSignup(email, securePassword, fullName);
         if (res.accessToken) {
-          saveLocalAuth(res.accessToken, res.user);
+          saveLocalAuth(res.accessToken, res.user, res.refreshToken);
         }
         setSuccessMsg("회원가입이 완료되었습니다! 자동 로그인됩니다.");
         setTimeout(() => {
@@ -187,7 +208,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
         // Normal Login
         const res = await backendLogin(email, securePassword);
         if (res.accessToken) {
-          saveLocalAuth(res.accessToken, res.user);
+          saveLocalAuth(res.accessToken, res.user, res.refreshToken);
         }
         setSuccessMsg("로그인 성공!");
         setTimeout(() => {
@@ -206,7 +227,19 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setErrorMsg("비밀번호를 재설정할 이메일 주소를 입력해주세요.");
+      setErrorMsg("이메일 주소를 입력해주세요.");
+      return;
+    }
+    if (!isEmailVerified) {
+      setErrorMsg("먼저 이메일 인증번호 확인을 완료해주세요.");
+      return;
+    }
+    if (!pwdSecurity.valid) {
+      setErrorMsg(pwdSecurity.errorMessages[0] || "비밀번호 보안 조건을 충족해주세요.");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setErrorMsg("새 비밀번호와 확인이 일치하지 않습니다.");
       return;
     }
 
@@ -215,22 +248,32 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
     setSuccessMsg(null);
 
     try {
-      await backendSendOtp(email);
-      setSuccessMsg(`비밀번호 재설정 인증번호가 발송되었습니다! 메일함을 확인해주세요.`);
+      const securePassword = await hashClientPassword(password);
+      const res = await backendResetPassword(email, securePassword);
+      if (res.accessToken) {
+        saveLocalAuth(res.accessToken, res.user, res.refreshToken);
+      }
+      setSuccessMsg("비밀번호가 성공적으로 변경되었습니다! 자동 로그인됩니다.");
+      setTimeout(() => {
+        onLoginSuccess?.();
+        onClose();
+      }, 1000);
     } catch (err: any) {
-      setErrorMsg(err.message || "비밀번호 재설정 메일 발송 실패");
+      setErrorMsg(err.message || "비밀번호 재설정 처리 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleModeChange = (newMode: "login" | "signup") => {
+  const handleModeChange = (newMode: "login" | "signup" | "forgot") => {
     setMode(newMode);
     setErrorMsg(null);
     setSuccessMsg(null);
     setIsOtpSent(false);
     setIsEmailVerified(false);
     setOtpCode("");
+    setPassword("");
+    setPasswordConfirm("");
   };
 
   return (
@@ -308,35 +351,177 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
 
           {/* Mode: Forgot Password */}
           {mode === "forgot" ? (
-            <form onSubmit={handleResetPassword} className="space-y-4">
+            <form onSubmit={handleResetPassword} className="space-y-3.5">
+              {/* 1. Email Field */}
               <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-300">가입한 이메일 주소</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.com"
-                    className="w-full bg-slate-950/80 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
-                  />
+                <label className="text-[11px] font-semibold text-slate-300">가입한 이메일 주소 *</label>
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      type="email"
+                      required
+                      disabled={isEmailVerified}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@company.com"
+                      className={`w-full bg-slate-950/80 border rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none transition-colors ${
+                        isEmailVerified
+                          ? "border-emerald-500/60 bg-emerald-950/10 text-emerald-300"
+                          : "border-slate-800 focus:border-purple-500"
+                      }`}
+                    />
+                  </div>
+
+                  {/* [인증번호 발송] 버튼 */}
+                  {!isEmailVerified && (
+                    <button
+                      type="button"
+                      disabled={sendingOtp || !email}
+                      onClick={handleSendEmailOtp}
+                      className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 text-white font-bold text-xs transition-all flex items-center space-x-1.5 flex-shrink-0 cursor-pointer shadow-md shadow-purple-600/20 disabled:opacity-50"
+                    >
+                      {sendingOtp ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isOtpSent ? "재발송" : "인증번호 발송"}</span>
+                    </button>
+                  )}
+
+                  {/* 이메일 인증 완료 뱃지 */}
+                  {isEmailVerified && (
+                    <div className="px-3 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center space-x-1 flex-shrink-0">
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      <span>인증완료</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                <span>비밀번호 재설정 인증번호 발송</span>
-              </button>
+              {/* [인증번호 6자리 입력칸] */}
+              {isOtpSent && !isEmailVerified && (
+                <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 space-y-2 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-purple-300 font-bold">이메일 6자리 인증번호</span>
+                    <span className="text-amber-400 font-mono flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>남은 시간 {formatTimer(timeLeft)}</span>
+                    </span>
+                  </div>
+
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="6자리 숫자 입력"
+                      className="flex-1 bg-slate-900 border border-purple-500/40 rounded-xl py-2 px-3 text-xs text-slate-100 font-mono tracking-widest focus:outline-none focus:border-purple-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={verifyingOtp || otpCode.length < 6}
+                      onClick={handleVerifyEmailOtp}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 text-white font-bold text-xs transition-all flex items-center space-x-1 cursor-pointer disabled:opacity-50 shadow-md shadow-emerald-600/20"
+                    >
+                      {verifyingOtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      <span>인증 확인</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    * 전송받은 6자리 인증번호를 입력하고 [인증 확인]을 눌러주세요.
+                  </p>
+                </div>
+              )}
+
+              {/* [새 비밀번호 설정 필드 - 이메일 인증 완료 후 활성화] */}
+              {isEmailVerified && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-300">새 비밀번호 *</label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                      <input
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="영문 대/소문자, 숫자, 특수문자 포함 (최소 6자)"
+                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 실시간 4대 보안 정책 피드백 */}
+                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] space-y-1.5">
+                    <div className="flex items-center space-x-1.5 text-slate-300 font-bold mb-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                      <span>비밀번호 보안 충족 조건 (Bcrypt 12 Rounds)</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <div className={`flex items-center space-x-1 ${pwdSecurity.lengthValid ? "text-emerald-400 font-semibold" : "text-slate-500"}`}>
+                        <span>{pwdSecurity.lengthValid ? "✓" : "•"}</span>
+                        <span>최소 6자 이상</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${pwdSecurity.byteLengthValid ? "text-emerald-400 font-semibold" : "text-red-400"}`}>
+                        <span>{pwdSecurity.byteLengthValid ? "✓" : "•"}</span>
+                        <span>72바이트 이하</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${pwdSecurity.hasUppercase && pwdSecurity.hasLowercase ? "text-emerald-400 font-semibold" : "text-slate-500"}`}>
+                        <span>{pwdSecurity.hasUppercase && pwdSecurity.hasLowercase ? "✓" : "•"}</span>
+                        <span>영문 대문자 & 소문자</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${pwdSecurity.hasNumber && pwdSecurity.hasSpecial ? "text-emerald-400 font-semibold" : "text-slate-500"}`}>
+                        <span>{pwdSecurity.hasNumber && pwdSecurity.hasSpecial ? "✓" : "•"}</span>
+                        <span>숫자 및 특수문자</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-300">새 비밀번호 확인 *</label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                      <input
+                        type="password"
+                        required
+                        value={passwordConfirm}
+                        onChange={(e) => setPasswordConfirm(e.target.value)}
+                        placeholder="새 비밀번호 다시 입력"
+                        className={`w-full bg-slate-950/80 border rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none transition-colors ${
+                          passwordConfirm && password !== passwordConfirm
+                            ? "border-red-500 focus:border-red-500"
+                            : passwordConfirm && password === passwordConfirm
+                            ? "border-emerald-500 focus:border-emerald-500"
+                            : "border-slate-800 focus:border-purple-500"
+                        }`}
+                      />
+                    </div>
+                    {passwordConfirm && password !== passwordConfirm && (
+                      <p className="text-[10px] text-red-400">비밀번호가 일치하지 않습니다.</p>
+                    )}
+                    {passwordConfirm && password === passwordConfirm && (
+                      <p className="text-[10px] text-emerald-400">비밀번호가 일치합니다. ✓</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || !pwdSecurity.valid || password !== passwordConfirm}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                    <span>새 비밀번호로 변경 및 즉시 로그인</span>
+                  </button>
+                </div>
+              )}
 
               <button
                 type="button"
                 onClick={() => handleModeChange("login")}
-                className="w-full py-2 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-1"
+                className="w-full py-2 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-1 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>로그인 화면으로 돌아가기</span>

@@ -23,10 +23,20 @@ export async function getJwtToken(): Promise<string | null> {
   return session?.access_token || null;
 }
 
-export function saveLocalAuth(token: string, user: any) {
+export function getRefreshToken(): string | null {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("ziwon_refresh_token");
+  }
+  return null;
+}
+
+export function saveLocalAuth(token: string, user: any, refreshToken?: string | null) {
   if (typeof window !== "undefined") {
     localStorage.setItem("ziwon_auth_token", token);
     localStorage.setItem("ziwon_auth_user", JSON.stringify(user));
+    if (refreshToken) {
+      localStorage.setItem("ziwon_refresh_token", refreshToken);
+    }
     window.dispatchEvent(new Event("ziwon_auth_change"));
   }
 }
@@ -34,7 +44,9 @@ export function saveLocalAuth(token: string, user: any) {
 export function clearLocalAuth() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("ziwon_auth_token");
+    localStorage.removeItem("ziwon_refresh_token");
     localStorage.removeItem("ziwon_auth_user");
     window.dispatchEvent(new Event("ziwon_auth_change"));
   }
 }
+

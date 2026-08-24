@@ -2,8 +2,8 @@ const BACKEND_BASE_URL =
   typeof window !== "undefined"
     ? "/api/backend-proxy"
     : process.env.BACKEND_API_URL ||
-      process.env.NEXT_PUBLIC_BACKEND_API_URL ||
-      "https://ziwonai-production.up.railway.app/api/v1";
+    process.env.NEXT_PUBLIC_BACKEND_API_URL ||
+    "https://ziwonai-production.up.railway.app/api/v1";
 
 function authHeaders(token?: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -75,6 +75,103 @@ export async function backendLogin(email: string, password: string) {
   if (!res.ok) throw new Error(json.error || "로그인 실패");
   return json;
 }
+
+export async function backendResetPassword(email: string, password: string) {
+  const res = await fetch("/api/auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "reset-password", email, password }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "비밀번호 재설정 실패");
+  return json;
+}
+
+
+export async function backendLogout(token?: string) {
+  try {
+    // 1. Clear session via /api/auth
+    await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "logout" }),
+    });
+
+    // 2. Also notify FastAPI Backend if running in background
+    if (token) {
+      fetch(`${BACKEND_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      }).catch(() => {});
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: true };
+  }
+}
+
+export async function backendRefreshToken(refreshToken?: string): Promise<{ accessToken: string; refreshToken: string } | null> {
+  const tokenToUse = refreshToken || (typeof window !== "undefined" ? localStorage.getItem("ziwon_refresh_token") : null);
+  if (!tokenToUse) return null;
+
+  try {
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "refresh", refreshToken: tokenToUse }),
+    });
+
+    if (!res.ok) {
+      // Refresh token expired or invalidated -> clear local auth
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("ziwon_auth_token");
+        localStorage.removeItem("ziwon_refresh_token");
+        localStorage.removeItem("ziwon_auth_user");
+        window.dispatchEvent(new Event("ziwon_auth_change"));
+      }
+      return null;
+    }
+
+    const data = await res.json();
+    if (data.accessToken && typeof window !== "undefined") {
+      localStorage.setItem("ziwon_auth_token", data.accessToken);
+      if (data.refreshToken) {
+        localStorage.setItem("ziwon_refresh_token", data.refreshToken);
+      }
+      window.dispatchEvent(new Event("ziwon_auth_change"));
+    }
+    return data;
+  } catch (err) {
+    console.error("[backendRefreshToken] Refresh failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Enhanced fetch wrapper with Automatic Silent Refresh
+ */
+export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  let token = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
+  const headers = new Headers(options.headers || {});
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  let res = await fetch(url, { ...options, headers });
+
+  // If 401 Unauthorized, attempt Silent Refresh once and retry
+  if (res.status === 401 && typeof window !== "undefined") {
+    const refreshed = await backendRefreshToken();
+    if (refreshed?.accessToken) {
+      headers.set("Authorization", `Bearer ${refreshed.accessToken}`);
+      res = await fetch(url, { ...options, headers });
+    }
+  }
+
+  return res;
+}
+
+
 
 // ----------------- Crawler & AI Services -----------------
 
