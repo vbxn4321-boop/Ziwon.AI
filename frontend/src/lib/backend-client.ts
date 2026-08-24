@@ -1,3 +1,5 @@
+import { getJwtToken } from "@/lib/supabase-client";
+
 const BACKEND_BASE_URL =
   typeof window !== "undefined"
     ? "/api/backend-proxy"
@@ -152,6 +154,9 @@ export async function backendRefreshToken(refreshToken?: string): Promise<{ acce
  */
 export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   let token = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
+  if (!token) {
+    token = await getJwtToken();
+  }
   const headers = new Headers(options.headers || {});
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
