@@ -50,11 +50,35 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<"kakao" | "google" | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // 실시간 비밀번호 4대 보안 정책 검증
   const pwdSecurity: PasswordValidationResult = validatePasswordSecurity(password);
+
+  // 브라우저 뒤로가기(BFCache) 또는 탭 복귀 시 로딩 상태 자동 초기화
+  useEffect(() => {
+    const handleResetLoading = () => {
+      setLoading(false);
+      setSocialLoading(null);
+    };
+
+    window.addEventListener("pageshow", handleResetLoading);
+    window.addEventListener("focus", handleResetLoading);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        handleResetLoading();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("pageshow", handleResetLoading);
+      window.removeEventListener("focus", handleResetLoading);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   // 모달이 열릴 때 모든 폼 상태 및 에러/성공 메시지를 완전 초기화 (로그인 모드로 리셋)
   useEffect(() => {
@@ -71,6 +95,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
       setSendingOtp(false);
       setVerifyingOtp(false);
       setLoading(false);
+      setSocialLoading(null);
       setErrorMsg(null);
       setSuccessMsg(null);
     }
@@ -97,7 +122,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
 
   // 1. Social Login (Google / Kakao)
   const handleSocialLogin = async (provider: "google" | "kakao") => {
-    setLoading(true);
+    setSocialLoading(provider);
     setErrorMsg(null);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -109,7 +134,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
       if (error) throw error;
     } catch (err: any) {
       setErrorMsg(err.message || `${provider} 로그인 중 오류가 발생했습니다.`);
-      setLoading(false);
+      setSocialLoading(null);
     }
   };
 
@@ -759,21 +784,41 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
 
               <div className="space-y-2">
                 <button
+                  type="button"
                   onClick={() => handleSocialLogin("kakao")}
-                  disabled={loading}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#FEE500] hover:bg-[#FEE500]/90 text-[#191919] font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                  disabled={loading || socialLoading !== null}
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#FEE500] hover:bg-[#FEE500]/90 text-[#191919] font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow-md cursor-pointer disabled:opacity-60"
                 >
-                  <span className="font-extrabold text-sm">💬</span>
-                  <span>카카오로 3초 만에 시작하기</span>
+                  {socialLoading === "kakao" ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#191919]" />
+                      <span>카카오 연결 중...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-extrabold text-sm">💬</span>
+                      <span>카카오로 3초 만에 시작하기</span>
+                    </>
+                  )}
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => handleSocialLogin("google")}
-                  disabled={loading}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-white border border-slate-700 font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50"
+                  disabled={loading || socialLoading !== null}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-white border border-slate-700 font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-60"
                 >
-                  <span className="font-bold text-sm">G</span>
-                  <span>Google 계정으로 계속하기</span>
+                  {socialLoading === "google" ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      <span>Google 연결 중...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-bold text-sm">G</span>
+                      <span>Google 계정으로 계속하기</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

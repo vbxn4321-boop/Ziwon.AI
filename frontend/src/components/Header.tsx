@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { Sparkles, LayoutGrid, ShieldCheck, Database, Server, User, LogIn, LogOut, Building2, FolderHeart } from "lucide-react";
 import { supabase, clearLocalAuth, getJwtToken } from "@/lib/supabase-client";
 import { checkBackendHealth, backendLogout } from "@/lib/backend-client";
-import AuthModal from "@/components/auth/AuthModal";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
 
@@ -28,7 +28,6 @@ export const Header: React.FC<HeaderProps> = ({
   const [mounted, setMounted] = useState(false);
 
   // Modals state
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showSavedPlansModal, setShowSavedPlansModal] = useState(false);
 
@@ -200,24 +199,19 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => setShowAuthModal(true)}
+              <Link
+                href="/login"
                 className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-600/30 flex items-center space-x-1.5 transition-all cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>로그인 / 회원가입</span>
-              </button>
+              </Link>
             )}
           </div>
         </div>
       </header>
 
       {/* Global Auth & User Modals */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-      />
-
       <CompanyProfileModal
         isOpen={showCompanyModal}
         onClose={() => setShowCompanyModal(false)}
