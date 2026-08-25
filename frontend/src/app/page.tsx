@@ -25,6 +25,7 @@ import { Header } from "../components/Header";
 import { ProgramCard, SupportProgram } from "../components/ProgramCard";
 import { ProgramDetailModal } from "../components/ProgramDetailModal";
 import { PsstPlanGenerator } from "../components/PsstPlanGenerator";
+import Footer from "../components/Footer";
 
 interface FilterItem {
   name: string;
@@ -1049,6 +1050,9 @@ export default function HomePage() {
           }}
         />
       )}
+
+      {/* 84컴퍼니 사업자 정보 및 운영 정책 푸터 */}
+      <Footer />
     </div>
   );
 }
