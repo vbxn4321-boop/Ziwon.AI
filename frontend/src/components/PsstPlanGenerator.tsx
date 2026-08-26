@@ -71,14 +71,14 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           setCreationMode={setCreationMode}
           canvasTheme={canvasTheme}
           setCanvasTheme={setCanvasTheme}
-          isGenerating={isGenerating}
-          generatedResult={generatedResult}
+          hasResult={!!generatedResult}
           isCopied={isCopied}
+          onCopyFullText={handleCopyFullText}
+          onResetNew={handleResetNew}
+          onBackToNotices={onBackToNotices}
+          onSavePlan={handleSavePlan}
           isSavingPlan={isSavingPlan}
           saveSuccessMsg={saveSuccessMsg}
-          onGenerate={creationMode === "chat" ? handleGenerateFromChat : () => handleGenerateFromForm()}
-          onCopyFullText={handleCopyFullText}
-          onSavePlan={handleSavePlan}
           onDownloadPdf={handleDownloadPdf}
         />
 

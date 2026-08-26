@@ -261,24 +261,26 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 </div>
 
                 {/* Competitor Comparative Matrix Table */}
-                {generatedResult.solution.competitorMatrix && (
-                  <div className="space-y-2 pt-1">
-                    <h3 className="text-sm font-bold text-blue-300">⚖️ 국내외 경쟁사 비교 분석 매트릭스</h3>
-                    <div className="overflow-x-auto rounded-xl border border-blue-500/30 bg-slate-950/70">
+                {generatedResult.solution.competitorTable && generatedResult.solution.competitorTable.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h3 className="text-sm font-bold text-blue-300">⚔️ 경쟁 제품/대체재 비교 분석표</h3>
+                    <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
                       <table className="w-full text-xs text-left">
-                        <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold text-[11px]">
+                        <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
                           <tr>
-                            <th className="p-2.5">비교 지표</th>
-                            <th className="p-2.5 text-blue-400">당사 솔루션 (Ziwon)</th>
-                            <th className="p-2.5 text-slate-400">기존 경쟁사 A</th>
-                            <th className="p-2.5 text-slate-400">기존 대체재 B</th>
+                            <th className="p-2.5">비교 구분</th>
+                            <th className="p-2.5 text-emerald-400 font-extrabold bg-emerald-950/30">
+                              당사 솔루션 (Ziwon)
+                            </th>
+                            <th className="p-2.5 text-slate-300">경쟁사 A (기존 외산)</th>
+                            <th className="p-2.5 text-slate-300">대체재 B</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
-                          {generatedResult.solution.competitorMatrix.map((row, idx) => (
-                            <tr key={idx}>
-                              <td className="p-2.5 font-semibold text-slate-400">{row.criteria}</td>
-                              <td className="p-2.5 font-bold text-emerald-400 bg-blue-950/20">{row.us}</td>
+                          {generatedResult.solution.competitorTable.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-900/50">
+                              <td className="p-2.5 font-bold text-blue-400 bg-slate-900/50">{row.category}</td>
+                              <td className="p-2.5 font-semibold text-emerald-300 bg-emerald-950/15">{row.ourItem}</td>
                               <td className="p-2.5 text-slate-400">{row.competitorA}</td>
                               <td className="p-2.5 text-slate-400">{row.competitorB}</td>
                             </tr>
@@ -289,12 +291,41 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                   </div>
                 )}
 
-                <div className="space-y-1.5">
-                  <h3 className="text-sm font-bold text-slate-300">2-3. 개발 추진 로드맵 및 마일스톤</h3>
+                <div className="space-y-1.5 pt-2">
+                  <h3 className="text-sm font-bold text-slate-300">2-3. 개발 및 사업화 로드맵</h3>
                   <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                    {generatedResult.solution.developmentMilestone}
+                    {generatedResult.solution.implementationPlan}
                   </p>
                 </div>
+
+                {/* Q1~Q4 Development Roadmap Milestone Table */}
+                {generatedResult.solution.roadmapTable && generatedResult.solution.roadmapTable.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h3 className="text-sm font-bold text-blue-300">🗓️ 협약 기간 내 개발 및 사업화 마일스톤 로드맵</h3>
+                    <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
+                          <tr>
+                            <th className="p-2.5 w-32">추진 기간</th>
+                            <th className="p-2.5">목표 마일스톤</th>
+                            <th className="p-2.5">주요 개발/실증 활동</th>
+                            <th className="p-2.5 text-emerald-400">최종 산출물</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                          {generatedResult.solution.roadmapTable.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-900/50">
+                              <td className="p-2.5 font-bold text-blue-400 bg-slate-900/50">{row.quarter}</td>
+                              <td className="p-2.5 font-semibold text-slate-200">{row.milestone}</td>
+                              <td className="p-2.5 text-slate-400">{row.keyActivities}</td>
+                              <td className="p-2.5 font-semibold text-emerald-300">{row.output}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -311,40 +342,47 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 </h2>
 
                 <div className="space-y-1.5">
-                  <h3 className="text-sm font-bold text-slate-300">3-1. 비즈니스 모델 및 수익화 방안</h3>
+                  <h3 className="text-sm font-bold text-slate-300">3-1. 비즈니스 모델(BM) 및 수익 구조</h3>
                   <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
                     {generatedResult.scaleUp.businessModelAndRevenue}
                   </p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <h3 className="text-sm font-bold text-slate-300">3-2. 시장 진입(GTM) 및 마케팅 전략</h3>
+                  <h3 className="text-sm font-bold text-slate-300">3-2. 초기 시장 진입 및 마케팅 전략</h3>
                   <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                    {generatedResult.scaleUp.go_to_market_strategy}
+                    {generatedResult.scaleUp.marketEntryAndMarketing}
                   </p>
                 </div>
 
-                {/* 3-Year Financial Forecast Table */}
-                {generatedResult.scaleUp.financialPlan && (
-                  <div className="space-y-2 pt-1">
-                    <h3 className="text-sm font-bold text-purple-300">📈 향후 3개년 매출 및 손익 추정치</h3>
-                    <div className="overflow-x-auto rounded-xl border border-purple-500/30 bg-slate-950/70">
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">3-3. 자금 조달 및 예산 집행 계획</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.scaleUp.fundingAndBudgetPlan}
+                  </p>
+                </div>
+
+                {/* Government Subsidy Budget Allocation Table */}
+                {generatedResult.scaleUp.budgetTable && generatedResult.scaleUp.budgetTable.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h3 className="text-sm font-bold text-purple-300">💰 정부지원금 비목별 소요 예산 집행 계획표</h3>
+                    <div className="overflow-x-auto rounded-xl border border-purple-500/20 bg-slate-950/70">
                       <table className="w-full text-xs text-left">
-                        <thead className="bg-purple-950/60 text-purple-200 border-b border-purple-500/20 font-bold text-[11px]">
+                        <thead className="bg-purple-950/60 text-purple-200 border-b border-purple-500/20 font-bold">
                           <tr>
-                            <th className="p-2.5">연도 구분</th>
-                            <th className="p-2.5 text-right">예상 매출액</th>
-                            <th className="p-2.5 text-right">영업이익</th>
-                            <th className="p-2.5 pl-4">주요 마일스톤</th>
+                            <th className="p-2.5">비목 구분</th>
+                            <th className="p-2.5 text-right">집행 금액 (원)</th>
+                            <th className="p-2.5 text-center">비중</th>
+                            <th className="p-2.5">세부 산출 근거 및 내역</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
-                          {generatedResult.scaleUp.financialPlan.map((fin, idx) => (
-                            <tr key={idx}>
-                              <td className="p-2.5 font-bold text-purple-400">{fin.year}</td>
-                              <td className="p-2.5 text-right font-semibold text-slate-200">{fin.sales}</td>
-                              <td className="p-2.5 text-right font-semibold text-emerald-400">{fin.operatingProfit}</td>
-                              <td className="p-2.5 pl-4 text-slate-400">{fin.majorMilestone}</td>
+                          {generatedResult.scaleUp.budgetTable.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-900/50">
+                              <td className="p-2.5 font-bold text-purple-300 bg-slate-900/50">{row.category}</td>
+                              <td className="p-2.5 font-semibold text-right text-emerald-400">{row.amount}</td>
+                              <td className="p-2.5 text-center font-bold text-purple-400">{row.ratio}%</td>
+                              <td className="p-2.5 text-slate-400">{row.description}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -352,13 +390,6 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                     </div>
                   </div>
                 )}
-
-                <div className="space-y-1.5">
-                  <h3 className="text-sm font-bold text-slate-300">3-3. 정부 지원금 집행 계획</h3>
-                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                    {generatedResult.scaleUp.budgetAllocationPlan}
-                  </p>
-                </div>
               </div>
             )}
 
