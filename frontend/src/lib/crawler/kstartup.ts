@@ -24,9 +24,12 @@ export async function fetchKStartupNotices(limit = 100): Promise<RawNoticeItem[]
   });
 
   try {
+    const cleanKey = decodeURIComponent(apiKey);
     while (pageNo <= maxPages) {
-      const url = `https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01?serviceKey=${apiKey}&pageNo=${pageNo}&numOfRows=${numOfRows}`;
-      console.log(`[K-Startup Live Ingestion] Fetching Page ${pageNo}/${maxPages}: ${url.replace(apiKey, "***REDACTED***")}`);
+      const url = `https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01?serviceKey=${encodeURIComponent(
+        cleanKey
+      )}&pageNo=${pageNo}&numOfRows=${numOfRows}`;
+      console.log(`[K-Startup Live Ingestion] Fetching Page ${pageNo}/${maxPages}: ${url.replace(encodeURIComponent(cleanKey), "***REDACTED***")}`);
 
       const res = await fetch(url, { next: { revalidate: 1800 } });
 
