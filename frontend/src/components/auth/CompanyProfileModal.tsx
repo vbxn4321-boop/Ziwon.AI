@@ -8,9 +8,10 @@ import { getJwtToken } from "@/lib/supabase-client";
 interface CompanyProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSaved?: (companyData?: any) => void;
 }
 
-export default function CompanyProfileModal({ isOpen, onClose }: CompanyProfileModalProps) {
+export default function CompanyProfileModal({ isOpen, onClose, onSaved }: CompanyProfileModalProps) {
   const [name, setName] = useState("");
   const [bizRegNo, setBizRegNo] = useState("");
   const [industry, setIndustry] = useState("");
@@ -77,7 +78,7 @@ export default function CompanyProfileModal({ isOpen, onClose }: CompanyProfileM
       const token = await getJwtToken();
       if (!token) throw new Error("로그인 세션이 만료되었습니다. 다시 로그인해주세요.");
 
-      await saveMyCompany(
+      const savedData = await saveMyCompany(
         {
           name,
           bizRegNo: bizRegNo || undefined,
@@ -95,9 +96,12 @@ export default function CompanyProfileModal({ isOpen, onClose }: CompanyProfileM
       );
 
       setSuccessMsg("기업 프로필이 백엔드 DB에 안전하게 저장되었습니다!");
+      if (onSaved) {
+        onSaved(savedData);
+      }
       setTimeout(() => {
         onClose();
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       setErrorMsg(err.message || "저장 중 오류가 발생했습니다.");
     } finally {

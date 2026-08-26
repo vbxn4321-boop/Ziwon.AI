@@ -9,27 +9,81 @@ import {
   PsstFormData,
 } from "../types";
 import { DEFAULT_INITIAL_MESSAGE, DEFAULT_SUGGESTIONS } from "../constants";
-import { savePlanToBackend } from "@/lib/backend-client";
+import { savePlanToBackend, fetchMyCompany } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
 
-export function usePsstPlan(initialProgramTitle?: string) {
+export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any) {
   // Mode: "chat" (AI Chatbot Interview) vs "form" (Quick Form Input)
-  const [creationMode, setCreationMode] = useState<CreationMode>("chat");
+  const [creationMode, setCreationMode] = useState<CreationMode>("form");
 
   // Document Canvas Theme: "dark" vs "light"
   const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>("dark");
 
+  // Loaded Company Profile State from DB
+  const [userCompany, setUserCompany] = useState<any>(null);
+
+  // Initial parsed plan
+  const parsedInitialPlan = initialPlanData
+    ? typeof initialPlanData.planJson === "string"
+      ? JSON.parse(initialPlanData.planJson)
+      : initialPlanData.planJson || initialPlanData
+    : null;
+
   // Form Data
   const [formData, setFormData] = useState<PsstFormData>({
-    companyName: "",
-    itemName: "",
-    industry: "",
-    targetCustomer: "",
-    itemDescription: "",
-    coreStrengths: "",
-    targetProgramTitle: initialProgramTitle || "2026년 중소벤처기업부 초기창업패키지",
-    budget: "",
+    companyName: parsedInitialPlan?.overview?.companyName || "",
+    itemName: parsedInitialPlan?.overview?.title || "",
+    industry: parsedInitialPlan?.overview?.industry || "",
+    targetCustomer: parsedInitialPlan?.overview?.summaryTable?.targetUsers || "",
+    itemDescription: parsedInitialPlan?.overview?.itemSummary || "",
+    coreStrengths: parsedInitialPlan?.solution?.competitorDifferentiation || "",
+    targetProgramTitle:
+      initialPlanData?.targetProgramTitle ||
+      initialProgramTitle ||
+      "2026년 중소벤처기업부 초기창업패키지",
+    budget: parsedInitialPlan?.overview?.summaryTable?.targetBudget || "",
   });
+
+  // Auto-fetch user company profile on mount and pre-fill form if empty
+  useEffect(() => {
+    const loadCompanyAndPrefill = async () => {
+      if (parsedInitialPlan) return; // If restoring existing plan, don't overwrite
+      try {
+        const token = await getJwtToken();
+        if (!token) return;
+        const comp = await fetchMyCompany(token);
+        if (comp && comp.name) {
+          setUserCompany(comp);
+          setFormData((prev) => ({
+            ...prev,
+            companyName: prev.companyName || comp.name || "",
+            industry: prev.industry || comp.industry || "",
+            itemDescription: prev.itemDescription || comp.coreItemSummary || "",
+            itemName:
+              prev.itemName ||
+              (comp.coreItemSummary
+                ? comp.coreItemSummary.slice(0, 35).replace(/[\n\r]+/g, " ")
+                : `${comp.name} 혁신 사업 아이템`),
+            coreStrengths:
+              prev.coreStrengths ||
+              [
+                comp.hasPatents ? "특허/지식재산권(IP) 보유" : "",
+                comp.hasCertifications ? "벤처기업/이노비즈 인증 보유" : "",
+                comp.isExporting ? "수출 실적 보유" : "",
+                comp.region ? `${comp.region} 소재` : "",
+              ]
+                .filter(Boolean)
+                .join(", "),
+            targetProgramTitle: initialProgramTitle || prev.targetProgramTitle,
+          }));
+        }
+      } catch (err) {
+        console.warn("Failed to prefill company profile for PSST:", err);
+      }
+    };
+
+    loadCompanyAndPrefill();
+  }, [initialProgramTitle, parsedInitialPlan]);
 
   // Chat Messages for Chatbot Interview Mode
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -46,18 +100,20 @@ export function usePsstPlan(initialProgramTitle?: string) {
   // Interactive Suggestion Pills and Checklist Progress
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
   const [interviewProgress, setInterviewProgress] = useState<InterviewProgress>({
-    itemTarget: false,
-    problem: false,
-    solution: false,
-    scaleUp: false,
-    team: false,
-    currentStep: 1,
-    completedCount: 0,
+    itemTarget: !!parsedInitialPlan,
+    problem: !!parsedInitialPlan,
+    solution: !!parsedInitialPlan,
+    scaleUp: !!parsedInitialPlan,
+    team: !!parsedInitialPlan,
+    currentStep: parsedInitialPlan ? 5 : 1,
+    completedCount: parsedInitialPlan ? 5 : 0,
   });
 
   // Business Plan Result State
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedResult, setGeneratedResult] = useState<PsstBusinessPlanResult | null>(null);
+  const [generatedResult, setGeneratedResult] = useState<PsstBusinessPlanResult | null>(
+    parsedInitialPlan || null
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isDirectEditing, setIsDirectEditing] = useState(false);
@@ -436,8 +492,45 @@ ${r.evaluationReport.expectedQuestions
       setIsSavingPlan(false);
     }
   };
+  // 7. Download as PDF via browser print dialog
+  const handleDownloadPdf = () => {
+    if (!generatedResult) return;
+    const planTitle = generatedResult.overview?.title || formData.itemName || "PSST_사업계획서";
+    const prevTitle = document.title;
+    document.title = `${planTitle} - Ziwon.AI`;
+    window.print();
+    setTimeout(() => {
+      document.title = prevTitle;
+    }, 1000);
+  };
+
+  // Force re-prefill from user company profile
+  const handlePrefillFromCompany = (compOverride?: any) => {
+    const comp = compOverride || userCompany;
+    if (!comp) return;
+    setFormData((prev) => ({
+      ...prev,
+      companyName: comp.name || prev.companyName,
+      industry: comp.industry || prev.industry,
+      itemDescription: comp.coreItemSummary || prev.itemDescription,
+      itemName:
+        comp.coreItemSummary
+          ? comp.coreItemSummary.slice(0, 35).replace(/[\n\r]+/g, " ")
+          : prev.itemName || `${comp.name} 혁신 사업 아이템`,
+      coreStrengths: [
+        comp.hasPatents ? "특허/IP 보유" : "",
+        comp.hasCertifications ? "벤처기업 인증 보유" : "",
+        comp.isExporting ? "수출 실적 보유" : "",
+        comp.region ? `${comp.region} 소재` : "",
+      ]
+        .filter(Boolean)
+        .join(", "),
+    }));
+  };
 
   return {
+    userCompany,
+    handlePrefillFromCompany,
     creationMode,
     setCreationMode,
     canvasTheme,
@@ -477,5 +570,6 @@ ${r.evaluationReport.expectedQuestions
     handleModifySection,
     handleCopyFullText,
     handleSavePlan,
+    handleDownloadPdf,
   };
 }

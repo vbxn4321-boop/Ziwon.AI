@@ -12,6 +12,7 @@ import {
   Plus,
   FolderHeart,
   Loader2,
+  FileDown,
 } from "lucide-react";
 import { CreationMode, CanvasTheme } from "../types";
 
@@ -28,6 +29,7 @@ interface PsstHeaderProps {
   onSavePlan?: () => void;
   isSavingPlan?: boolean;
   saveSuccessMsg?: string | null;
+  onDownloadPdf?: () => void;
 }
 
 export const PsstHeader: React.FC<PsstHeaderProps> = ({
@@ -43,6 +45,7 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
   onSavePlan,
   isSavingPlan,
   saveSuccessMsg,
+  onDownloadPdf,
 }) => {
   return (
     <header className="h-14 bg-slate-900/90 border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between flex-shrink-0 z-20 backdrop-blur-md">
@@ -131,6 +134,18 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
                 <span>내 보관함 저장</span>
               </>
             )}
+          </button>
+        )}
+
+        {hasResult && onDownloadPdf && (
+          <button
+            type="button"
+            onClick={onDownloadPdf}
+            className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/30 flex items-center space-x-1.5 cursor-pointer"
+            title="사업계획서를 PDF 파일로 저장"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            <span>PDF 저장</span>
           </button>
         )}
 

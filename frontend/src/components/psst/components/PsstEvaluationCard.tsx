@@ -36,6 +36,8 @@ export const PsstEvaluationCard: React.FC<PsstEvaluationCardProps> = ({
   canvasTheme,
   sectionRef,
 }) => {
+  if (!evaluationReport) return null;
+
   return (
     <div ref={sectionRef as any} className="space-y-5 pb-4">
       <h2 className="text-xl font-extrabold text-amber-400 border-l-4 border-amber-500 pl-3 flex items-center justify-between">
