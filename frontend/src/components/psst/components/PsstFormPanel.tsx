@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { SlidersHorizontal, Target, Sparkles, AlertTriangle } from "lucide-react";
+import { SlidersHorizontal, Target, Sparkles, AlertTriangle, Building2, CheckCircle2, ArrowRight } from "lucide-react";
 import { PsstFormData } from "../types";
 import { TARGET_PROGRAM_FORMATS } from "../constants";
 
@@ -11,6 +11,8 @@ interface PsstFormPanelProps {
   isGenerating: boolean;
   errorMessage: string | null;
   onGenerateFromForm: (e?: React.FormEvent) => void;
+  userCompany?: any;
+  onPrefillFromCompany?: () => void;
 }
 
 export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
@@ -19,17 +21,57 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
   isGenerating,
   errorMessage,
   onGenerateFromForm,
+  userCompany,
+  onPrefillFromCompany,
 }) => {
   return (
     <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
+      {/* 1. Company Profile Auto-Integration Banner */}
+      {userCompany?.name && (
+        <div className="bg-gradient-to-r from-blue-950/50 via-indigo-950/40 to-slate-900 border border-blue-500/30 rounded-2xl p-3.5 space-y-2 shadow-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <Building2 className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span className="font-bold text-xs text-white">[{userCompany.name}] 기업 프로필 자동 연동됨</span>
+                <p className="text-[10.5px] text-blue-200/80">업종, 핵심 아이템, 우대 가점이 폼에 자동 입력되었습니다.</p>
+              </div>
+            </div>
+
+            {onPrefillFromCompany && (
+              <button
+                type="button"
+                onClick={onPrefillFromCompany}
+                className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 text-[10.5px] font-semibold transition-all cursor-pointer"
+                title="등록된 기업 정보로 다시 채우기"
+              >
+                다시 채우기
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onGenerateFromForm()}
+            disabled={isGenerating}
+            className="w-full py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-blue-600/30 flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin" : "text-amber-300"}`} />
+            <span>{isGenerating ? "AI가 사업계획서를 작성하는 중..." : "🚀 내 기업 맞춤 초안 원클릭 즉시 생성"}</span>
+          </button>
+        </div>
+      )}
+
       <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3.5 shadow-md">
         <div className="flex items-center justify-between border-b border-slate-800 pb-2">
           <span className="font-bold text-slate-200 flex items-center space-x-1.5">
             <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
-            <span>초고속 폼 정보 입력</span>
+            <span>초고속 폼 정보 입력 & 검토</span>
           </span>
           <span className="text-[10px] text-slate-400 font-medium">
-            * 칸을 비워두시면 입력창 내 <span className="text-slate-300">ex) 예시</span>를 참고하여 작성할 수 있습니다.
+            * 각 항목을 수정하여 맞춤 첨삭이 가능합니다.
           </span>
         </div>
 

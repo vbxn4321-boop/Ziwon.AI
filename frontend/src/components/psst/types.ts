@@ -6,6 +6,7 @@ export type CanvasTheme = "dark" | "light";
 
 export interface PsstPlanGeneratorProps {
   initialProgramTitle?: string;
+  initialPlanData?: any;
   onBackToNotices?: () => void;
 }
 

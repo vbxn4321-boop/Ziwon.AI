@@ -14,6 +14,8 @@ interface HeaderProps {
   mainPortalMode: "bizinfo" | "kstartup";
   setMainPortalMode: (mode: "bizinfo" | "kstartup") => void;
   totalCount?: number;
+  onSelectPlan?: (planData: any) => void;
+  onOpenBookmarkedProgram?: (programId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   mainPortalMode,
   setMainPortalMode,
   totalCount,
+  onSelectPlan,
+  onOpenBookmarkedProgram,
 }) => {
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [sessionUser, setSessionUser] = useState<any>(null);
@@ -182,13 +186,15 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="hidden sm:inline">내 보관함</span>
                 </button>
 
-                <button
-                  onClick={() => setShowCompanyModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                <Link
+                  href="/mypage"
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-800 hover:border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                  title="마이페이지 (기업 정보 관리 & 내 보관함)"
                 >
                   <Building2 className="w-3.5 h-3.5 text-blue-400" />
                   <span className="font-bold">{displayName}</span>
-                </button>
+                  <span className="text-[10px] text-blue-400 font-normal ml-0.5">MY</span>
+                </Link>
 
                 <button
                   onClick={handleLogout}
@@ -220,6 +226,8 @@ export const Header: React.FC<HeaderProps> = ({
       <SavedPlansModal
         isOpen={showSavedPlansModal}
         onClose={() => setShowSavedPlansModal(false)}
+        onSelectPlan={onSelectPlan}
+        onOpenBookmarkedProgram={onOpenBookmarkedProgram}
       />
     </>
   );

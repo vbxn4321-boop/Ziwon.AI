@@ -1,17 +1,58 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, FolderHeart, FileText, Bookmark, Trash2, Calendar, Award, ExternalLink, Loader2, AlertCircle } from "lucide-react";
-import { fetchMyPlans, deletePlanFromBackend, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
+import { useRouter } from "next/navigation";
+import {
+  X,
+  FolderHeart,
+  FileText,
+  Bookmark,
+  Trash2,
+  Calendar,
+  Award,
+  ExternalLink,
+  Loader2,
+  AlertCircle,
+  Eye,
+  RefreshCw,
+  TrendingUp,
+} from "lucide-react";
+import {
+  fetchMyPlans,
+  deletePlanFromBackend,
+  fetchMyBookmarks,
+  toggleBookmarkOnBackend,
+} from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
 
 interface SavedPlansModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectPlan?: (planData: any) => void;
+  onOpenBookmarkedProgram?: (programId: string) => void;
 }
 
-export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: SavedPlansModalProps) {
+function ScoreBar({ score, maxScore }: { score: number; maxScore: number }) {
+  const pct = Math.min(100, Math.round((score / maxScore) * 100));
+  const color =
+    pct >= 80 ? "bg-emerald-500" : pct >= 60 ? "bg-blue-500" : pct >= 40 ? "bg-amber-500" : "bg-rose-500";
+  return (
+    <div className="flex items-center space-x-2 mt-1">
+      <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+        <div className={`h-full rounded-full ${color} transition-all duration-700`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[11px] font-bold text-slate-300 w-8 text-right">{score}점</span>
+    </div>
+  );
+}
+
+export default function SavedPlansModal({
+  isOpen,
+  onClose,
+  onSelectPlan,
+  onOpenBookmarkedProgram,
+}: SavedPlansModalProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"plans" | "bookmarks">("plans");
   const [plans, setPlans] = useState<any[]>([]);
   const [bookmarks, setBookmarks] = useState<any[]>([]);
@@ -25,12 +66,16 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
       const token = await getJwtToken();
       if (!token) return;
 
-      if (activeTab === "plans") {
-        const data = await fetchMyPlans(token);
-        setPlans(data || []);
-      } else {
-        const data = await fetchMyBookmarks(token);
-        setBookmarks(data || []);
+      const [plansRes, bookmarksRes] = await Promise.allSettled([
+        fetchMyPlans(token),
+        fetchMyBookmarks(token),
+      ]);
+
+      if (plansRes.status === "fulfilled") {
+        setPlans(plansRes.value || []);
+      }
+      if (bookmarksRes.status === "fulfilled") {
+        setBookmarks(bookmarksRes.value || []);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "보관함 데이터를 불러오지 못했습니다.");
@@ -43,7 +88,7 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
     if (isOpen) {
       loadData();
     }
-  }, [isOpen, activeTab]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -70,6 +115,30 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
     }
   };
 
+  const handleOpenPlan = (plan: any) => {
+    if (onSelectPlan) {
+      try {
+        const planJson =
+          typeof plan.planJson === "string" ? JSON.parse(plan.planJson) : plan.planJson;
+        onSelectPlan({ ...plan, planJson });
+        onClose();
+      } catch {
+        alert("사업계획서 데이터를 불러오는 중 오류가 발생했습니다.");
+      }
+    } else {
+      router.push(`/?tab=psst&planId=${plan.id}`);
+      onClose();
+    }
+  };
+
+  const getGradeColor = (grade?: string) => {
+    if (!grade) return "text-slate-400 bg-slate-800";
+    if (grade === "S") return "text-amber-300 bg-amber-900/50 border-amber-500/40";
+    if (grade === "A") return "text-emerald-300 bg-emerald-900/50 border-emerald-500/40";
+    if (grade === "B") return "text-blue-300 bg-blue-900/50 border-blue-500/40";
+    return "text-slate-400 bg-slate-800 border-slate-700";
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden text-slate-100 max-h-[85vh] flex flex-col">
@@ -85,9 +154,10 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
         <div className="border-b border-slate-800 pb-4 mb-4">
           <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold mb-2">
             <FolderHeart className="w-3.5 h-3.5" />
-            <span>내 개인 보관함 (FastAPI DB 연동)</span>
+            <span>내 개인 보관함</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-white">저장된 내역 & 관심 공고</h2>
+          <p className="text-xs text-slate-400 mt-1">저장된 PSST 사업계획서를 불러와 재편집하거나, 관심 공고를 바로 열 수 있습니다.</p>
         </div>
 
         {/* Tab Switcher */}
@@ -101,7 +171,7 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>저장된 PSST 사업계획서 ({plans.length})</span>
+            <span>저장된 PSST 계획서 ({plans.length})</span>
           </button>
 
           <button
@@ -113,11 +183,20 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
             }`}
           >
             <Bookmark className="w-4 h-4" />
-            <span>관심 지원사업 스크랩 ({bookmarks.length})</span>
+            <span>관심 지원사업 ({bookmarks.length})</span>
+          </button>
+
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="ml-auto p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-xl transition-colors"
+            title="새로 고침"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
 
-        {/* Content Body */}
+        {/* Error */}
         {errorMsg && (
           <div className="mb-4 p-3 rounded-xl bg-red-950/50 border border-red-500/30 text-red-300 text-xs flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-red-400" />
@@ -125,6 +204,7 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
           </div>
         )}
 
+        {/* Content Body */}
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
@@ -137,40 +217,64 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
                 <div className="py-16 text-center text-slate-500 text-xs space-y-2">
                   <FileText className="w-10 h-10 mx-auto text-slate-600" />
                   <p>아직 저장된 PSST 사업계획서가 없습니다.</p>
-                  <p className="text-[11px] text-slate-600">AI 사업계획서 탭에서 생성 후 [보관함 저장]을 눌러보세요.</p>
+                  <p className="text-[11px] text-slate-600">AI 사업계획서 탭에서 생성 후 [내 보관함 저장]을 눌러보세요.</p>
                 </div>
               ) : (
                 plans.map((p) => (
                   <div
                     key={p.id}
-                    className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between gap-4"
+                    className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-slate-600 transition-all group"
                   >
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                          {p.targetProgramTitle || "표준 PSST"}
-                        </span>
-                        {p.score && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 flex items-center space-x-1">
-                            <Award className="w-3 h-3" />
-                            <span>{p.score}점 ({p.grade || "A"}등급)</span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                            {p.targetProgramTitle || "표준 PSST"}
                           </span>
-                        )}
-                        <span className="text-[11px] text-slate-500">
-                          {new Date(p.updatedAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-100 truncate">{p.title}</h4>
-                    </div>
+                          {p.grade && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center space-x-1 ${getGradeColor(p.grade)}`}>
+                              <Award className="w-3 h-3" />
+                              <span>{p.grade}등급</span>
+                            </span>
+                          )}
+                          <span className="text-[11px] text-slate-500 flex items-center space-x-1">
+                            <Calendar className="w-3 h-3" />
+                            <span>{new Date(p.updatedAt).toLocaleDateString("ko-KR")}</span>
+                          </span>
+                        </div>
 
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleDeletePlan(p.id)}
-                        className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
-                        title="삭제"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        <h4 className="text-sm font-bold text-slate-100 truncate">{p.title}</h4>
+
+                        {/* Score gauge bar */}
+                        {p.score && (
+                          <div className="flex items-center space-x-2">
+                            <TrendingUp className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                            <div className="flex-1">
+                              <ScoreBar score={p.score} maxScore={100} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center space-x-1.5 flex-shrink-0">
+                        {onSelectPlan && (
+                          <button
+                            onClick={() => handleOpenPlan(p)}
+                            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-500 text-white transition-colors flex items-center space-x-1.5 shadow-md shadow-purple-600/20"
+                            title="이 계획서를 PSST 편집 화면에서 열기"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>열기</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeletePlan(p.id)}
+                          className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -179,33 +283,56 @@ export default function SavedPlansModal({ isOpen, onClose, onSelectPlan }: Saved
               <div className="py-16 text-center text-slate-500 text-xs space-y-2">
                 <Bookmark className="w-10 h-10 mx-auto text-slate-600" />
                 <p>찜한 관심 지원사업이 없습니다.</p>
+                <p className="text-[11px] text-slate-600">공고 상세 보기에서 북마크 버튼을 눌러보세요.</p>
               </div>
             ) : (
               bookmarks.map((b) => (
                 <div
                   key={b.id}
-                  className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between gap-4"
+                  className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-slate-600 transition-all"
                 >
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 text-[10px] text-slate-400">
-                      <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">
-                        {b.organizer}
-                      </span>
-                      <span>{b.category}</span>
-                      <span>•</span>
-                      <span>{b.region}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center flex-wrap gap-2 text-[10px] text-slate-400">
+                        <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/20">
+                          {b.organizer}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-800">{b.category}</span>
+                        <span>{b.region}</span>
+                        {b.endDate && (
+                          <span className="flex items-center space-x-1 text-amber-400">
+                            <Calendar className="w-3 h-3" />
+                            <span>~{new Date(b.endDate).toLocaleDateString("ko-KR")}</span>
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-100 truncate">{b.programTitle}</h4>
                     </div>
-                    <h4 className="text-sm font-bold text-slate-100 truncate">{b.programTitle}</h4>
-                  </div>
 
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleRemoveBookmark(b.supportProgramId)}
-                      className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
-                      title="관심 공고 해제"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center space-x-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          if (onOpenBookmarkedProgram) {
+                            onOpenBookmarkedProgram(b.supportProgramId);
+                          } else {
+                            router.push(`/?programId=${b.supportProgramId}`);
+                          }
+                          onClose();
+                        }}
+                        className="px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center space-x-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
+                        title="공고 상세 보기"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>공고 열기</span>
+                      </button>
+                      <button
+                        onClick={() => handleRemoveBookmark(b.supportProgramId)}
+                        className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
+                        title="관심 공고 해제"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))

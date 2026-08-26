@@ -13,9 +13,12 @@ export { TARGET_PROGRAM_FORMATS } from "./psst/constants";
 
 export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
   initialProgramTitle,
+  initialPlanData,
   onBackToNotices,
 }) => {
   const {
+    userCompany,
+    handlePrefillFromCompany,
     creationMode,
     setCreationMode,
     canvasTheme,
@@ -48,7 +51,8 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     handleGenerateFromForm,
     handleCopyFullText,
     handleSavePlan,
-  } = usePsstPlan(initialProgramTitle);
+    handleDownloadPdf,
+  } = usePsstPlan(initialProgramTitle, initialPlanData);
 
   return (
     <div className="fixed inset-0 z-50 flex bg-slate-950 text-slate-100 font-sans select-text overflow-hidden">
@@ -61,26 +65,27 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
 
       {/* 2. Main Workspace Container */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Top App Bar */}
+        {/* Workspace Top Header Bar */}
         <PsstHeader
           creationMode={creationMode}
           setCreationMode={setCreationMode}
           canvasTheme={canvasTheme}
           setCanvasTheme={setCanvasTheme}
-          hasResult={!!generatedResult}
+          isGenerating={isGenerating}
+          generatedResult={generatedResult}
           isCopied={isCopied}
-          onCopyFullText={handleCopyFullText}
-          onResetNew={handleResetNew}
-          onBackToNotices={onBackToNotices}
-          onSavePlan={handleSavePlan}
           isSavingPlan={isSavingPlan}
           saveSuccessMsg={saveSuccessMsg}
+          onGenerate={creationMode === "chat" ? handleGenerateFromChat : () => handleGenerateFromForm()}
+          onCopyFullText={handleCopyFullText}
+          onSavePlan={handleSavePlan}
+          onDownloadPdf={handleDownloadPdf}
         />
 
-        {/* 2-Panel Workspace */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-          {/* Left Panel: Chat Interview or Quick Form */}
-          <div className="lg:col-span-5 border-r border-slate-800/80 bg-slate-950 flex flex-col h-full overflow-hidden">
+        {/* 2-Column Split Workspace */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden">
+          {/* Left Panel: AI Interview Chat vs Fast Form Input */}
+          <div className="lg:col-span-5 flex flex-col h-full overflow-hidden border-r border-slate-800 bg-slate-950/60">
             {creationMode === "chat" ? (
               <PsstChatPanel
                 formData={formData}
@@ -106,6 +111,8 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
                 isGenerating={isGenerating}
                 errorMessage={errorMessage}
                 onGenerateFromForm={handleGenerateFromForm}
+                userCompany={userCompany}
+                onPrefillFromCompany={handlePrefillFromCompany}
               />
             )}
           </div>

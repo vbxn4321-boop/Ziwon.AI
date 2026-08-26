@@ -32,6 +32,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
 }) => {
   return (
     <div
+      id="psst-document-canvas"
       className={`lg:col-span-7 flex flex-col h-full overflow-hidden relative transition-colors ${
         canvasTheme === "dark" ? "bg-slate-950 text-slate-100" : "bg-[#f1f5f9] text-slate-800"
       }`}
@@ -48,7 +49,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 font-bold text-xs border border-blue-500/20">
             {SECTION_LABELS[activeSection] || "창업아이템 개요(요약)"}
           </span>
-          {generatedResult && (
+          {generatedResult?.evaluationReport && (
             <span className="text-[11px] text-slate-400 font-medium">
               (점수: {generatedResult.evaluationReport.score}점 · {generatedResult.evaluationReport.grade})
             </span>
@@ -84,41 +85,42 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
             }`}
           >
             {/* ── 1. Overview Section ── */}
-            <div
-              ref={sectionRefs.overview as any}
-              className={`space-y-5 border-b pb-8 ${
-                canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-extrabold text-blue-400 border-l-4 border-blue-500 pl-3">
-                  창업아이템 개요(요약)
-                </h2>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                  🏛️ {formData.targetProgramTitle || "중소벤처기업부 표준 PSST"}
-                </span>
-              </div>
+            {generatedResult.overview && (
+              <div
+                ref={sectionRefs.overview as any}
+                className={`space-y-5 border-b pb-8 ${
+                  canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-extrabold text-blue-400 border-l-4 border-blue-500 pl-3">
+                    창업아이템 개요(요약)
+                  </h2>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                    🏛️ {formData.targetProgramTitle || "중소벤처기업부 표준 PSST"}
+                  </span>
+                </div>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-indigo-300">명칭</h3>
-                <p className="text-xs font-semibold pl-1">
-                  <b>{generatedResult.overview.title}</b>
-                </p>
-              </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-indigo-300">명칭</h3>
+                  <p className="text-xs font-semibold pl-1">
+                    <b>{generatedResult.overview.title}</b>
+                  </p>
+                </div>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-indigo-300">산업 분야</h3>
-                <p className="text-xs pl-1 text-slate-300">
-                  <b>{generatedResult.overview.industry}</b>
-                </p>
-              </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-indigo-300">산업 분야</h3>
+                  <p className="text-xs pl-1 text-slate-300">
+                    <b>{generatedResult.overview.industry}</b>
+                  </p>
+                </div>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-indigo-300">아이템 핵심 개요</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.overview.itemSummary}
-                </p>
-              </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-indigo-300">아이템 핵심 개요</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.overview.itemSummary}
+                  </p>
+                </div>
 
               {/* Government Standard 2-Column Summary Table */}
               {generatedResult.overview.summaryTable && (
@@ -164,243 +166,220 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
               <div className="space-y-1.5 pt-1">
                 <h3 className="text-sm font-bold text-indigo-300">개발 배경 및 시급성</h3>
                 <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.problem.developmentNecessity}
+                  {generatedResult.problem?.developmentNecessity}
                 </p>
               </div>
             </div>
+          )}
 
             {/* ── 2. Problem Section ── */}
-            <div
-              ref={sectionRefs.problem as any}
-              className={`space-y-5 border-b pb-8 ${
-                canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
-              }`}
-            >
-              <h2 className="text-xl font-extrabold text-rose-400 border-l-4 border-rose-500 pl-3">
-                {generatedResult.problem.title}
-              </h2>
+            {generatedResult.problem && (
+              <div
+                ref={sectionRefs.problem as any}
+                className={`space-y-5 border-b pb-8 ${
+                  canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
+                }`}
+              >
+                <h2 className="text-xl font-extrabold text-rose-400 border-l-4 border-rose-500 pl-3">
+                  {generatedResult.problem.title || "1. 문제인식 (Problem)"}
+                </h2>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">1-1. 시장 및 고객의 문제점</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.problem.marketPainPoint}
-                </p>
-              </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">1-1. 시장 및 고객의 문제점</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.problem.marketPainPoint}
+                  </p>
+                </div>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">1-2. 타겟 고객의 핵심 페인포인트</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.problem.targetCustomerProblem}
-                </p>
-              </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">1-2. 타겟 고객의 핵심 페인포인트</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.problem.targetCustomerProblem}
+                  </p>
+                </div>
 
-              {/* TAM - SAM - SOM Market Size Diagram Card */}
-              {generatedResult.problem.tamSamSom && (
-                <div className="space-y-2 pt-1">
-                  <h3 className="text-sm font-bold text-rose-300">📊 타겟 시장 규모 (TAM - SAM - SOM)</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
-                      <div className="text-[11px] font-bold text-blue-400">TAM (전체 시장)</div>
-                      <div className="text-xs font-semibold text-slate-200 leading-relaxed">
-                        {generatedResult.problem.tamSamSom.tam}
+                {/* TAM - SAM - SOM Market Size Diagram Card */}
+                {generatedResult.problem.tamSamSom && (
+                  <div className="space-y-2 pt-1">
+                    <h3 className="text-sm font-bold text-rose-300">📊 타겟 시장 규모 (TAM - SAM - SOM)</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                        <div className="text-[11px] font-bold text-blue-400">TAM (전체 시장)</div>
+                        <div className="text-xs font-semibold text-slate-200 leading-relaxed">
+                          {generatedResult.problem.tamSamSom.tam}
+                        </div>
                       </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
-                      <div className="text-[11px] font-bold text-purple-400">SAM (유효 시장)</div>
-                      <div className="text-xs font-semibold text-slate-200 leading-relaxed">
-                        {generatedResult.problem.tamSamSom.sam}
+                      <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                        <div className="text-[11px] font-bold text-purple-400">SAM (유효 시장)</div>
+                        <div className="text-xs font-semibold text-slate-200 leading-relaxed">
+                          {generatedResult.problem.tamSamSom.sam}
+                        </div>
                       </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
-                      <div className="text-[11px] font-bold text-emerald-400">SOM (수익 시장)</div>
-                      <div className="text-xs font-semibold text-slate-200 leading-relaxed">
-                        {generatedResult.problem.tamSamSom.som}
+                      <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                        <div className="text-[11px] font-bold text-emerald-400">SOM (수익 시장)</div>
+                        <div className="text-xs font-semibold text-slate-200 leading-relaxed">
+                          {generatedResult.problem.tamSamSom.som}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">1-3. 개발 및 사업화의 필요성과 시급성</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.problem.developmentNecessity}
-                </p>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">1-3. 개발 및 사업화의 필요성과 시급성</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.problem.developmentNecessity}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* ── 3. Solution Section ── */}
-            <div
-              ref={sectionRefs.solution as any}
-              className={`space-y-5 border-b pb-8 ${
-                canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
-              }`}
-            >
-              <h2 className="text-xl font-extrabold text-blue-400 border-l-4 border-blue-500 pl-3">
-                {generatedResult.solution.title}
-              </h2>
+            {generatedResult.solution && (
+              <div
+                ref={sectionRefs.solution as any}
+                className={`space-y-5 border-b pb-8 ${
+                  canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
+                }`}
+              >
+                <h2 className="text-xl font-extrabold text-blue-400 border-l-4 border-blue-500 pl-3">
+                  {generatedResult.solution.title || "2. 실현가능성 (Solution)"}
+                </h2>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">2-1. 핵심 기술 및 해결 방안</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.solution.coreTechnologyAndFeatures}
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">2-2. 경쟁사 대비 차별화 요소 (기술적 해자)</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.solution.competitorDifferentiation}
-                </p>
-              </div>
-
-              {/* Competitor Comparative Matrix Table */}
-              {generatedResult.solution.competitorTable && generatedResult.solution.competitorTable.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <h3 className="text-sm font-bold text-blue-300">⚔️ 경쟁 제품/대체재 비교 분석표</h3>
-                  <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
-                        <tr>
-                          <th className="p-2.5">비교 구분</th>
-                          <th className="p-2.5 text-emerald-400 font-extrabold bg-emerald-950/30">
-                            당사 솔루션 (Ziwon)
-                          </th>
-                          <th className="p-2.5 text-slate-300">경쟁사 A (기존 외산)</th>
-                          <th className="p-2.5 text-slate-300">대체재 B</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
-                        {generatedResult.solution.competitorTable.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-slate-900/50">
-                            <td className="p-2.5 font-bold text-blue-400 bg-slate-900/50">{row.category}</td>
-                            <td className="p-2.5 font-semibold text-emerald-300 bg-emerald-950/15">{row.ourItem}</td>
-                            <td className="p-2.5 text-slate-400">{row.competitorA}</td>
-                            <td className="p-2.5 text-slate-400">{row.competitorB}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">2-1. 핵심 기술 및 해결 방안</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.solution.coreTechnologyAndFeatures}
+                  </p>
                 </div>
-              )}
 
-              <div className="space-y-1.5 pt-2">
-                <h3 className="text-sm font-bold text-slate-300">2-3. 개발 및 사업화 로드맵</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.solution.implementationPlan}
-                </p>
-              </div>
-
-              {/* Q1~Q4 Development Roadmap Milestone Table */}
-              {generatedResult.solution.roadmapTable && generatedResult.solution.roadmapTable.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <h3 className="text-sm font-bold text-blue-300">🗓️ 협약 기간 내 개발 및 사업화 마일스톤 로드맵</h3>
-                  <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
-                        <tr>
-                          <th className="p-2.5 w-32">추진 기간</th>
-                          <th className="p-2.5">목표 마일스톤</th>
-                          <th className="p-2.5">주요 개발/실증 활동</th>
-                          <th className="p-2.5 text-emerald-400">최종 산출물</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
-                        {generatedResult.solution.roadmapTable.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-slate-900/50">
-                            <td className="p-2.5 font-bold text-blue-400 bg-slate-900/50">{row.quarter}</td>
-                            <td className="p-2.5 font-semibold text-slate-200">{row.milestone}</td>
-                            <td className="p-2.5 text-slate-400">{row.keyActivities}</td>
-                            <td className="p-2.5 font-semibold text-emerald-300">{row.output}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">2-2. 경쟁사 대비 차별화 요소 (기술적 해자)</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.solution.competitorDifferentiation}
+                  </p>
                 </div>
-              )}
-            </div>
+
+                {/* Competitor Comparative Matrix Table */}
+                {generatedResult.solution.competitorMatrix && (
+                  <div className="space-y-2 pt-1">
+                    <h3 className="text-sm font-bold text-blue-300">⚖️ 국내외 경쟁사 비교 분석 매트릭스</h3>
+                    <div className="overflow-x-auto rounded-xl border border-blue-500/30 bg-slate-950/70">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold text-[11px]">
+                          <tr>
+                            <th className="p-2.5">비교 지표</th>
+                            <th className="p-2.5 text-blue-400">당사 솔루션 (Ziwon)</th>
+                            <th className="p-2.5 text-slate-400">기존 경쟁사 A</th>
+                            <th className="p-2.5 text-slate-400">기존 대체재 B</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                          {generatedResult.solution.competitorMatrix.map((row, idx) => (
+                            <tr key={idx}>
+                              <td className="p-2.5 font-semibold text-slate-400">{row.criteria}</td>
+                              <td className="p-2.5 font-bold text-emerald-400 bg-blue-950/20">{row.us}</td>
+                              <td className="p-2.5 text-slate-400">{row.competitorA}</td>
+                              <td className="p-2.5 text-slate-400">{row.competitorB}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">2-3. 개발 추진 로드맵 및 마일스톤</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.solution.developmentMilestone}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* ── 4. Scale-up Section ── */}
-            <div
-              ref={sectionRefs.scaleUp as any}
-              className={`space-y-5 border-b pb-8 ${
-                canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
-              }`}
-            >
-              <h2 className="text-xl font-extrabold text-purple-400 border-l-4 border-purple-500 pl-3">
-                {generatedResult.scaleUp.title}
-              </h2>
+            {generatedResult.scaleUp && (
+              <div
+                ref={sectionRefs.scaleUp as any}
+                className={`space-y-5 border-b pb-8 ${
+                  canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
+                }`}
+              >
+                <h2 className="text-xl font-extrabold text-purple-400 border-l-4 border-purple-500 pl-3">
+                  {generatedResult.scaleUp.title || "3. 성장전략 (Scale-up)"}
+                </h2>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">3-1. 비즈니스 모델(BM) 및 수익 구조</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.scaleUp.businessModelAndRevenue}
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">3-2. 초기 시장 진입 및 마케팅 전략</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.scaleUp.marketEntryAndMarketing}
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">3-3. 자금 조달 및 예산 집행 계획</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.scaleUp.fundingAndBudgetPlan}
-                </p>
-              </div>
-
-              {/* Government Subsidy Budget Allocation Table */}
-              {generatedResult.scaleUp.budgetTable && generatedResult.scaleUp.budgetTable.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <h3 className="text-sm font-bold text-purple-300">💰 정부지원금 비목별 소요 예산 집행 계획표</h3>
-                  <div className="overflow-x-auto rounded-xl border border-purple-500/20 bg-slate-950/70">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-purple-950/60 text-purple-200 border-b border-purple-500/20 font-bold">
-                        <tr>
-                          <th className="p-2.5">비목 구분</th>
-                          <th className="p-2.5 text-right">집행 금액 (원)</th>
-                          <th className="p-2.5 text-center">비중</th>
-                          <th className="p-2.5">세부 산출 근거 및 내역</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
-                        {generatedResult.scaleUp.budgetTable.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-slate-900/50">
-                            <td className="p-2.5 font-bold text-purple-300 bg-slate-900/50">{row.category}</td>
-                            <td className="p-2.5 font-semibold text-right text-emerald-400">{row.amount}</td>
-                            <td className="p-2.5 text-center font-bold text-purple-400">{row.ratio}%</td>
-                            <td className="p-2.5 text-slate-400">{row.description}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">3-1. 비즈니스 모델 및 수익화 방안</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.scaleUp.businessModelAndRevenue}
+                  </p>
                 </div>
-              )}
-            </div>
+
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">3-2. 시장 진입(GTM) 및 마케팅 전략</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.scaleUp.go_to_market_strategy}
+                  </p>
+                </div>
+
+                {/* 3-Year Financial Forecast Table */}
+                {generatedResult.scaleUp.financialPlan && (
+                  <div className="space-y-2 pt-1">
+                    <h3 className="text-sm font-bold text-purple-300">📈 향후 3개년 매출 및 손익 추정치</h3>
+                    <div className="overflow-x-auto rounded-xl border border-purple-500/30 bg-slate-950/70">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-purple-950/60 text-purple-200 border-b border-purple-500/20 font-bold text-[11px]">
+                          <tr>
+                            <th className="p-2.5">연도 구분</th>
+                            <th className="p-2.5 text-right">예상 매출액</th>
+                            <th className="p-2.5 text-right">영업이익</th>
+                            <th className="p-2.5 pl-4">주요 마일스톤</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">
+                          {generatedResult.scaleUp.financialPlan.map((fin, idx) => (
+                            <tr key={idx}>
+                              <td className="p-2.5 font-bold text-purple-400">{fin.year}</td>
+                              <td className="p-2.5 text-right font-semibold text-slate-200">{fin.sales}</td>
+                              <td className="p-2.5 text-right font-semibold text-emerald-400">{fin.operatingProfit}</td>
+                              <td className="p-2.5 pl-4 text-slate-400">{fin.majorMilestone}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">3-3. 정부 지원금 집행 계획</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.scaleUp.budgetAllocationPlan}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* ── 5. Team Section ── */}
-            <div
-              ref={sectionRefs.team as any}
-              className={`space-y-5 border-b pb-8 ${
-                canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
-              }`}
-            >
-              <h2 className="text-xl font-extrabold text-emerald-400 border-l-4 border-emerald-500 pl-3">
-                {generatedResult.team.title}
-              </h2>
+            {generatedResult.team && (
+              <div
+                ref={sectionRefs.team as any}
+                className={`space-y-5 border-b pb-8 ${
+                  canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
+                }`}
+              >
+                <h2 className="text-xl font-extrabold text-emerald-400 border-l-4 border-emerald-500 pl-3">
+                  {generatedResult.team.title || "4. 팀 구성 (Team)"}
+                </h2>
 
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-slate-300">4-1. 대표자 및 핵심 팀원 보유 역량</h3>
-                <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
-                  {generatedResult.team.founderAndTeamCompetency}
-                </p>
-              </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-slate-300">4-1. 대표자 및 핵심 팀원 보유 역량</h3>
+                  <p className="text-xs leading-relaxed pl-1 whitespace-pre-line text-slate-300">
+                    {generatedResult.team.founderAndTeamCompetency || (generatedResult.team as any).founderCompetence}
+                  </p>
+                </div>
 
               {/* Team Personnel R&R Matrix Table */}
               {generatedResult.team.memberList && generatedResult.team.memberList.length > 0 && (
@@ -445,6 +424,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 </p>
               </div>
             </div>
+          )}
 
             {/* ── 6. Evaluation Report Section ── */}
             <PsstEvaluationCard

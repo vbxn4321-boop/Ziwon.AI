@@ -25,8 +25,18 @@ import {
   Minimize2,
   ChevronDown,
   ChevronUp,
+  Building2,
+  TrendingUp,
+  ShieldAlert,
+  ArrowRight,
+  Lock,
+  Bookmark,
 } from "lucide-react";
+import Link from "next/link";
 import { SupportProgram } from "./ProgramCard";
+import { getJwtToken } from "@/lib/supabase-client";
+import { fetchMyCompany, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
+import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 
 interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
@@ -55,6 +65,54 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   const [liveAnalysis, setLiveAnalysis] = useState<any>(
     selectedProgram.analyses && selectedProgram.analyses.length > 0 ? selectedProgram.analyses[0] : null
   );
+
+  // AI Matching Recommendation State
+  const [matchingResult, setMatchingResult] = useState<any>(null);
+  const [isMatching, setIsMatching] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
+  const [gateState, setGateState] = useState<null | "unauthenticated" | "no_company">(null);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [userCompany, setUserCompany] = useState<any>(null);
+
+  // Bookmark / Scrap State
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [bookmarkLoading, setBookmarkLoading] = useState(false);
+
+  // Check initial bookmark status
+  useEffect(() => {
+    const checkBookmarkStatus = async () => {
+      try {
+        const token = await getJwtToken();
+        if (!token) return;
+        const bms = await fetchMyBookmarks(token);
+        if (bms && Array.isArray(bms)) {
+          setIsBookmarked(bms.some((b: any) => b.supportProgramId === selectedProgram.id));
+        }
+      } catch {}
+    };
+    checkBookmarkStatus();
+  }, [selectedProgram.id]);
+
+  const handleToggleBookmark = async () => {
+    setBookmarkLoading(true);
+    try {
+      const token = await getJwtToken();
+      if (!token) {
+        setGateState("unauthenticated");
+        return;
+      }
+      const res = await toggleBookmarkOnBackend(selectedProgram.id, token);
+      if (res && typeof res.bookmarked === "boolean") {
+        setIsBookmarked(res.bookmarked);
+      } else {
+        setIsBookmarked((prev) => !prev);
+      }
+    } catch (err: any) {
+      alert("관심 공고 처리 중 오류가 발생했습니다: " + err.message);
+    } finally {
+      setBookmarkLoading(false);
+    }
+  };
 
   // Parse structured AI Data safely
   const aiData = useMemo(() => {
@@ -160,6 +218,59 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  // Run AI Company Match Analysis (Gate 1 -> Gate 2 -> Gate 3)
+  const handleStartMatching = async (companyOverride?: any) => {
+    setMatchError(null);
+    setGateState(null);
+
+    // Gate 1: Check Login
+    const token = await getJwtToken();
+    if (!token) {
+      setGateState("unauthenticated");
+      return;
+    }
+
+    // Gate 2: Check Company Profile
+    let comp = companyOverride || userCompany;
+    if (!comp) {
+      try {
+        comp = await fetchMyCompany(token);
+        setUserCompany(comp);
+      } catch (err) {
+        comp = null;
+      }
+    }
+
+    if (!comp || !comp.name) {
+      setGateState("no_company");
+      return;
+    }
+
+    // Gate 3: Execute Gemini AI Matching
+    setIsMatching(true);
+    try {
+      const res = await fetch("/api/ai/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: comp,
+          program: selectedProgram,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.result) {
+        setMatchingResult(json.result);
+      } else {
+        setMatchError(json.error || "적합도 분석에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      }
+    } catch (err: any) {
+      setMatchError("적합도 분석 서버와의 통신 중 오류가 발생했습니다.");
+    } finally {
+      setIsMatching(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-all">
       <div
@@ -191,17 +302,32 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
           </div>
 
           <div className="flex items-center space-x-1.5 flex-shrink-0">
+            {/* Bookmark / Scrap Button */}
+            <button
+              onClick={handleToggleBookmark}
+              disabled={bookmarkLoading}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer border ${
+                isBookmarked
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/20"
+                  : "bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700"
+              }`}
+              title={isBookmarked ? "관심 공고 찜 해제" : "내 보관함에 관심 공고로 찜하기"}
+            >
+              <Bookmark className={`w-4 h-4 ${isBookmarked ? "fill-amber-400 text-amber-400" : ""}`} />
+              <span className="hidden sm:inline">{isBookmarked ? "찜 완료" : "관심 공고 찜"}</span>
+            </button>
+
             {/* Maximize / Minimize Toggle Button */}
             <button
               onClick={() => setIsMaximized((prev) => !prev)}
-              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors"
+              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors cursor-pointer"
               title={isMaximized ? "기본 크기로 축소" : "전체화면으로 크게 보기"}
             >
               {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors"
+              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -303,6 +429,16 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     </div>
 
                     <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+                      <button
+                        onClick={() => handleStartMatching()}
+                        disabled={isMatching}
+                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold text-xs transition-all flex items-center space-x-1.5 shadow-md shadow-blue-600/30 cursor-pointer disabled:opacity-50"
+                        title="등록된 내 기업 정보를 바탕으로 이 공고와의 적합도를 실시간 분석합니다."
+                      >
+                        <Building2 className={`w-3.5 h-3.5 ${isMatching ? "animate-spin" : "text-amber-300"}`} />
+                        <span>{isMatching ? "적합도 분석 중..." : "내 기업 적합도 분석"}</span>
+                      </button>
+
                       {onCreatePsstPlan && (
                         <button
                           onClick={() => {
@@ -336,6 +472,159 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Gate 1: Unauthenticated Alert */}
+                  {gateState === "unauthenticated" && (
+                    <div className="bg-slate-900 border border-blue-500/40 p-4 rounded-2xl flex items-center justify-between gap-3 text-slate-200">
+                      <div className="flex items-center space-x-3">
+                        <Lock className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-xs text-white">로그인이 필요한 서비스입니다</p>
+                          <p className="text-[11px] text-slate-400">기업 정보 기반 맞춤 적합도 분석을 위해 먼저 로그인해주세요.</p>
+                        </div>
+                      </div>
+                      <Link
+                        href="/login"
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all flex items-center space-x-1 flex-shrink-0"
+                      >
+                        <span>로그인</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Gate 2: No Company Registered Alert */}
+                  {gateState === "no_company" && (
+                    <div className="bg-amber-950/40 border border-amber-500/40 p-4 rounded-2xl flex items-center justify-between gap-3 text-amber-200">
+                      <div className="flex items-center space-x-3">
+                        <Building2 className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-xs text-amber-300">기업 프로필을 먼저 등록해주세요</p>
+                          <p className="text-[11px] text-amber-200/80">업력, 산업분야, 소재지 등을 등록하시면 0~100점 실시간 매칭 적합도를 제공합니다.</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowCompanyModal(true)}
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-all flex items-center space-x-1 flex-shrink-0 cursor-pointer shadow-md shadow-amber-600/30"
+                      >
+                        <span>기업 정보 등록하기</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Matching Error Banner */}
+                  {matchError && (
+                    <div className="bg-rose-950/40 border border-rose-500/40 p-3.5 rounded-2xl flex items-center justify-between gap-3 text-rose-300">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                        <span>{matchError}</span>
+                      </div>
+                      <button
+                        onClick={() => handleStartMatching()}
+                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-colors"
+                      >
+                        재시도
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Gate 3: AI Matching Result Card */}
+                  {matchingResult && (
+                    <div className="bg-gradient-to-br from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/40 rounded-2xl p-5 space-y-4 shadow-xl animate-in fade-in duration-300">
+                      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800/80 pb-3">
+                        <div className="flex items-center space-x-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center">
+                            <TrendingUp className="w-5 h-5 text-indigo-300" />
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-sm text-white">AI 맞춤 적합도 진단 결과</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                                {matchingResult.gradeLabel || "적합"}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              귀사 프로필({userCompany?.name || "등록 기업"}) 기준 정밀 심사위원 매칭 리포트
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Overall Score Badge */}
+                        <div className="flex items-center space-x-3 bg-slate-950/80 px-4 py-2 rounded-xl border border-indigo-500/30">
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 block font-medium">종합 적합도</span>
+                            <span className="text-xs font-bold text-indigo-300">{matchingResult.grade || "A"}등급</span>
+                          </div>
+                          <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400">
+                            {matchingResult.totalScore ?? 0}
+                            <span className="text-xs text-slate-400 font-normal ml-0.5">/100점</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 4 Score Item Bars */}
+                      {matchingResult.items && Array.isArray(matchingResult.items) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {matchingResult.items.map((item: any, idx: number) => {
+                            const pct = Math.min(100, Math.round(((item.score || 0) / (item.maxScore || 25)) * 100));
+                            const barColor =
+                              pct >= 80 ? "bg-emerald-500" : pct >= 60 ? "bg-blue-500" : pct >= 40 ? "bg-amber-500" : "bg-rose-500";
+                            return (
+                              <div key={idx} className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-semibold text-slate-300">{item.label}</span>
+                                  <span className="font-bold text-indigo-300">{item.score} / {item.maxScore || 25}점</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                  <div className={`h-full ${barColor} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                                </div>
+                                {item.comment && (
+                                  <p className="text-[11px] text-slate-400 leading-tight">{item.comment}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* AI Expert Recommendation Commentary */}
+                      {matchingResult.recommendation && (
+                        <div className="bg-indigo-950/30 border border-indigo-500/20 p-3.5 rounded-xl space-y-1">
+                          <span className="text-indigo-300 font-bold text-xs flex items-center space-x-1">
+                            <span>💡</span>
+                            <span>심사위원 AI 추천 총평</span>
+                          </span>
+                          <p className="text-slate-200 text-xs leading-relaxed">{matchingResult.recommendation}</p>
+                        </div>
+                      )}
+
+                      {/* Strengths & Risks Tags */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        {matchingResult.keyStrengths && matchingResult.keyStrengths.length > 0 && (
+                          <div className="bg-emerald-950/20 border border-emerald-500/20 p-3 rounded-xl space-y-1.5">
+                            <span className="text-emerald-400 font-bold text-xs">✅ 핵심 지원 강점</span>
+                            <ul className="list-disc list-inside text-[11px] text-emerald-200/90 space-y-0.5">
+                              {matchingResult.keyStrengths.map((str: string, sIdx: number) => (
+                                <li key={sIdx}>{str}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {matchingResult.keyRisks && matchingResult.keyRisks.length > 0 && (
+                          <div className="bg-rose-950/20 border border-rose-500/20 p-3 rounded-xl space-y-1.5">
+                            <span className="text-rose-400 font-bold text-xs">⚠️ 주의 요건 & 리스크</span>
+                            <ul className="list-disc list-inside text-[11px] text-rose-200/90 space-y-0.5">
+                              {matchingResult.keyRisks.map((risk: string, rIdx: number) => (
+                                <li key={rIdx}>{risk}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 3 Sentences Executive Summary */}
                   {aiData.summaryReport && Array.isArray(aiData.summaryReport) && (
@@ -1019,6 +1308,16 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Global Company Profile Modal for Instant Registration */}
+      <CompanyProfileModal
+        isOpen={showCompanyModal}
+        onClose={() => setShowCompanyModal(false)}
+        onSaved={(savedComp) => {
+          setUserCompany(savedComp);
+          handleStartMatching(savedComp);
+        }}
+      />
     </div>
   );
 };

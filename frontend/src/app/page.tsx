@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   ChevronRight,
@@ -26,6 +27,8 @@ import { ProgramCard, SupportProgram } from "../components/ProgramCard";
 import { ProgramDetailModal } from "../components/ProgramDetailModal";
 import { PsstPlanGenerator } from "../components/PsstPlanGenerator";
 import Footer from "../components/Footer";
+import { fetchPlanDetail } from "@/lib/backend-client";
+import { getJwtToken } from "@/lib/supabase-client";
 
 interface FilterItem {
   name: string;
@@ -40,9 +43,12 @@ interface StatsData {
   urgentCount: number;
 }
 
-export default function HomePage() {
+function HomePageContent() {
+  const searchParams = useSearchParams();
+
   const [activeNavTab, setActiveNavTab] = useState<"notices" | "psst">("notices");
   const [selectedTargetProgramForPlan, setSelectedTargetProgramForPlan] = useState<string>("");
+  const [selectedPlanToLoad, setSelectedPlanToLoad] = useState<any>(null);
 
   const [programs, setPrograms] = useState<SupportProgram[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,6 +106,53 @@ export default function HomePage() {
   useEffect(() => {
     fetchFiltersFromDb();
   }, []);
+
+  // 1-1. Process URL Query Parameters (Cross-Page Navigation Support from /mypage)
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const planIdParam = searchParams.get("planId");
+    const programIdParam = searchParams.get("programId");
+
+    if (tabParam === "psst") {
+      setActiveNavTab("psst");
+    }
+
+    if (planIdParam) {
+      const loadPlanFromQuery = async () => {
+        try {
+          const token = await getJwtToken();
+          if (token) {
+            const planData = await fetchPlanDetail(planIdParam, token);
+            if (planData) {
+              setSelectedPlanToLoad(planData);
+              setSelectedTargetProgramForPlan(planData.targetProgramTitle || "");
+              setActiveNavTab("psst");
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to load plan from query param:", err);
+        }
+      };
+      loadPlanFromQuery();
+    }
+
+    if (programIdParam) {
+      const loadProgramFromQuery = async () => {
+        try {
+          const res = await fetch(`/api/support-programs/${programIdParam}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.data) {
+              setSelectedProgram(json.data);
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to load program from query param:", err);
+        }
+      };
+      loadProgramFromQuery();
+    }
+  }, [searchParams]);
 
   const fetchFiltersFromDb = async () => {
     try {
@@ -217,6 +270,25 @@ export default function HomePage() {
     setSearchQuery("");
   };
 
+  const handleOpenBookmarkedProgram = async (programId: string) => {
+    const existing = programs.find((p) => p.id === programId);
+    if (existing) {
+      setSelectedProgram(existing);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/support-programs/${programId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setSelectedProgram(json.data);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to open bookmarked program:", err);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col text-slate-100 bg-slate-950">
       {/* Header Component */}
@@ -226,6 +298,12 @@ export default function HomePage() {
         mainPortalMode={mainPortalMode}
         setMainPortalMode={setMainPortalMode}
         totalCount={stats.totalCount || totalCount}
+        onSelectPlan={(planData) => {
+          setSelectedPlanToLoad(planData);
+          setSelectedTargetProgramForPlan(planData.targetProgramTitle || "");
+          setActiveNavTab("psst");
+        }}
+        onOpenBookmarkedProgram={handleOpenBookmarkedProgram}
       />
 
       {/* VIEW 1: PSST BUSINESS PLAN GENERATOR */}
@@ -233,7 +311,11 @@ export default function HomePage() {
         <main className="w-full flex-1 flex flex-col overflow-hidden">
           <PsstPlanGenerator
             initialProgramTitle={selectedTargetProgramForPlan}
-            onBackToNotices={() => setActiveNavTab("notices")}
+            initialPlanData={selectedPlanToLoad}
+            onBackToNotices={() => {
+              setActiveNavTab("notices");
+              setSelectedPlanToLoad(null);
+            }}
           />
         </main>
       ) : (
@@ -1054,5 +1136,19 @@ export default function HomePage() {
       {/* 84컴퍼니 사업자 정보 및 운영 정책 푸터 */}
       <Footer />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
+          <span className="text-xs">Ziwon.AI 로딩 중...</span>
+        </div>
+      }
+    >
+      <HomePageContent />
+    </Suspense>
   );
 }
