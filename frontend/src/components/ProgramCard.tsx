@@ -17,7 +17,7 @@ export interface SupportProgram {
   officialNoticeNo?: string;
   duplicateStatus: string;
   createdAt?: string;
-  sources: { id: string; sourceType: string; sourceUrl: string; rawTitle: string }[];
+  sources: { id: string; sourceType: string; sourceUrl: string; rawTitle: string; rawData?: string }[];
   documents: { id: string; fileName: string; fileUrl: string; fileType: string }[];
   analyses: any[];
 }
@@ -136,9 +136,9 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
                 <span>{createdBadgeText}</span>
               </span>
             )}
-            {prog.sources.map((src) => (
+            {prog.sources.map((src, sIdx) => (
               <span
-                key={src.id}
+                key={src.id ? `${src.id}-${sIdx}` : sIdx}
                 className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
                   src.sourceType === "K_STARTUP"
                     ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"

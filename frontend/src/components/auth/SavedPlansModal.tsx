@@ -220,9 +220,9 @@ export default function SavedPlansModal({
                   <p className="text-[11px] text-slate-600">AI 사업계획서 탭에서 생성 후 [내 보관함 저장]을 눌러보세요.</p>
                 </div>
               ) : (
-                plans.map((p) => (
+                plans.map((p, idx) => (
                   <div
-                    key={p.id}
+                    key={p.id ? `${p.id}-${idx}` : idx}
                     className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-slate-600 transition-all group"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -286,9 +286,9 @@ export default function SavedPlansModal({
                 <p className="text-[11px] text-slate-600">공고 상세 보기에서 북마크 버튼을 눌러보세요.</p>
               </div>
             ) : (
-              bookmarks.map((b) => (
+              bookmarks.map((b, bIdx) => (
                 <div
-                  key={b.id}
+                  key={b.id ? `${b.id}-${bIdx}` : bIdx}
                   className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 hover:border-slate-600 transition-all"
                 >
                   <div className="flex items-start justify-between gap-3">
