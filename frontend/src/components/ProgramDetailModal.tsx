@@ -45,6 +45,309 @@ interface ProgramDetailModalProps {
   onCreatePsstPlan?: (programTitle: string) => void;
 }
 
+
+// Helper to strip and format raw HTML strings (like bsnsSumryCn in Bizinfo) into clean, readable text
+function cleanHtml(rawText: string | null | undefined): string {
+  if (!rawText) return "";
+  return rawText
+    .replace(/<br\s*[\/]?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&apos;/gi, "'")
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#34;/gi, '"')
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&middot;/gi, "·")
+    .replace(/&#183;/gi, "·")
+    .replace(/\n\s*\n\s*\n+/g, "\n\n")
+    .trim();
+}
+
+// Helper to format date strings nicely (e.g. 20260826 -> 2026.08.26)
+function formatNoticeDate(raw: string | null | undefined): string {
+  if (!raw) return "공고문 참조";
+  const cleaned = cleanHtml(raw);
+  return cleaned.replace(/(\d{4})(\d{2})(\d{2})/g, "$1.$2.$3");
+}
+
+// Helper to render comma-separated criteria as sleek tags / chips to prevent text overlapping
+function renderConditionChips(
+  rawString: string | null | undefined,
+  fallback: string = "공고문 참조",
+  colorScheme: "amber" | "blue" | "teal" | "purple" = "amber"
+) {
+  if (!rawString || !rawString.trim()) {
+    return <span className="text-slate-400 text-xs">{fallback}</span>;
+  }
+  const clean = cleanHtml(rawString);
+  const items = clean
+    .split(/[,/·|]/)
+    .map((i) => i.trim())
+    .filter(Boolean);
+
+  if (items.length <= 1) {
+    return <span className="font-semibold text-slate-200 text-xs break-words leading-relaxed">{clean}</span>;
+  }
+
+  const colorClasses = {
+    amber: "bg-amber-500/15 text-amber-200 border-amber-500/30",
+    blue: "bg-blue-500/15 text-blue-200 border-blue-500/30",
+    teal: "bg-teal-500/15 text-teal-200 border-teal-500/30",
+    purple: "bg-purple-500/15 text-purple-200 border-purple-500/30",
+  }[colorScheme];
+
+  return (
+    <div className="flex flex-wrap gap-1.5 pt-0.5">
+      {items.map((item, idx) => (
+        <span
+          key={idx}
+          className={`px-2 py-0.5 rounded-md text-[11px] font-medium border break-all leading-tight ${colorClasses}`}
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const CommonNoticeHeader: React.FC<{
+  selectedProgram: SupportProgram;
+  kst: (keys: string[]) => string | null;
+  biz: (keys: string[]) => string | null;
+}> = ({ selectedProgram, kst, biz }) => {
+  const isKst = selectedProgram.sources.some((s) => s.sourceType === "K_STARTUP");
+  const isBiz = selectedProgram.sources.some((s) => s.sourceType === "BIZINFO");
+
+  if (isKst) {
+    const rawStartDate = kst(["pbanc_rcpt_bgng_dt", "접수시작일시"]);
+    const rawEndDate = kst(["pbanc_rcpt_end_dt", "접수마감일시"]);
+    const dateDisplay =
+      rawStartDate && rawEndDate
+        ? `${formatNoticeDate(rawStartDate)} ~ ${formatNoticeDate(rawEndDate)}`
+        : rawStartDate
+        ? `${formatNoticeDate(rawStartDate)} ~`
+        : "공고문 참조";
+
+    const inquiryInfo =
+      cleanHtml(
+        kst([
+          "tel_no",
+          "cntct_no",
+          "enqrv_tel_no",
+          "inq_tel_no",
+          "rcpt_tel_no",
+          "rprsv_tel_no",
+          "tel",
+          "문의처",
+          "연락처",
+        ])
+      ) ||
+      selectedProgram.organizer ||
+      "공고문 및 첨부파일 내 문의처 참조";
+
+    const targetContent = cleanHtml(kst(["aply_trgt_ctnt", "신청대상"]));
+    const excludeContent = cleanHtml(kst(["aply_excl_trgt_ctnt", "제외대상"]));
+    const preferContent = cleanHtml(kst(["prfn_matr", "우대사항"]));
+
+    return (
+      <div className="bg-gradient-to-r from-amber-950/30 via-slate-900 to-indigo-950/20 border border-amber-500/30 rounded-2xl p-5 space-y-4 shadow-md flex-shrink-0">
+        {/* Header Title & External Link */}
+        <div className="flex items-start justify-between flex-wrap gap-2 border-b border-amber-500/20 pb-3">
+          <div className="flex items-start space-x-2 min-w-0 flex-1">
+            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30 flex-shrink-0 mt-0.5">
+              🚀 K-Startup 창업 지원사업
+            </span>
+            <span className="text-xs font-bold text-slate-200 break-words leading-snug">
+              {cleanHtml(kst(["biz_pbanc_nm", "intg_pbanc_biz_nm", "detl_pg_title", "공고명"])) || selectedProgram.title}
+            </span>
+          </div>
+          <div className="flex items-center space-x-2 flex-shrink-0">
+            {kst(["aply_mthd_onli_rcpt_istc", "detl_pg_url"])?.startsWith("http") && (
+              <a
+                href={kst(["aply_mthd_onli_rcpt_istc", "detl_pg_url"])!}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center space-x-1 transition-colors"
+              >
+                <span>온라인 접수처 바로가기</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* 4 Key Condition Cards with Chips (No overlapping, min-w-0 applied) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5 min-w-0 flex flex-col justify-start">
+            <span className="text-[11px] text-amber-400/90 font-bold block">창업 업력 조건</span>
+            <div className="flex-1">{renderConditionChips(kst(["biz_enyy", "창업업력"]), "공고문 참조", "amber")}</div>
+          </div>
+          <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5 min-w-0 flex flex-col justify-start">
+            <span className="text-[11px] text-amber-400/90 font-bold block">대상 연령</span>
+            <div className="flex-1">{renderConditionChips(kst(["aply_trgt_age", "biz_trgt_age", "대상연령"]), "공고문 참조", "amber")}</div>
+          </div>
+          <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5 min-w-0 flex flex-col justify-start">
+            <span className="text-[11px] text-amber-400/90 font-bold block">지원 지역</span>
+            <div className="flex-1">{renderConditionChips(kst(["supt_regin", "지역"]) || selectedProgram.region, "전국", "blue")}</div>
+          </div>
+          <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5 min-w-0 flex flex-col justify-start">
+            <span className="text-[11px] text-amber-400/90 font-bold block">접수 기간</span>
+            <span className="font-semibold text-slate-200 text-xs break-words leading-relaxed block">{dateDisplay}</span>
+          </div>
+        </div>
+
+        {/* Extended Description Grid (Target, Exclusion, Preference) */}
+        {(targetContent || excludeContent || preferContent) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+            {targetContent && (
+              <div className="text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-slate-300 break-words whitespace-pre-wrap leading-relaxed space-y-1">
+                <strong className="text-emerald-400 font-bold block text-[11px]">🎯 지원 대상 상세</strong>
+                <p className="text-slate-200">{targetContent}</p>
+              </div>
+            )}
+            {excludeContent && (
+              <div className="text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-slate-300 break-words whitespace-pre-wrap leading-relaxed space-y-1">
+                <strong className="text-rose-400 font-bold block text-[11px]">🚫 지원 제외 대상</strong>
+                <p className="text-slate-300">{excludeContent}</p>
+              </div>
+            )}
+            {preferContent && (
+              <div className="text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-slate-300 break-words whitespace-pre-wrap leading-relaxed space-y-1 md:col-span-2">
+                <strong className="text-blue-400 font-bold block text-[11px]">⭐ 가점 및 우대사항</strong>
+                <p className="text-slate-300">{preferContent}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Agency & Contact Info Footer Bar (Always Displayed) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] bg-slate-950/80 p-3 rounded-xl border border-slate-800/80">
+          <div className="space-y-0.5">
+            <span className="text-slate-400 font-bold block">소관/주관기관</span>
+            <span className="text-slate-200 break-words font-medium block">
+              {cleanHtml(kst(["pbanc_ntrp_nm", "소관기관"])) || selectedProgram.organizer || "공고문 참조"}
+            </span>
+          </div>
+          <div className="space-y-0.5">
+            <span className="text-slate-400 font-bold block">수행/운영기관</span>
+            <span className="text-slate-200 break-words font-medium block">
+              {cleanHtml(kst(["exct_istt_nm", "수행기관"])) || selectedProgram.executingAgency || "공고문 참조"}
+            </span>
+          </div>
+          <div className="space-y-0.5">
+            <span className="text-amber-400/90 font-bold block">문의처 (전화/안내)</span>
+            <span className="text-slate-200 break-words font-medium block">{inquiryInfo}</span>
+          </div>
+        </div>
+      </div>
+    );
+  } else if (isBiz) {
+    const rawSummary = biz(["bsnsSumryCn", "사업요약"]);
+    const cleanedSummary = cleanHtml(rawSummary) || "공고문 본문을 참조해 주세요.";
+    const targetDesc = cleanHtml(biz(["trgetNm", "지원대상"])) || "공고문 참조";
+    const applyMethod = cleanHtml(biz(["reqstMthPapersCn", "신청방법"])) || "공고문 참조";
+    const dateRange = cleanHtml(biz(["reqstBeginEndDe", "신청기간"])) || "공고문 참조";
+
+    return (
+      <div className="bg-gradient-to-r from-teal-950/20 via-slate-900 to-blue-950/20 border border-teal-500/20 rounded-2xl p-5 space-y-4 shadow-md flex-shrink-0">
+        {/* Header Title & External Link */}
+        <div className="flex items-start justify-between flex-wrap gap-2 border-b border-teal-500/20 pb-3">
+          <div className="flex items-start space-x-2 min-w-0 flex-1">
+            <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold text-xs border border-teal-500/30 flex-shrink-0 mt-0.5">
+              🏢 기업마당 정책 지원사업
+            </span>
+            <span className="text-xs font-bold text-slate-200 break-words leading-snug">
+              {cleanHtml(biz(["pblancNm", "사업명"])) || selectedProgram.title}
+            </span>
+          </div>
+          <div className="flex items-center space-x-2 flex-shrink-0">
+            {biz(["pblancUrl"])?.startsWith("http") && (
+              <a
+                href={biz(["pblancUrl"])!}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-xs font-semibold flex items-center space-x-1 transition-colors"
+              >
+                <span>기업마당 공고 원문</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* 2-Column Main Info (Target & Summary with HTML Cleaned) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div className="space-y-3 flex flex-col">
+            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2 flex-1">
+              <span className="text-[11px] text-teal-400 font-bold block">🎯 지원대상 (trgetNm)</span>
+              <p className="font-medium text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{targetDesc}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 flex flex-col">
+            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2 flex-1 flex flex-col">
+              <span className="text-[11px] text-teal-400 font-bold block">📋 사업 요약 (bsnsSumryCn)</span>
+              <div className="font-medium text-slate-300 leading-relaxed whitespace-pre-wrap break-words flex-1 max-h-[160px] overflow-y-auto custom-scrollbar pr-1 text-xs">
+                {cleanedSummary}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Hashtags list */}
+        {biz(["hashtags"]) && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {cleanHtml(biz(["hashtags"]))
+              .split(/[,#]/)
+              .map((tag) => tag.trim())
+              .filter(Boolean)
+              .map((tag: string, idx: number) => (
+                <span
+                  key={idx}
+                  className="px-2.5 py-0.5 rounded-md bg-slate-800/90 text-teal-300 text-[11px] font-medium border border-teal-500/20"
+                >
+                  #{tag}
+                </span>
+              ))}
+          </div>
+        )}
+
+        {/* 4 Grid Footer Info (No Truncation, Pure Break-words) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[11px] pt-2 border-t border-slate-800/80">
+          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
+            <span className="text-slate-400 block font-bold">접수 기간</span>
+            <span className="text-slate-200 block break-words font-medium">{dateRange}</span>
+          </div>
+          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
+            <span className="text-slate-400 block font-bold">소관 기관</span>
+            <span className="text-slate-200 block break-words font-medium">
+              {cleanHtml(biz(["jrsdInsttNm"])) || selectedProgram.organizer}
+            </span>
+          </div>
+          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
+            <span className="text-slate-400 block font-bold">수행 기관</span>
+            <span className="text-slate-200 block break-words font-medium">
+              {cleanHtml(biz(["excInsttNm"])) || selectedProgram.executingAgency || "공고문 참조"}
+            </span>
+          </div>
+          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
+            <span className="text-slate-400 block font-bold">접수 방법</span>
+            <span className="text-slate-200 block break-words font-medium">{applyMethod}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   selectedProgram,
   onClose,
@@ -52,7 +355,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   onCreatePsstPlan,
 }) => {
   // Main tabs: AI Analysis ("ai"), Document Viewer ("viewer"), Attachments ("docs"), Official Sources ("sources")
-  const [activeTab, setActiveTab] = useState<"ai" | "viewer" | "docs" | "sources">("ai");
+  const [activeTab, setActiveTab] = useState<"ai" | "viewer" | "docs" | "sources">("viewer");
   const [isMaximized, setIsMaximized] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -139,11 +442,32 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
     }
   }, [selectedProgram.sources]);
 
+  // Parse Bizinfo rawData from sources (for BIZINFO sourceType)
+  const bizinfoRawData = useMemo(() => {
+    const bizSrc = selectedProgram.sources.find((s) => s.sourceType === "BIZINFO");
+    if (!bizSrc?.rawData) return null;
+    try {
+      return typeof bizSrc.rawData === "string" ? JSON.parse(bizSrc.rawData) : bizSrc.rawData;
+    } catch {
+      return null;
+    }
+  }, [selectedProgram.sources]);
+
   // Helper: extract K-Startup field with multiple key fallbacks
   const kst = (keys: string[]): string | null => {
     if (!kstartupRawData) return null;
     for (const k of keys) {
       const val = kstartupRawData[k];
+      if (val && String(val).trim() && String(val).trim() !== "0") return String(val).trim();
+    }
+    return null;
+  };
+
+  // Helper: extract Bizinfo field with multiple key fallbacks
+  const biz = (keys: string[]): string | null => {
+    if (!bizinfoRawData) return null;
+    for (const k of keys) {
+      const val = bizinfoRawData[k];
       if (val && String(val).trim() && String(val).trim() !== "0") return String(val).trim();
     }
     return null;
@@ -545,78 +869,6 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Platform-Specific Quick Overview Banner (K-Startup vs Bizinfo) */}
-                  {kstartupRawData ? (
-                    <div className="bg-gradient-to-r from-amber-950/30 via-slate-900 to-indigo-950/20 border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-md">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30">
-                            🚀 K-Startup 창업 지원사업
-                          </span>
-                          <span className="text-[11px] text-slate-400">창업진흥원 표준 공고 규격</span>
-                        </div>
-                        {(kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"])?.startsWith("http")) && (
-                          <a
-                            href={kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"]) || ""}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
-                          >
-                            <span>K-Startup 온라인 접수처</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">창업 업력 조건</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["biz_enyy", "창업업력"]) || "전체 / 공고문 참조"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">대상 연령</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["aply_trgt_age", "대상연령"]) || "전체"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">수행 / 소관 기관</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["exct_istt_nm", "수행기관"]) || selectedProgram.organizer}
-                          </span>
-                        </div>
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">담당 문의처</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["tel_no", "cntct_no", "연락처"]) || "공고문 참조"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-gradient-to-r from-teal-950/20 via-slate-900 to-slate-900 border border-teal-500/20 rounded-2xl p-3.5 flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold text-xs border border-teal-500/30">
-                          🏢 기업마당 정책 지원사업
-                        </span>
-                        <span className="text-[11px] text-slate-400">중소벤처기업부 중소기업·소상공인 지원 공고</span>
-                      </div>
-                      {selectedProgram.sources[0]?.sourceUrl && (
-                        <a
-                          href={selectedProgram.sources[0].sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
-                        >
-                          <span>기업마당 공고 원문</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                  )}
-
                   {/* Gate 1: Unauthenticated Alert */}
                   {gateState === "unauthenticated" && (
                     <div className="bg-slate-900 border border-blue-500/40 p-4 rounded-2xl flex items-center justify-between gap-3 text-slate-200">
@@ -775,7 +1027,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     <div className="space-y-2">
                       <h4 className="font-bold text-xs text-indigo-300 uppercase tracking-wider flex items-center space-x-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>핵심 요약 (3문장 브리핑)</span>
+                        <span>AI 맞춤형 합격 공략 (3-Step 브리핑)</span>
                       </h4>
                       <div className="bg-indigo-950/20 p-4 rounded-xl border border-indigo-500/20 space-y-2">
                         {aiData.summaryReport.map((sentence: string, idx: number) => (
@@ -947,58 +1199,6 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
               ) : (
                 /* Unanalyzed Program Empty State */
                 <div className="space-y-4">
-                  {/* Platform-Specific Quick Overview Banner in Initial View */}
-                  {kstartupRawData ? (
-                    <div className="bg-gradient-to-r from-amber-950/30 via-slate-900 to-indigo-950/20 border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-md">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30">
-                            🚀 K-Startup 창업 지원사업
-                          </span>
-                          <span className="text-[11px] text-slate-400">창업진흥원 표준 공고 규격</span>
-                        </div>
-                        {(kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"])?.startsWith("http")) && (
-                          <a
-                            href={kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"]) || ""}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
-                          >
-                            <span>K-Startup 온라인 접수처</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">창업 업력 조건</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["biz_enyy", "창업업력"]) || "전체 / 공고문 참조"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">대상 연령</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["aply_trgt_age", "대상연령"]) || "전체"}
-                          </span>
-                        </div>
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">수행 / 소관 기관</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["exct_istt_nm", "수행기관"]) || selectedProgram.organizer}
-                          </span>
-                        </div>
-                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
-                          <span className="text-[10px] text-amber-400/90 font-bold block">담당 문의처</span>
-                          <span className="font-semibold text-slate-200 truncate block">
-                            {kst(["tel_no", "cntct_no", "연락처"]) || "공고문 참조"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
                   {/* Basic Notice Summary Card */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-1">
@@ -1060,9 +1260,9 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   <div className="bg-gradient-to-br from-indigo-950/40 via-purple-950/30 to-slate-900 p-6 rounded-2xl border border-indigo-500/30 text-center space-y-4">
                     <Sparkles className="w-8 h-8 text-indigo-400 mx-auto" />
                     <div className="space-y-1">
-                      <h3 className="font-bold text-slate-100 text-sm">아직 AI 정밀 분석이 실행되지 않았습니다</h3>
+                      <h3 className="font-bold text-slate-100 text-sm">아직 AI 합격 전략 리포트가 없습니다</h3>
                       <p className="text-slate-400 text-xs max-w-md mx-auto leading-relaxed">
-                        공고문 전문과 첨부파일을 Gemini AI로 정밀 분석하여 심사·평가기준, 우선선정/가점표, 필수 제출서류를 즉시 구조화합니다.
+                        공고문 전문과 첨부파일을 Gemini AI로 정밀 분석하여 작성 공략법과 심사·평가 대응 전략을 즉시 제공합니다.
                       </p>
                     </div>
 
@@ -1092,12 +1292,12 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                         {isLoadingDocs ? (
                           <>
                             <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
-                            <span>공식 서류 동기화 중 (완료 후 AI 분석 가능)</span>
+                            <span>공식 서류 동기화 중 (완료 후 분석 가능)</span>
                           </>
                         ) : (
                           <>
                             <Sparkles className="w-4 h-4" />
-                            <span>Google Gemini AI 분석 시작</span>
+                            <span>AI 합격 전략 리포트 분석하기</span>
                           </>
                         )}
                       </button>
@@ -1111,6 +1311,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
           {/* 2. Notice Document Viewer (Prioritizes PDF, Direct Download for HWP) */}
           {activeTab === "viewer" && (
             <div className="space-y-3 flex flex-col flex-1 min-h-[480px]">
+              <CommonNoticeHeader selectedProgram={selectedProgram} kst={kst} biz={biz} />
               {sortedDocs.length === 0 ? (
                 isLoadingDocs ? (
                   /* Loading State when documents are being fetched */
