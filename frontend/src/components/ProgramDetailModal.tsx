@@ -77,6 +77,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   // Bookmark / Scrap State
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
+  const [showBookmarkLoginDialog, setShowBookmarkLoginDialog] = useState(false);
 
   // Check initial bookmark status
   useEffect(() => {
@@ -98,7 +99,8 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
     try {
       const token = await getJwtToken();
       if (!token) {
-        setGateState("unauthenticated");
+        setShowBookmarkLoginDialog(true);
+        setBookmarkLoading(false);
         return;
       }
       const res = await toggleBookmarkOnBackend(selectedProgram.id, token);
@@ -125,6 +127,27 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
       return null;
     }
   }, [liveAnalysis]);
+
+  // Parse K-Startup rawData from sources (for K_STARTUP sourceType)
+  const kstartupRawData = useMemo(() => {
+    const kstSrc = selectedProgram.sources.find((s) => s.sourceType === "K_STARTUP");
+    if (!kstSrc?.rawData) return null;
+    try {
+      return typeof kstSrc.rawData === "string" ? JSON.parse(kstSrc.rawData) : kstSrc.rawData;
+    } catch {
+      return null;
+    }
+  }, [selectedProgram.sources]);
+
+  // Helper: extract K-Startup field with multiple key fallbacks
+  const kst = (keys: string[]): string | null => {
+    if (!kstartupRawData) return null;
+    for (const k of keys) {
+      const val = kstartupRawData[k];
+      if (val && String(val).trim() && String(val).trim() !== "0") return String(val).trim();
+    }
+    return null;
+  };
 
   // Prioritize PDF documents first so PDF is shown by default in the viewer
   const sortedDocs = useMemo(() => {
@@ -273,6 +296,55 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-all">
+      {/* ── 로그인 유도 다이얼로그 (빬마크 클릭 시 비로그인 상태) ── */}
+      {showBookmarkLoginDialog && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setShowBookmarkLoginDialog(false)}>
+          <div
+            className="relative w-full max-w-sm bg-slate-900 border border-slate-700 rounded-3xl p-7 shadow-2xl shadow-black/60 text-center animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close */}
+            <button
+              onClick={() => setShowBookmarkLoginDialog(false)}
+              className="absolute top-4 right-4 p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Icon */}
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-5">
+              <Bookmark className="w-7 h-7 text-amber-400" />
+            </div>
+
+            {/* Text */}
+            <h3 className="text-base font-extrabold text-white mb-1.5">로그인이 필요한 기능입니다</h3>
+            <p className="text-xs text-slate-400 leading-relaxed mb-6">
+              관심 공고 찜 기능은 로그인한 사용자만 이용할 수 있어요.{" "}
+              <br />
+              로그인 후 <span className="text-amber-300 font-semibold">{selectedProgram.title}</span> 공고를 바로 보관함에 저장할 수 있습니다.
+            </p>
+
+            {/* Buttons */}
+            <div className="flex flex-col gap-2.5">
+              <a
+                href="/login"
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-sm transition-all shadow-md shadow-amber-500/30 flex items-center justify-center space-x-2"
+              >
+                <Lock className="w-4 h-4" />
+                <span>로그인하러 가기</span>
+                <ArrowRight className="w-4 h-4" />
+              </a>
+              <button
+                onClick={() => setShowBookmarkLoginDialog(false)}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm transition-colors cursor-pointer"
+              >
+                계속 둘러보기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         className={`glass-panel w-full transition-all duration-200 overflow-hidden flex flex-col border border-slate-700/80 shadow-2xl ${
           isMaximized
@@ -472,6 +544,78 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Platform-Specific Quick Overview Banner (K-Startup vs Bizinfo) */}
+                  {kstartupRawData ? (
+                    <div className="bg-gradient-to-r from-amber-950/30 via-slate-900 to-indigo-950/20 border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-md">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30">
+                            🚀 K-Startup 창업 지원사업
+                          </span>
+                          <span className="text-[11px] text-slate-400">창업진흥원 표준 공고 규격</span>
+                        </div>
+                        {(kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"])?.startsWith("http")) && (
+                          <a
+                            href={kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"]) || ""}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
+                          >
+                            <span>K-Startup 온라인 접수처</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">창업 업력 조건</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["biz_enyy", "창업업력"]) || "전체 / 공고문 참조"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">대상 연령</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["aply_trgt_age", "대상연령"]) || "전체"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">수행 / 소관 기관</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["exct_istt_nm", "수행기관"]) || selectedProgram.organizer}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">담당 문의처</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["tel_no", "cntct_no", "연락처"]) || "공고문 참조"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-r from-teal-950/20 via-slate-900 to-slate-900 border border-teal-500/20 rounded-2xl p-3.5 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold text-xs border border-teal-500/30">
+                          🏢 기업마당 정책 지원사업
+                        </span>
+                        <span className="text-[11px] text-slate-400">중소벤처기업부 중소기업·소상공인 지원 공고</span>
+                      </div>
+                      {selectedProgram.sources[0]?.sourceUrl && (
+                        <a
+                          href={selectedProgram.sources[0].sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
+                        >
+                          <span>기업마당 공고 원문</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  )}
 
                   {/* Gate 1: Unauthenticated Alert */}
                   {gateState === "unauthenticated" && (
@@ -803,6 +947,58 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
               ) : (
                 /* Unanalyzed Program Empty State */
                 <div className="space-y-4">
+                  {/* Platform-Specific Quick Overview Banner in Initial View */}
+                  {kstartupRawData ? (
+                    <div className="bg-gradient-to-r from-amber-950/30 via-slate-900 to-indigo-950/20 border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-md">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30">
+                            🚀 K-Startup 창업 지원사업
+                          </span>
+                          <span className="text-[11px] text-slate-400">창업진흥원 표준 공고 규격</span>
+                        </div>
+                        {(kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"])?.startsWith("http")) && (
+                          <a
+                            href={kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"]) || ""}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
+                          >
+                            <span>K-Startup 온라인 접수처</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">창업 업력 조건</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["biz_enyy", "창업업력"]) || "전체 / 공고문 참조"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">대상 연령</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["aply_trgt_age", "대상연령"]) || "전체"}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">수행 / 소관 기관</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["exct_istt_nm", "수행기관"]) || selectedProgram.organizer}
+                          </span>
+                        </div>
+                        <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-0.5">
+                          <span className="text-[10px] text-amber-400/90 font-bold block">담당 문의처</span>
+                          <span className="font-semibold text-slate-200 truncate block">
+                            {kst(["tel_no", "cntct_no", "연락처"]) || "공고문 참조"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {/* Basic Notice Summary Card */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 space-y-1">
@@ -1278,26 +1474,109 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
 
           {/* 4. Official Source Portals Tab */}
           {activeTab === "sources" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <p className="text-xs text-slate-400">
                 본 공고는 아래 공식 기관 포털에서 수집 및 정규화되었습니다:
               </p>
-              {selectedProgram.sources.map((src) => (
+
+              {/* K-Startup 전용 상세 정보 카드 */}
+              {kstartupRawData && (
+                <div className="bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 font-bold text-xs border border-amber-500/30">
+                      K-Startup 공고 상세 정보
+                    </span>
+                    <span className="text-[11px] text-slate-500">공공데이터 포털 원본 기준</span>
+                  </div>
+
+                  {/* 메타 정보 그리드 */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {[
+                      { label: "창업업력", value: kst(["biz_enyy", "창업업력"]) || "전체" },
+                      { label: "대상연령", value: kst(["aply_trgt_age", "대상연령"]) || "전체" },
+                      { label: "기관구분", value: kst(["istt_clsfc_nm", "기관구분"]) },
+                      { label: "담당부서", value: kst(["pbanc_ntrp_nm", "담당부서", "주관기관"]) },
+                      { label: "연락처", value: kst(["tel_no", "cntct_no", "연락처"]) },
+                      { label: "지원분야", value: kst(["supt_biz_clsfc", "지원분야", "supt_biz_clsfc_nm"]) },
+                    ]
+                      .filter((item) => item.value)
+                      .map((item) => (
+                        <div key={item.label} className="bg-slate-950/60 rounded-xl p-3 border border-slate-800">
+                          <p className="text-[10px] font-bold text-amber-400/80 mb-1">{item.label}</p>
+                          <p className="text-xs text-slate-200 font-medium">{item.value}</p>
+                        </div>
+                      ))}
+                  </div>
+
+                  {/* 신청방법 */}
+                  {kst(["aply_mthd_onli_rcpt_istc", "신청방법"]) && (
+                    <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
+                      <p className="text-[10px] font-bold text-amber-400/80">신청방법</p>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {kst(["aply_mthd_onli_rcpt_istc", "신청방법"])}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 지원대상 상세 */}
+                  {kst(["aply_trgt_ctnt", "지원대상"]) && (
+                    <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
+                      <p className="text-[10px] font-bold text-amber-400/80">지원대상 상세</p>
+                      <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                        {kst(["aply_trgt_ctnt", "지원대상"])}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 선정절차 */}
+                  {kst(["slctn_mthd_ctnt", "선정절차"]) && (
+                    <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
+                      <p className="text-[10px] font-bold text-amber-400/80">선정절차 및 평가방법</p>
+                      <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                        {kst(["slctn_mthd_ctnt", "선정절차"])}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 온라인 접수 바로가기 버튼 */}
+                  {(kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"])?.startsWith("http")) && (
+                    <a
+                      href={kst(["detl_pg_url", "aply_mthd_onli_rcpt_istc", "상세URL"]) || ""}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 font-bold text-xs border border-amber-500/30 transition-all flex items-center justify-center space-x-2"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>K-Startup 공고 원문 바로가기</span>
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* 출처 목록 */}
+              {selectedProgram.sources.map((src, srcIdx) => (
                 <div
-                  key={src.id}
+                  key={src.id ? `${src.id}-${srcIdx}` : srcIdx}
                   className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex items-center justify-between text-xs"
                 >
                   <div className="space-y-1">
-                    <span className="font-semibold text-slate-200">
-                      [{src.sourceType}] {src.rawTitle}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        src.sourceType === "K_STARTUP"
+                          ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                          : "bg-teal-500/10 text-teal-300 border border-teal-500/20"
+                      }`}>
+                        {src.sourceType === "K_STARTUP" ? "K-Startup" : "기업마당"}
+                      </span>
+                      <span className="font-semibold text-slate-200">{src.rawTitle}</span>
+                    </div>
                     <p className="text-[11px] text-slate-500 truncate max-w-md">{src.sourceUrl}</p>
                   </div>
                   <a
                     href={src.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 transition-colors flex items-center space-x-1"
+                    className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 transition-colors flex items-center space-x-1 flex-shrink-0"
                   >
                     <span>원문 보기</span>
                     <ExternalLink className="w-3.5 h-3.5" />

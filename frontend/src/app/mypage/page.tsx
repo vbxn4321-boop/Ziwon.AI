@@ -1145,9 +1145,9 @@ export default function MyPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {plans.map((p) => (
+                {plans.map((p, idx) => (
                   <div
-                    key={p.id}
+                    key={p.id ? `${p.id}-${idx}` : idx}
                     className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-purple-500/40 transition-all flex flex-col justify-between space-y-4 group"
                   >
                     <div className="space-y-2">
@@ -1247,9 +1247,9 @@ export default function MyPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {bookmarks.map((b) => (
+                {bookmarks.map((b, idx) => (
                   <div
-                    key={b.id}
+                    key={b.id ? `${b.id}-${idx}` : idx}
                     className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-indigo-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
                   >
                     <div className="space-y-1.5 flex-1 min-w-0">

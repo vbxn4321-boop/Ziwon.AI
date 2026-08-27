@@ -232,10 +232,24 @@ function HomePageContent() {
       const res = await fetch(`/api/support-programs?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
+        const rawList = Array.isArray(data.data) ? data.data : [];
         if (isReset) {
-          setPrograms(data.data);
+          const map = new Map();
+          rawList.forEach((p: any) => {
+            if (p && p.id) map.set(p.id, p);
+          });
+          setPrograms(Array.from(map.values()));
         } else {
-          setPrograms((prev) => [...prev, ...data.data]);
+          setPrograms((prev) => {
+            const map = new Map();
+            prev.forEach((p: any) => {
+              if (p && p.id) map.set(p.id, p);
+            });
+            rawList.forEach((p: any) => {
+              if (p && p.id) map.set(p.id, p);
+            });
+            return Array.from(map.values());
+          });
         }
         setHasMore(data.hasMore);
         setTotalCount(data.total);
@@ -862,8 +876,8 @@ function HomePageContent() {
               ) : (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {programs.map((prog) => (
-                      <ProgramCard key={prog.id} prog={prog} onClick={() => setSelectedProgram(prog)} />
+                    {programs.map((prog, pIdx) => (
+                      <ProgramCard key={`${prog.id}-${pIdx}`} prog={prog} onClick={() => setSelectedProgram(prog)} />
                     ))}
                   </div>
 
@@ -1071,8 +1085,8 @@ function HomePageContent() {
                   ) : (
                     <div className="space-y-4">
                       <div className="glass-panel rounded-2xl divide-y divide-slate-800/80 overflow-hidden">
-                        {programs.map((prog) => (
-                          <ProgramCard key={prog.id} prog={prog} onClick={() => setSelectedProgram(prog)} />
+                        {programs.map((prog, pIdx) => (
+                          <ProgramCard key={`${prog.id}-${pIdx}`} prog={prog} onClick={() => setSelectedProgram(prog)} />
                         ))}
                       </div>
 
