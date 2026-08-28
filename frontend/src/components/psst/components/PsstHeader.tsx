@@ -48,27 +48,27 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
   onDownloadPdf,
 }) => {
   return (
-    <header className="h-14 bg-slate-900/90 border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between flex-shrink-0 z-20 backdrop-blur-md">
+    <header className="h-14 bg-white/95 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between flex-shrink-0 z-20 backdrop-blur-md shadow-2xs">
       {/* Left: Mode Switcher & Title */}
       <div className="flex items-center space-x-3 overflow-hidden">
         <button
           type="button"
           onClick={() => onBackToNotices && onBackToNotices()}
-          className="text-slate-400 hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-800 cursor-pointer"
+          className="text-slate-500 hover:text-slate-800 transition-colors p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
           title="공고 탐색으로 돌아가기"
         >
           <Menu className="w-4 h-4" />
         </button>
 
         {/* Creation Mode Toggle */}
-        <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex space-x-1 text-xs">
+        <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex space-x-1 text-xs">
           <button
             type="button"
             onClick={() => setCreationMode("chat")}
             className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
               creationMode === "chat"
-                ? "bg-indigo-600 text-white shadow-md font-bold"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-indigo-600 text-white shadow-xs font-bold"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             <Bot className="w-3.5 h-3.5" />
@@ -79,8 +79,8 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
             onClick={() => setCreationMode("form")}
             className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center space-x-1.5 cursor-pointer ${
               creationMode === "form"
-                ? "bg-blue-600 text-white shadow-md font-bold"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-blue-600 text-white shadow-xs font-bold"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -95,18 +95,18 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
         <button
           type="button"
           onClick={() => setCanvasTheme((prev) => (prev === "dark" ? "light" : "dark"))}
-          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium transition-colors flex items-center space-x-1 cursor-pointer"
+          className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium transition-colors flex items-center space-x-1 cursor-pointer shadow-2xs"
           title="문서 시트 다크/라이트 테마 전환"
         >
           {canvasTheme === "dark" ? (
             <>
-              <Moon className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="text-[11px]">다크 뷰</span>
+              <Moon className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-[11px] font-semibold">다크 뷰</span>
             </>
           ) : (
             <>
-              <Sun className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-[11px]">페이퍼 뷰</span>
+              <Sun className="w-3.5 h-3.5 text-amber-500" />
+              <span className="text-[11px] font-semibold">페이퍼 뷰</span>
             </>
           )}
         </button>
@@ -116,7 +116,7 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
             type="button"
             disabled={isSavingPlan}
             onClick={onSavePlan}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/30 flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
           >
             {isSavingPlan ? (
               <>
@@ -125,12 +125,12 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
               </>
             ) : saveSuccessMsg ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-300" />
+                <Check className="w-3.5 h-3.5 text-emerald-200" />
                 <span>저장 완료!</span>
               </>
             ) : (
               <>
-                <FolderHeart className="w-3.5 h-3.5 text-purple-300" />
+                <FolderHeart className="w-3.5 h-3.5 text-indigo-200" />
                 <span>내 보관함 저장</span>
               </>
             )}
@@ -141,7 +141,7 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
           <button
             type="button"
             onClick={onDownloadPdf}
-            className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-md shadow-emerald-600/30 flex items-center space-x-1.5 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
             title="사업계획서를 PDF 파일로 저장"
           >
             <FileDown className="w-3.5 h-3.5" />
@@ -153,11 +153,11 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
           <button
             type="button"
             onClick={onCopyFullText}
-            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30 flex items-center space-x-1.5 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
           >
             {isCopied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <Check className="w-3.5 h-3.5 text-emerald-200" />
                 <span>복사 완료!</span>
               </>
             ) : (
@@ -172,7 +172,7 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
         <button
           type="button"
           onClick={onResetNew}
-          className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+          className="p-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition-colors cursor-pointer shadow-2xs"
           title="새 사업계획서 작성"
         >
           <Plus className="w-4 h-4" />
@@ -182,7 +182,7 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
         <button
           type="button"
           onClick={() => onBackToNotices && onBackToNotices()}
-          className="px-3 py-1.5 rounded-xl bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 border border-rose-500/30 text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer shadow-sm hover:text-white"
+          className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer shadow-2xs"
           title="사업계획서 화면을 닫고 공고 탐색 홈으로 이동"
         >
           <span>✕ 닫기</span>
