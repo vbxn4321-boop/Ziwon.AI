@@ -315,7 +315,7 @@ export default function SavedPlansModal({
                           if (onOpenBookmarkedProgram) {
                             onOpenBookmarkedProgram(b.supportProgramId);
                           } else {
-                            router.push(`/?programId=${b.supportProgramId}`);
+                            router.push(`/programs/${b.supportProgramId}`);
                           }
                           onClose();
                         }}

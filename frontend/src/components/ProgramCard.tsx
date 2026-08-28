@@ -1,6 +1,5 @@
-"use client";
-
 import React from "react";
+import Link from "next/link";
 import { ChevronRight, Sparkles, Clock, Calendar } from "lucide-react";
 
 export interface SupportProgram {
@@ -17,14 +16,15 @@ export interface SupportProgram {
   officialNoticeNo?: string;
   duplicateStatus: string;
   createdAt?: string;
+  daysLeft?: number;
   sources: { id: string; sourceType: string; sourceUrl: string; rawTitle: string; rawData?: string }[];
-  documents: { id: string; fileName: string; fileUrl: string; fileType: string }[];
+  documents: { id: string; fileName: string; fileUrl: string; fileType: string; extractedText?: string; status?: string }[];
   analyses: any[];
 }
 
 interface ProgramCardProps {
   prog: SupportProgram;
-  onClick: () => void;
+  onClick?: () => void;
 }
 
 export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
@@ -69,10 +69,10 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
   const isUrgent = !isClosed && dday.includes("D-") && parseInt(dday.replace(/[^0-9]/g, "") || "99") <= 7;
   const createdBadgeText = formatCreatedTime(prog.createdAt);
 
-  return (
+  const cardContent = (
     <div
       onClick={onClick}
-      className={`glass-card rounded-2xl p-5 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10 ${
+      className={`glass-card rounded-2xl p-5 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10 h-full ${
         isClosed ? "opacity-60 bg-slate-950/40" : ""
       }`}
     >
@@ -157,6 +157,16 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
         <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
       </div>
     </div>
+  );
+
+  if (onClick) {
+    return cardContent;
+  }
+
+  return (
+    <Link href={`/programs/${prog.id}`} className="block h-full">
+      {cardContent}
+    </Link>
   );
 };
 
