@@ -208,16 +208,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden selection:bg-blue-600 selection:text-white">
       {/* Ambient background glows */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[300px] bg-purple-600/10 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[300px] bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none" />
 
       {/* Top back navigation */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md px-4 mb-6">
         <Link
           href="/"
-          className="inline-flex items-center space-x-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors group"
+          className="inline-flex items-center space-x-2 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           <span>메인 화면으로 돌아가기</span>
@@ -226,21 +226,21 @@ export default function LoginPage() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md px-4">
         {/* Card Box */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/50 space-y-6">
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
           {/* Header & Logo */}
           <div className="text-center space-y-2">
             <Link href="/" className="inline-flex items-center space-x-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-xs">
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
-              <span className="text-2xl font-black text-white tracking-tight">
-                Ziwon<span className="text-blue-400">.AI</span>
+              <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                Ziwon<span className="text-blue-600">.AI</span>
               </span>
             </Link>
-            <h1 className="text-lg font-bold text-white tracking-tight pt-1">
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight pt-1">
               {isForgotMode ? "비밀번호 재설정" : "로그인"}
             </h1>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               {isForgotMode
                 ? "가입하신 이메일로 6자리 인증번호를 받아 재설정합니다."
                 : "대한민국 100만 기업을 위한 AI 맞춤 지원사업 플랫폼"}
@@ -249,16 +249,16 @@ export default function LoginPage() {
 
           {/* Mode Switch Tabs */}
           {!isForgotMode && (
-            <div className="grid grid-cols-2 p-1 bg-slate-950/80 rounded-2xl border border-slate-800">
+            <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
               <button
                 type="button"
-                className="py-2.5 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md transition-all"
+                className="py-2.5 text-xs font-bold rounded-xl bg-white text-slate-900 shadow-2xs transition-all border border-slate-200"
               >
                 로그인
               </button>
               <Link
                 href="/signup"
-                className="py-2.5 text-xs font-semibold rounded-xl text-slate-400 hover:text-white transition-all text-center flex items-center justify-center"
+                className="py-2.5 text-xs font-semibold rounded-xl text-slate-500 hover:text-slate-900 transition-all text-center flex items-center justify-center"
               >
                 회원가입
               </Link>
@@ -267,15 +267,15 @@ export default function LoginPage() {
 
           {/* Notification Messages */}
           {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-center space-x-2 animate-shake">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2 animate-shake">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center space-x-2 animate-fade-in">
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center space-x-2 animate-fade-in">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
               <span>{successMsg}</span>
             </div>
           )}
@@ -284,23 +284,23 @@ export default function LoginPage() {
           {!isForgotMode ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">이메일 주소</label>
+                <label className="text-xs font-bold text-slate-700">이메일 주소</label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@company.com"
-                    className="w-full bg-slate-950/90 border border-slate-800 focus:border-blue-500 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none transition-colors"
+                    className="w-full bg-white border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-100 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors shadow-2xs"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">비밀번호</label>
+                  <label className="text-xs font-bold text-slate-700">비밀번호</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -308,20 +308,20 @@ export default function LoginPage() {
                       setErrorMsg(null);
                       setSuccessMsg(null);
                     }}
-                    className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold transition-colors cursor-pointer"
                   >
                     비밀번호를 잊으셨나요?
                   </button>
                 </div>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
                     type="password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="비밀번호 입력"
-                    className="w-full bg-slate-950/90 border border-slate-800 focus:border-blue-500 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none transition-colors"
+                    className="w-full bg-white border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-100 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors shadow-2xs"
                   />
                 </div>
               </div>
@@ -329,7 +329,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
               >
                 {loading ? (
                   <>
@@ -348,10 +348,10 @@ export default function LoginPage() {
             /* Forgot Password Form */
             <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">가입 이메일 주소</label>
+                <label className="text-xs font-bold text-slate-700">가입 이메일 주소</label>
                 <div className="flex space-x-2">
                   <div className="relative flex-1">
-                    <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                     <input
                       type="email"
                       required
@@ -359,7 +359,7 @@ export default function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@company.com"
-                      className="w-full bg-slate-950/90 border border-slate-800 focus:border-blue-500 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none transition-colors"
+                      className="w-full bg-white border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-100 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors shadow-2xs"
                     />
                   </div>
                   {!isEmailVerified && (
@@ -367,14 +367,14 @@ export default function LoginPage() {
                       type="button"
                       disabled={sendingOtp || !email}
                       onClick={handleSendOtp}
-                      className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all flex items-center space-x-1 flex-shrink-0 cursor-pointer disabled:opacity-50"
+                      className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center space-x-1 flex-shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
                     >
                       {sendingOtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                       <span>{isOtpSent ? "재발송" : "인증번호"}</span>
                     </button>
                   )}
                   {isEmailVerified && (
-                    <div className="px-3 py-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-bold flex items-center space-x-1 flex-shrink-0">
+                    <div className="px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center space-x-1 flex-shrink-0">
                       <Check className="w-4 h-4" />
                       <span>인증완료</span>
                     </div>
@@ -383,10 +383,10 @@ export default function LoginPage() {
               </div>
 
               {isOtpSent && !isEmailVerified && (
-                <div className="p-3 bg-blue-950/20 border border-blue-500/30 rounded-xl space-y-2">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
                   <div className="flex justify-between text-[11px]">
-                    <span className="text-blue-300 font-bold">인증번호 6자리</span>
-                    <span className="text-amber-400 font-mono flex items-center space-x-1">
+                    <span className="text-blue-800 font-bold">인증번호 6자리</span>
+                    <span className="text-amber-700 font-mono font-bold flex items-center space-x-1">
                       <Clock className="w-3 h-3" />
                       <span>{formatTimer(timeLeft)}</span>
                     </span>
@@ -398,13 +398,13 @@ export default function LoginPage() {
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
                       placeholder="6자리 숫자"
-                      className="flex-1 bg-slate-900 border border-blue-500/40 rounded-xl py-2 px-3 text-xs text-slate-100 font-mono tracking-widest focus:outline-none"
+                      className="flex-1 bg-white border border-blue-300 rounded-xl py-2 px-3 text-xs text-slate-900 font-mono tracking-widest focus:outline-none"
                     />
                     <button
                       type="button"
                       disabled={verifyingOtp || otpCode.length < 6}
                       onClick={handleVerifyOtp}
-                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs disabled:opacity-50 cursor-pointer"
                     >
                       {verifyingOtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "확인"}
                     </button>
@@ -415,31 +415,31 @@ export default function LoginPage() {
               {isEmailVerified && (
                 <>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300">새 비밀번호 (6자 이상)</label>
+                    <label className="text-xs font-bold text-slate-700">새 비밀번호 (6자 이상)</label>
                     <input
                       type="password"
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="새 비밀번호 입력"
-                      className="w-full bg-slate-950/90 border border-slate-800 focus:border-blue-500 rounded-xl py-2.5 px-3.5 text-xs text-slate-100 focus:outline-none"
+                      className="w-full bg-white border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-100 rounded-xl py-2.5 px-3.5 text-xs text-slate-900 focus:outline-none shadow-2xs"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300">새 비밀번호 확인</label>
+                    <label className="text-xs font-bold text-slate-700">새 비밀번호 확인</label>
                     <input
                       type="password"
                       required
                       value={passwordConfirm}
                       onChange={(e) => setPasswordConfirm(e.target.value)}
                       placeholder="새 비밀번호 다시 입력"
-                      className="w-full bg-slate-950/90 border border-slate-800 focus:border-blue-500 rounded-xl py-2.5 px-3.5 text-xs text-slate-100 focus:outline-none"
+                      className="w-full bg-white border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-100 rounded-xl py-2.5 px-3.5 text-xs text-slate-900 focus:outline-none shadow-2xs"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+                    className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all cursor-pointer disabled:opacity-50 shadow-sm"
                   >
                     {loading ? "변경 중..." : "비밀번호 변경 완료 및 로그인"}
                   </button>
@@ -453,7 +453,7 @@ export default function LoginPage() {
                   setErrorMsg(null);
                   setSuccessMsg(null);
                 }}
-                className="w-full text-center text-xs text-slate-400 hover:text-slate-200 pt-2"
+                className="w-full text-center text-xs text-slate-500 hover:text-slate-800 pt-2 cursor-pointer font-medium"
               >
                 ← 로그인으로 돌아가기
               </button>
@@ -464,11 +464,11 @@ export default function LoginPage() {
           {!isForgotMode && (
             <div className="space-y-3 pt-2">
               <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-slate-800" />
-                <span className="flex-shrink mx-3 text-[11px] text-slate-500 font-medium">
+                <div className="flex-grow border-t border-slate-200" />
+                <span className="flex-shrink mx-3 text-[11px] text-slate-400 font-medium">
                   또는 간편 로그인
                 </span>
-                <div className="flex-grow border-t border-slate-800" />
+                <div className="flex-grow border-t border-slate-200" />
               </div>
 
               <div className="space-y-2">
@@ -476,7 +476,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => handleSocialLogin("kakao")}
                   disabled={loading || socialLoading !== null}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#FEE500] hover:bg-[#FEE500]/90 text-[#191919] font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow-md cursor-pointer disabled:opacity-60"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#FEE500] hover:bg-[#FEE500]/90 text-[#191919] font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow-2xs cursor-pointer disabled:opacity-60"
                 >
                   {socialLoading === "kakao" ? (
                     <>
@@ -495,16 +495,16 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => handleSocialLogin("google")}
                   disabled={loading || socialLoading !== null}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-white border border-slate-700 font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-60"
+                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-60 shadow-2xs"
                 >
                   {socialLoading === "google" ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-700" />
                       <span>Google 연결 중...</span>
                     </>
                   ) : (
                     <>
-                      <span className="font-bold text-sm">G</span>
+                      <span className="font-bold text-sm text-slate-900">G</span>
                       <span>Google 계정으로 계속하기</span>
                     </>
                   )}
@@ -514,13 +514,13 @@ export default function LoginPage() {
           )}
 
           {/* Footer Terms Notice */}
-          <div className="pt-2 text-center text-[11px] text-slate-500 space-x-2">
+          <div className="pt-2 text-center text-[11px] text-slate-400 space-x-2">
             <span>로그인 시</span>
-            <Link href="/terms" className="text-slate-400 hover:text-blue-400 underline underline-offset-2">
+            <Link href="/terms" className="text-slate-600 hover:text-blue-600 underline underline-offset-2">
               이용약관
             </Link>
             <span>및</span>
-            <Link href="/privacy" className="text-slate-400 hover:text-blue-400 underline underline-offset-2">
+            <Link href="/privacy" className="text-slate-600 hover:text-blue-600 underline underline-offset-2">
               개인정보 처리방침
             </Link>
             <span>에 동의하게 됩니다.</span>

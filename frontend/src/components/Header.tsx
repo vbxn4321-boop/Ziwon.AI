@@ -130,22 +130,22 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Left: Logo & DB Live Badge & Backend Status */}
+          {/* Left: Logo & DB Live Badge */}
           <div className="flex items-center space-x-3">
             <Link
               href="/"
               onClick={() => handleNavClick("notices")}
-              className="flex items-center space-x-2 cursor-pointer group"
+              className="flex items-center space-x-2.5 cursor-pointer group"
             >
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
                 <span className="text-white font-black text-sm tracking-wider">Z</span>
               </div>
               <div className="flex flex-col">
-                <span className="font-extrabold text-base tracking-tight text-white flex items-center">
-                  Ziwon<span className="text-purple-400">.AI</span>
-                  <span className="ml-1.5 px-1.5 py-0.2 rounded-md bg-blue-500/10 text-blue-400 text-[10px] font-bold border border-blue-500/20">
+                <span className="font-extrabold text-base tracking-tight text-slate-900 flex items-center">
+                  Ziwon<span className="text-blue-600">.AI</span>
+                  <span className="ml-1.5 px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
                     2026
                   </span>
                 </span>
@@ -156,30 +156,30 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right: Navigation, Stats & Auth */}
           <div className="flex items-center space-x-3">
             {/* Top Main Navigation Tabs */}
-            <div className="flex items-center p-1 bg-slate-900/90 border border-slate-800/80 rounded-2xl text-xs">
+            <div className="flex items-center p-1 bg-slate-100 border border-slate-200 rounded-xl text-xs">
               <button
                 onClick={() => handleNavClick("notices")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+                className={`px-3 sm:px-3.5 py-1.5 rounded-lg font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
                   pathname === "/" && activeNavTab === "notices"
-                    ? "bg-slate-800 text-white shadow-md font-bold border border-slate-700"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-white text-slate-900 shadow-xs font-bold border border-slate-200"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <LayoutGrid className="w-3.5 h-3.5 text-blue-400" />
+                <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
                 <span>지원사업 공고 탐색</span>
               </button>
 
               <button
                 onClick={() => handleNavClick("psst")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+                className={`px-3 sm:px-3.5 py-1.5 rounded-lg font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
                   pathname === "/" && activeNavTab === "psst"
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30 font-bold"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm font-bold"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                 <span>AI 사업계획서</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-extrabold border border-purple-500/30">
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 text-[10px] font-extrabold border border-blue-200">
                   PSST
                 </span>
               </button>
@@ -187,31 +187,31 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* User Auth Buttons / Profile Menu */}
             {!mounted ? (
-              <div className="h-8 w-24 bg-slate-900/60 rounded-xl" />
+              <div className="h-8 w-24 bg-slate-100 rounded-xl animate-pulse" />
             ) : sessionUser ? (
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setShowSavedPlansModal(true)}
-                  className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                  className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
                   title="내 보관함"
                 >
-                  <FolderHeart className="w-3.5 h-3.5 text-purple-400" />
+                  <FolderHeart className="w-3.5 h-3.5 text-indigo-600" />
                   <span className="hidden sm:inline">내 보관함</span>
                 </button>
 
                 <Link
                   href="/mypage"
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-800 hover:border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
                   title="마이페이지 (기업 정보 관리 & 내 보관함)"
                 >
-                  <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                  <Building2 className="w-3.5 h-3.5 text-blue-600" />
                   <span className="font-bold">{displayName}</span>
-                  <span className="text-[10px] text-blue-400 font-normal ml-0.5">MY</span>
+                  <span className="text-[10px] text-blue-600 font-semibold ml-0.5 bg-blue-50 px-1 rounded">MY</span>
                 </Link>
 
                 <button
                   onClick={handleLogout}
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-red-400 border border-slate-800 text-xs transition-colors cursor-pointer"
+                  className="p-2 rounded-xl bg-white hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-200 text-xs transition-colors cursor-pointer shadow-2xs"
                   title="로그아웃"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -220,7 +220,7 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <Link
                 href="/login"
-                className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-600/30 flex items-center space-x-1.5 transition-all cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm shadow-blue-600/20 flex items-center space-x-1.5 transition-all cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>로그인 / 회원가입</span>
