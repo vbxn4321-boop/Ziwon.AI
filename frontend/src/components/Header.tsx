@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { Sparkles, LayoutGrid, ShieldCheck, Database, Server, User, LogIn, LogOut, Building2, FolderHeart } from "lucide-react";
 import { supabase, clearLocalAuth, getJwtToken } from "@/lib/supabase-client";
 import { checkBackendHealth, backendLogout } from "@/lib/backend-client";
@@ -27,6 +28,9 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectPlan,
   onOpenBookmarkedProgram,
 }) => {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [sessionUser, setSessionUser] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
@@ -34,6 +38,14 @@ export const Header: React.FC<HeaderProps> = ({
   // Modals state
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showSavedPlansModal, setShowSavedPlansModal] = useState(false);
+
+  const handleNavClick = (tab: "notices" | "psst") => {
+    if (pathname === "/") {
+      setActiveNavTab(tab);
+    } else {
+      router.push(`/?tab=${tab}`);
+    }
+  };
 
   const syncCurrentUser = () => {
     if (typeof window !== "undefined") {
@@ -122,8 +134,9 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Left: Logo & DB Live Badge & Backend Status */}
           <div className="flex items-center space-x-3">
-            <div
-              onClick={() => setActiveNavTab("notices")}
+            <Link
+              href="/"
+              onClick={() => handleNavClick("notices")}
               className="flex items-center space-x-2 cursor-pointer group"
             >
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
@@ -137,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 </span>
               </div>
-            </div>
+            </Link>
           </div>
 
           {/* Right: Navigation, Stats & Auth */}
@@ -145,9 +158,9 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Top Main Navigation Tabs */}
             <div className="flex items-center p-1 bg-slate-900/90 border border-slate-800/80 rounded-2xl text-xs">
               <button
-                onClick={() => setActiveNavTab("notices")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-medium transition-all flex items-center space-x-1.5 ${
-                  activeNavTab === "notices"
+                onClick={() => handleNavClick("notices")}
+                className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  pathname === "/" && activeNavTab === "notices"
                     ? "bg-slate-800 text-white shadow-md font-bold border border-slate-700"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
@@ -157,9 +170,9 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               <button
-                onClick={() => setActiveNavTab("psst")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-medium transition-all flex items-center space-x-1.5 ${
-                  activeNavTab === "psst"
+                onClick={() => handleNavClick("psst")}
+                className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  pathname === "/" && activeNavTab === "psst"
                     ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30 font-bold"
                     : "text-slate-400 hover:text-slate-200"
                 }`}

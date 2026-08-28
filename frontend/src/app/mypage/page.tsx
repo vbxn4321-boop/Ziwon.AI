@@ -375,26 +375,9 @@ export default function MyPage() {
     router.push(`/?tab=psst&planId=${plan.id}`);
   };
 
-  // 6. Open Program Detail Modal DIRECTLY inside MyPage
-  const handleOpenProgramDetail = async (programId: string) => {
-    setProgramModalLoading(true);
-    try {
-      const res = await fetch(`/api/support-programs/${programId}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          setSelectedProgramForModal(json.data);
-        } else {
-          alert("공고 정보를 불러오지 못했습니다.");
-        }
-      } else {
-        alert("공고 정보를 불러오지 못했습니다.");
-      }
-    } catch (err: any) {
-      alert("공고 조회 중 오류가 발생했습니다: " + err.message);
-    } finally {
-      setProgramModalLoading(false);
-    }
+  // 6. Open Program Detail Page DIRECTLY
+  const handleOpenProgramDetail = (programId: string) => {
+    router.push(`/programs/${programId}`);
   };
 
   // Calculations

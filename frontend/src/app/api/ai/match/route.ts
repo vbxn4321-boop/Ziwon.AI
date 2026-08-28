@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { prisma } from "@/lib/db";
 
 const CASCADE_MODELS = [
   process.env.AI_GENERAL_MODEL || "gemini-2.0-flash",
@@ -10,10 +11,18 @@ const CASCADE_MODELS = [
 
 export async function POST(req: NextRequest) {
   try {
-    const { company, program } = await req.json();
+    const body = await req.json();
+    const company = body.company || body.companyProfile;
+    let program = body.program;
+
+    if (!program && body.programId) {
+      program = await prisma.supportProgram.findUnique({
+        where: { id: body.programId },
+      });
+    }
 
     if (!company || !program) {
-      return NextResponse.json({ error: "기업 정보 또는 공고 정보가 없습니다." }, { status: 400 });
+      return NextResponse.json({ error: "기업 프로필 또는 공고 정보를 찾을 수 없습니다. 기업 정보를 먼저 등록해 주세요." }, { status: 400 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY || "";
@@ -97,7 +106,7 @@ export async function POST(req: NextRequest) {
         const clean = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
         const result = JSON.parse(clean);
 
-        return NextResponse.json({ success: true, result });
+        return NextResponse.json({ success: true, result, data: result });
       } catch (e) {
         lastError = e;
         console.error(`[AI Match] Model ${modelName} failed:`, e);

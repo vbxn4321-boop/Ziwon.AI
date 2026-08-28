@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Search,
   ChevronRight,
@@ -43,8 +43,28 @@ interface StatsData {
   urgentCount: number;
 }
 
+// Memory cache store for instant navigation restoration (SWR pattern)
+const memoryProgramsCache = new Map<
+  string,
+  {
+    programs: SupportProgram[];
+    total: number;
+    hasMore: boolean;
+    timestamp: number;
+  }
+>();
+
+let memoryFiltersCache: {
+  categories: FilterItem[];
+  regions: FilterItem[];
+  organizers: FilterItem[];
+  stats: StatsData;
+  timestamp: number;
+} | null = null;
+
 function HomePageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [activeNavTab, setActiveNavTab] = useState<"notices" | "psst">("notices");
   const [selectedTargetProgramForPlan, setSelectedTargetProgramForPlan] = useState<string>("");
@@ -58,6 +78,9 @@ function HomePageContent() {
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Live Feed Notification for Newly Collected Notices
+  const [newlyArrivedPrograms, setNewlyArrivedPrograms] = useState<SupportProgram[]>([]);
+
   // 1. Time / Curation Quick Filter: 'today' | 'recent' | 'urgent' | 'all'
   const [timeFilter, setTimeFilter] = useState<"today" | "recent" | "urgent" | "all">("today");
 
@@ -68,18 +91,26 @@ function HomePageContent() {
   const [onlyClosed, setOnlyClosed] = useState(false);
 
   // 4. Live DB Briefing Stats
-  const [stats, setStats] = useState<StatsData>({
-    totalCount: 0,
-    activeCount: 0,
-    todayCount: 0,
-    recentCount: 0,
-    urgentCount: 0,
-  });
+  const [stats, setStats] = useState<StatsData>(
+    memoryFiltersCache?.stats || {
+      totalCount: 0,
+      activeCount: 0,
+      todayCount: 0,
+      recentCount: 0,
+      urgentCount: 0,
+    }
+  );
 
   // Dynamic filter lists fetched directly from DB with counts
-  const [dbCategories, setDbCategories] = useState<FilterItem[]>([{ name: "전체", count: 0 }]);
-  const [dbRegions, setDbRegions] = useState<FilterItem[]>([{ name: "전체", count: 0 }]);
-  const [dbOrganizers, setDbOrganizers] = useState<FilterItem[]>([{ name: "전체", count: 0 }]);
+  const [dbCategories, setDbCategories] = useState<FilterItem[]>(
+    memoryFiltersCache?.categories || [{ name: "전체", count: 0 }]
+  );
+  const [dbRegions, setDbRegions] = useState<FilterItem[]>(
+    memoryFiltersCache?.regions || [{ name: "전체", count: 0 }]
+  );
+  const [dbOrganizers, setDbOrganizers] = useState<FilterItem[]>(
+    memoryFiltersCache?.organizers || [{ name: "전체", count: 0 }]
+  );
 
   // Top Nav Portal Mode
   const [mainPortalMode, setMainPortalMode] = useState<"bizinfo" | "kstartup">("bizinfo");
@@ -101,6 +132,10 @@ function HomePageContent() {
   // K-Startup Navigation Control Definitions
   const NAV_STAGES = ["전체", "예비(0년)", "창업(1~3년)", "성장(4~7년)", "신산업(10년 이내)"];
   const NAV_AGES = ["전체", "만 20세 미만", "만 20세 이상~39세 이하", "만 40세 이상"];
+
+  const getFilterKey = (query = searchQuery) => {
+    return `${mainPortalMode}_${bizFilterMode}_${selectedCategory}_${selectedOrganizer}_${selectedRegion}_${navStage}_${navAge}_${navCategory}_${timeFilter}_${sortOption}_${onlyClosed}_${query.trim()}`;
+  };
 
   // 1. Fetch Dynamic Filters & Live Stats on Mount
   useEffect(() => {
@@ -159,17 +194,33 @@ function HomePageContent() {
       const res = await fetch("/api/filters");
       const json = await res.json();
       if (json.success) {
-        if (json.data) {
-          setDbCategories(json.data.categories || [{ name: "전체", count: 0 }]);
-          setDbRegions(json.data.regions || [{ name: "전체", count: 0 }]);
-          setDbOrganizers(json.data.organizers || [{ name: "전체", count: 0 }]);
-        }
-        if (json.stats) {
-          setStats(json.stats);
-          // If no notices were ingested today (e.g. weekend or early morning), fallback timeFilter to 'recent' for best UX
-          if (json.stats.todayCount === 0 && json.stats.recentCount > 0) {
-            setTimeFilter("recent");
-          }
+        const categories = json.data?.categories || [{ name: "전체", count: 0 }];
+        const regions = json.data?.regions || [{ name: "전체", count: 0 }];
+        const organizers = json.data?.organizers || [{ name: "전체", count: 0 }];
+        const currentStats = json.stats || {
+          totalCount: 0,
+          activeCount: 0,
+          todayCount: 0,
+          recentCount: 0,
+          urgentCount: 0,
+        };
+
+        setDbCategories(categories);
+        setDbRegions(regions);
+        setDbOrganizers(organizers);
+        setStats(currentStats);
+
+        memoryFiltersCache = {
+          categories,
+          regions,
+          organizers,
+          stats: currentStats,
+          timestamp: Date.now(),
+        };
+
+        // If no notices were ingested today and timeFilter is currently today, smoothly fallback to 'recent'
+        if (currentStats.todayCount === 0 && currentStats.recentCount > 0 && timeFilter === "today") {
+          setTimeFilter("recent");
         }
       }
     } catch (err) {
@@ -196,7 +247,16 @@ function HomePageContent() {
   ]);
 
   const fetchPrograms = async (pageNum = 1, isReset = false, query = searchQuery) => {
-    if (isReset) {
+    const key = getFilterKey(query);
+    const cached = memoryProgramsCache.get(key);
+
+    // Instant SWR Hydration: if we have cached data for page 1 on reset, render immediately!
+    if (isReset && pageNum === 1 && cached && cached.programs.length > 0) {
+      setPrograms(cached.programs);
+      setTotalCount(cached.total);
+      setHasMore(cached.hasMore);
+      setLoading(false);
+    } else if (isReset) {
       setLoading(true);
     } else {
       setLoadingMore(true);
@@ -238,7 +298,28 @@ function HomePageContent() {
           rawList.forEach((p: any) => {
             if (p && p.id) map.set(p.id, p);
           });
-          setPrograms(Array.from(map.values()));
+          const newList = Array.from(map.values()) as SupportProgram[];
+
+          // Check if newly collected programs arrived since previous cache
+          if (cached && cached.programs.length > 0 && pageNum === 1) {
+            const currentIds = new Set(cached.programs.map((p) => p.id));
+            const freshItems = newList.filter((p) => !currentIds.has(p.id));
+            if (freshItems.length > 0) {
+              setNewlyArrivedPrograms(freshItems);
+            } else {
+              setPrograms(newList);
+            }
+          } else {
+            setPrograms(newList);
+          }
+
+          // Save to memory cache
+          memoryProgramsCache.set(key, {
+            programs: newList,
+            total: data.total,
+            hasMore: data.hasMore,
+            timestamp: Date.now(),
+          });
         } else {
           setPrograms((prev) => {
             const map = new Map();
@@ -248,7 +329,16 @@ function HomePageContent() {
             rawList.forEach((p: any) => {
               if (p && p.id) map.set(p.id, p);
             });
-            return Array.from(map.values());
+            const merged = Array.from(map.values()) as SupportProgram[];
+            if (pageNum === 1) {
+              memoryProgramsCache.set(key, {
+                programs: merged,
+                total: data.total,
+                hasMore: data.hasMore,
+                timestamp: Date.now(),
+              });
+            }
+            return merged;
           });
         }
         setHasMore(data.hasMore);
@@ -260,6 +350,26 @@ function HomePageContent() {
       setLoading(false);
       setLoadingMore(false);
     }
+  };
+
+  const handleApplyNewPrograms = () => {
+    if (newlyArrivedPrograms.length === 0) return;
+    setPrograms((prev) => {
+      const map = new Map();
+      newlyArrivedPrograms.forEach((p) => map.set(p.id, p));
+      prev.forEach((p) => map.set(p.id, p));
+      return Array.from(map.values());
+    });
+    const key = getFilterKey();
+    const current = memoryProgramsCache.get(key);
+    if (current) {
+      const map = new Map();
+      newlyArrivedPrograms.forEach((p) => map.set(p.id, p));
+      current.programs.forEach((p) => map.set(p.id, p));
+      current.programs = Array.from(map.values());
+    }
+    setNewlyArrivedPrograms([]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleLoadMore = () => {
@@ -284,23 +394,8 @@ function HomePageContent() {
     setSearchQuery("");
   };
 
-  const handleOpenBookmarkedProgram = async (programId: string) => {
-    const existing = programs.find((p) => p.id === programId);
-    if (existing) {
-      setSelectedProgram(existing);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/support-programs/${programId}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          setSelectedProgram(json.data);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to open bookmarked program:", err);
-    }
+  const handleOpenBookmarkedProgram = (programId: string) => {
+    router.push(`/programs/${programId}`);
   };
 
   return (
@@ -831,6 +926,21 @@ function HomePageContent() {
                 </h2>
               </div>
 
+              {/* Live Feed Floating Banner for Newly Collected Notices */}
+              {newlyArrivedPrograms.length > 0 && (
+                <div className="sticky top-20 z-30 flex justify-center py-2 animate-bounce">
+                  <button
+                    type="button"
+                    onClick={handleApplyNewPrograms}
+                    className="px-5 py-2.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-extrabold text-xs shadow-xl shadow-indigo-600/30 flex items-center space-x-2 border border-blue-400/40 hover:scale-105 transition-all cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
+                    <span>새로 수집된 공고 {newlyArrivedPrograms.length}건이 있습니다</span>
+                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">지금 보기 ↻</span>
+                  </button>
+                </div>
+              )}
+
               {/* Program Cards Grid */}
               {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -877,7 +987,7 @@ function HomePageContent() {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {programs.map((prog, pIdx) => (
-                      <ProgramCard key={`${prog.id}-${pIdx}`} prog={prog} onClick={() => setSelectedProgram(prog)} />
+                      <ProgramCard key={`${prog.id}-${pIdx}`} prog={prog} onClick={() => router.push(`/programs/${prog.id}`)} />
                     ))}
                   </div>
 
@@ -1069,6 +1179,21 @@ function HomePageContent() {
                     </div>
                   </div>
 
+                  {/* Live Feed Floating Banner for Newly Collected Notices */}
+                  {newlyArrivedPrograms.length > 0 && (
+                    <div className="sticky top-20 z-30 flex justify-center py-2 animate-bounce">
+                      <button
+                        type="button"
+                        onClick={handleApplyNewPrograms}
+                        className="px-5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white font-extrabold text-xs shadow-xl shadow-purple-600/30 flex items-center space-x-2 border border-purple-400/40 hover:scale-105 transition-all cursor-pointer"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
+                        <span>새로 수집된 맞춤 공고 {newlyArrivedPrograms.length}건이 있습니다</span>
+                        <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">지금 보기 ↻</span>
+                      </button>
+                    </div>
+                  )}
+
                   {loading ? (
                     <div className="py-20 text-center space-y-3 glass-panel rounded-2xl">
                       <div className="inline-block w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
@@ -1086,7 +1211,7 @@ function HomePageContent() {
                     <div className="space-y-4">
                       <div className="glass-panel rounded-2xl divide-y divide-slate-800/80 overflow-hidden">
                         {programs.map((prog, pIdx) => (
-                          <ProgramCard key={`${prog.id}-${pIdx}`} prog={prog} onClick={() => setSelectedProgram(prog)} />
+                          <ProgramCard key={`${prog.id}-${pIdx}`} prog={prog} onClick={() => router.push(`/programs/${prog.id}`)} />
                         ))}
                       </div>
 

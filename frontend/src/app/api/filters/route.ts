@@ -103,6 +103,10 @@ export async function GET() {
         regions,
         organizers,
       },
+    }, {
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      },
     });
   } catch (error: any) {
     console.error("API /api/filters Error:", error);

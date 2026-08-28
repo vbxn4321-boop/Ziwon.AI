@@ -143,6 +143,10 @@ export async function GET(req: NextRequest) {
       sort,
       timeFilter,
       data: programs,
+    }, {
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+      },
     });
   } catch (error: any) {
     console.error("API /api/support-programs Error:", error);
