@@ -102,21 +102,14 @@ export interface PsstBusinessPlanResult {
   };
 }
 
+import { getCandidateModels } from "./models";
+
 function cleanJsonString(str: string): string {
   return str
     .replace(/```json\s*/gi, "")
     .replace(/```\s*/gi, "")
     .trim();
 }
-
-const CASCADE_MODELS = [
-  process.env.AI_GENERAL_MODEL || "gemini-3.7-flash",
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-flash-latest",
-];
 
 export async function generatePsstBusinessPlan(
   input: PsstGeneratorInput
@@ -127,7 +120,7 @@ export async function generatePsstBusinessPlan(
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const candidateModels = CASCADE_MODELS.filter((v, i, a) => a.indexOf(v) === i && !!v);
+  const candidateModels = getCandidateModels("reasoning");
 
   const prompt = `
 [역할]

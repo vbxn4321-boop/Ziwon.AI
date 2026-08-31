@@ -10,19 +10,19 @@ import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
 
 interface HeaderProps {
-  activeNavTab: "notices" | "psst";
-  setActiveNavTab: (tab: "notices" | "psst") => void;
-  mainPortalMode: "bizinfo" | "kstartup";
-  setMainPortalMode: (mode: "bizinfo" | "kstartup") => void;
+  activeNavTab?: "notices" | "psst";
+  setActiveNavTab?: (tab: "notices" | "psst") => void;
+  mainPortalMode?: "bizinfo" | "kstartup" | "all";
+  setMainPortalMode?: (mode: "bizinfo" | "kstartup") => void;
   totalCount?: number;
   onSelectPlan?: (planData: any) => void;
   onOpenBookmarkedProgram?: (programId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  activeNavTab,
+  activeNavTab = "notices",
   setActiveNavTab,
-  mainPortalMode,
+  mainPortalMode = "bizinfo",
   setMainPortalMode,
   totalCount,
   onSelectPlan,
@@ -40,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [showSavedPlansModal, setShowSavedPlansModal] = useState(false);
 
   const handleNavClick = (tab: "notices" | "psst") => {
-    if (pathname === "/") {
+    if (pathname === "/" && setActiveNavTab) {
       setActiveNavTab(tab);
     } else {
       router.push(`/?tab=${tab}`);

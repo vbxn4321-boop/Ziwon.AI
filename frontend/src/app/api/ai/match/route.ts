@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "@/lib/db";
-
-const CASCADE_MODELS = [
-  process.env.AI_GENERAL_MODEL || "gemini-2.0-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-8b",
-];
+import { getCandidateModels } from "@/lib/ai/models";
 
 export async function POST(req: NextRequest) {
   try {
@@ -86,7 +80,7 @@ export async function POST(req: NextRequest) {
 `;
 
     const ai = new GoogleGenAI({ apiKey });
-    const candidateModels = CASCADE_MODELS.filter((v, i, a) => a.indexOf(v) === i && !!v);
+    const candidateModels = getCandidateModels("fast");
 
     let lastError: any = null;
     for (const modelName of candidateModels) {
