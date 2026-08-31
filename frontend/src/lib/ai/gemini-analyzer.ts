@@ -50,6 +50,8 @@ export interface ProgramAnalysisResult {
   summaryReport: string[];
 }
 
+import { getCandidateModels } from "./models";
+
 /**
  * Clean JSON output from LLM markdown code blocks
  */
@@ -59,16 +61,6 @@ function cleanJsonString(str: string): string {
     .replace(/```\s*/gi, "")
     .trim();
 }
-
-/**
- * Tiered Cascade Candidate Models (Ordered from Highest Quality to Lighter Fallbacks)
- */
-const CASCADE_MODELS = [
-  process.env.AI_GENERAL_MODEL || "gemini-2.0-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-8b",
-];
 
 /**
  * Analyze Support Program Notice Document using Gemini AI with Adaptive Tiered Cascade Fallback
@@ -84,9 +76,7 @@ export async function analyzeProgramWithGemini(
   }
 
   const ai = new GoogleGenAI({ apiKey });
-
-  // Deduplicated candidate cascade models
-  const candidateModels = CASCADE_MODELS.filter((v, i, a) => a.indexOf(v) === i && !!v);
+  const candidateModels = getCandidateModels("fast");
 
   const prompt = `
 [역할]

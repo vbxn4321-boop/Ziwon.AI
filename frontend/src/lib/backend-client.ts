@@ -9,7 +9,7 @@ const BACKEND_BASE_URL =
 
 function authHeaders(token?: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) {
+  if (token && typeof token === "string" && token.includes(".") && token.split(".").length === 3) {
     headers["Authorization"] = `Bearer ${token}`;
   }
   return headers;
@@ -239,11 +239,26 @@ export async function fetchMyProfile(token?: string) {
 }
 
 export async function fetchMyCompany(token?: string) {
-  const res = await fetchWithAuth(`${BACKEND_BASE_URL}/companies/me`, {
-    headers: authHeaders(token),
-  });
-  if (!res.ok) return null;
-  return res.json();
+  let actualToken = token && typeof token === "string" && token.includes(".") ? token : null;
+  if (!actualToken && typeof window !== "undefined") {
+    actualToken = localStorage.getItem("ziwon_auth_token");
+  }
+  if (!actualToken) {
+    actualToken = await getJwtToken();
+  }
+  if (!actualToken) {
+    return null;
+  }
+
+  try {
+    const res = await fetchWithAuth(`${BACKEND_BASE_URL}/companies/me`, {
+      headers: authHeaders(actualToken),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function saveMyCompany(data: any, token?: string) {

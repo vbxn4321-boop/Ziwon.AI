@@ -3,26 +3,36 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Sparkles, LayoutGrid, ShieldCheck, Database, Server, User, LogIn, LogOut, Building2, FolderHeart } from "lucide-react";
+import {
+  Sparkles,
+  LayoutGrid,
+  Building2,
+  BriefcaseBusiness,
+  ShieldCheck,
+  User,
+  LogIn,
+  LogOut,
+  FolderHeart,
+} from "lucide-react";
 import { supabase, clearLocalAuth, getJwtToken } from "@/lib/supabase-client";
 import { checkBackendHealth, backendLogout } from "@/lib/backend-client";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
 
 interface HeaderProps {
-  activeNavTab: "notices" | "psst";
-  setActiveNavTab: (tab: "notices" | "psst") => void;
-  mainPortalMode: "bizinfo" | "kstartup";
-  setMainPortalMode: (mode: "bizinfo" | "kstartup") => void;
+  activeNavTab?: "notices" | "psst";
+  setActiveNavTab?: (tab: "notices" | "psst") => void;
+  mainPortalMode?: "bizinfo" | "kstartup" | "all";
+  setMainPortalMode?: (mode: "bizinfo" | "kstartup") => void;
   totalCount?: number;
   onSelectPlan?: (planData: any) => void;
   onOpenBookmarkedProgram?: (programId: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  activeNavTab,
+  activeNavTab = "notices",
   setActiveNavTab,
-  mainPortalMode,
+  mainPortalMode = "bizinfo",
   setMainPortalMode,
   totalCount,
   onSelectPlan,
@@ -39,14 +49,6 @@ export const Header: React.FC<HeaderProps> = ({
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showSavedPlansModal, setShowSavedPlansModal] = useState(false);
 
-  const handleNavClick = (tab: "notices" | "psst") => {
-    if (pathname === "/") {
-      setActiveNavTab(tab);
-    } else {
-      router.push(`/?tab=${tab}`);
-    }
-  };
-
   const syncCurrentUser = () => {
     if (typeof window !== "undefined") {
       const localUserStr = localStorage.getItem("ziwon_auth_user");
@@ -62,7 +64,8 @@ export const Header: React.FC<HeaderProps> = ({
       if (session?.user) {
         setSessionUser(session.user);
       } else {
-        const localUserStr = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
+        const localUserStr =
+          typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
         if (!localUserStr) {
           setSessionUser(null);
         }
@@ -71,7 +74,6 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   useEffect(() => {
-    // Check Python FastAPI backend status
     const checkBackend = async () => {
       try {
         const health = await checkBackendHealth();
@@ -89,12 +91,14 @@ export const Header: React.FC<HeaderProps> = ({
     const handleLocalAuthChange = () => syncCurrentUser();
     window.addEventListener("ziwon_auth_change", handleLocalAuthChange);
 
-    // Supabase onAuthStateChange가 null을 반환해도 local JWT 유저를 덮어쓰지 않도록 방어
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setSessionUser(session.user);
       } else {
-        const localUserStr = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
+        const localUserStr =
+          typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
         if (!localUserStr) {
           setSessionUser(null);
         }
@@ -120,6 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
     clearLocalAuth();
     await supabase.auth.signOut();
     setSessionUser(null);
+    window.location.href = "/";
   };
 
   const displayName =
@@ -128,15 +133,31 @@ export const Header: React.FC<HeaderProps> = ({
     sessionUser?.email?.split("@")[0] ||
     "대표자";
 
+  const navLinks = [
+    { href: "/explore", label: "🌱 초간편 탐색", icon: Sparkles, id: "explore" },
+    { href: "/dashboard", label: "🏢 맞춤 대시보드", icon: Building2, id: "dashboard" },
+    { href: "/consultant", label: "💼 PSST 전문가", icon: BriefcaseBusiness, id: "consultant" },
+  ];
+
+  const handleNavClick = (e: React.MouseEvent, item: (typeof navLinks)[0]) => {
+    if (item.id === "dashboard" || item.id === "consultant") {
+      const localToken =
+        typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
+      if (!sessionUser && !localToken) {
+        e.preventDefault();
+        router.push(`/login?redirect=${encodeURIComponent(item.href)}`);
+      }
+    }
+  };
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Left: Logo & DB Live Badge */}
+          {/* Left: Logo (로그인 상태일 때는 /dashboard로 직행, 비로그인 시 메인 랜딩 / 로 이동) */}
           <div className="flex items-center space-x-3">
             <Link
-              href="/"
-              onClick={() => handleNavClick("notices")}
+              href={sessionUser ? "/dashboard" : "/"}
               className="flex items-center space-x-2.5 cursor-pointer group"
             >
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
@@ -153,74 +174,65 @@ export const Header: React.FC<HeaderProps> = ({
             </Link>
           </div>
 
-          {/* Right: Navigation, Stats & Auth */}
-          <div className="flex items-center space-x-3">
-            {/* Top Main Navigation Tabs */}
-            <div className="flex items-center p-1 bg-slate-100 border border-slate-200 rounded-xl text-xs">
-              <button
-                onClick={() => handleNavClick("notices")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
-                  pathname === "/" && activeNavTab === "notices"
-                    ? "bg-white text-slate-900 shadow-xs font-bold border border-slate-200"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
-                <span>지원사업 공고 탐색</span>
-              </button>
+          {/* Center: 3 Persona Direct Routes (Desktop) */}
+          <nav className="hidden md:flex items-center p-1 bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold">
+            {navLinks.map((item) => {
+              const isActive = pathname === item.href;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  onClick={(e) => handleNavClick(e, item)}
+                  className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
+                    isActive
+                      ? "bg-white text-blue-700 font-extrabold shadow-2xs border border-slate-200"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? "text-blue-600" : "text-slate-500"}`} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
 
-              <button
-                onClick={() => handleNavClick("psst")}
-                className={`px-3 sm:px-3.5 py-1.5 rounded-lg font-medium transition-all flex items-center space-x-1.5 cursor-pointer ${
-                  pathname === "/" && activeNavTab === "psst"
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                <span>AI 사업계획서</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 text-[10px] font-extrabold border border-blue-200">
-                  PSST
-                </span>
-              </button>
-            </div>
-
-            {/* User Auth Buttons / Profile Menu */}
-            {!mounted ? (
-              <div className="h-8 w-24 bg-slate-100 rounded-xl animate-pulse" />
-            ) : sessionUser ? (
+          {/* Right: Auth & Profile */}
+          <div className="flex items-center space-x-2.5">
+            {mounted && sessionUser ? (
               <div className="flex items-center space-x-2">
                 <button
+                  type="button"
                   onClick={() => setShowSavedPlansModal(true)}
-                  className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
-                  title="내 보관함"
+                  title="저장된 사업계획서 보관함"
+                  className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center space-x-1"
                 >
-                  <FolderHeart className="w-3.5 h-3.5 text-indigo-600" />
-                  <span className="hidden sm:inline">내 보관함</span>
+                  <FolderHeart className="w-3.5 h-3.5 text-rose-500" />
+                  <span className="hidden sm:inline">보관함</span>
                 </button>
 
-                <Link
-                  href="/mypage"
-                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
-                  title="마이페이지 (기업 정보 관리 & 내 보관함)"
+                <button
+                  type="button"
+                  onClick={() => setShowCompanyModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
                 >
-                  <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="font-bold">{displayName}</span>
-                  <span className="text-[10px] text-blue-600 font-semibold ml-0.5 bg-blue-50 px-1 rounded">MY</span>
-                </Link>
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span className="max-w-[100px] truncate">{displayName}</span>
+                </button>
 
                 <button
+                  type="button"
                   onClick={handleLogout}
-                  className="p-2 rounded-xl bg-white hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-200 text-xs transition-colors cursor-pointer shadow-2xs"
                   title="로그아웃"
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
+                  <LogOut className="w-4 h-4" />
                 </button>
               </div>
             ) : (
               <Link
                 href="/login"
-                className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm shadow-blue-600/20 flex items-center space-x-1.5 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-sm shadow-blue-600/20 transition-all flex items-center space-x-1.5 cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>로그인 / 회원가입</span>
@@ -230,17 +242,27 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* Global Auth & User Modals */}
+      {/* Profile & Saved Plan Modals */}
       <CompanyProfileModal
         isOpen={showCompanyModal}
         onClose={() => setShowCompanyModal(false)}
+        onSaved={() => {
+          setShowCompanyModal(false);
+          window.dispatchEvent(new Event("ziwon_auth_change"));
+        }}
       />
 
       <SavedPlansModal
         isOpen={showSavedPlansModal}
         onClose={() => setShowSavedPlansModal(false)}
-        onSelectPlan={onSelectPlan}
-        onOpenBookmarkedProgram={onOpenBookmarkedProgram}
+        onSelectPlan={(plan) => {
+          setShowSavedPlansModal(false);
+          if (onSelectPlan) {
+            onSelectPlan(plan);
+          } else {
+            router.push(`/consultant?planId=${plan.id}`);
+          }
+        }}
       />
     </>
   );

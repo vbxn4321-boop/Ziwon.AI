@@ -142,7 +142,7 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ prog, onClick }) => {
                   <span>{createdBadgeText}</span>
                 </span>
               )}
-              {prog.sources.map((src, sIdx) => (
+              {(prog.sources || []).map((src, sIdx) => (
                 <span
                   key={src.id ? `${src.id}-${sIdx}` : sIdx}
                   className={`px-1.5 py-0.5 text-[10px] font-semibold rounded whitespace-nowrap ${

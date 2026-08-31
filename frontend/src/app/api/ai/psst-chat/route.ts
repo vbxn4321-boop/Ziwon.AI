@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { generatePsstBusinessPlan, PsstBusinessPlanResult, PsstGeneratorInput } from "@/lib/ai/psst-generator";
-
-const CANDIDATE_MODELS = [
-  process.env.AI_GENERAL_MODEL || "gemini-3.7-flash",
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-flash-latest",
-];
+import { getCandidateModels } from "@/lib/ai/models";
 
 export async function POST(req: NextRequest) {
   try {
@@ -74,7 +66,7 @@ ${JSON.stringify(currentPlan, null, 2)}
 3. 반드시 변경된 전체 사업계획서 유효한 JSON만 출력하세요.
 `.trim();
 
-      for (const modelName of CANDIDATE_MODELS) {
+      for (const modelName of getCandidateModels("fast")) {
         try {
           const res = await ai.models.generateContent({
             model: modelName,
@@ -172,7 +164,7 @@ ${JSON.stringify(currentPlan, null, 2)}
     let rawReply = "";
     let lastError: any = null;
 
-    for (const modelName of CANDIDATE_MODELS) {
+    for (const modelName of getCandidateModels("fast")) {
       try {
         console.log(`💬 [PSST Chat] Calling Gemini model: ${modelName}...`);
         const response = await ai.models.generateContent({

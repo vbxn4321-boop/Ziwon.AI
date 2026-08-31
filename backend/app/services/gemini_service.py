@@ -4,14 +4,22 @@ from google.genai import types
 from app.core.config import settings
 from app.schemas.psst import PsstGeneratorInput, PsstBusinessPlanResult
 
-# Official Google Gemini Latest Supported Model Lineup
-CANDIDATE_MODELS = [
-    "gemini-3.6-flash",
+import os
+
+# Official Google Gemini Latest Supported Model Lineup (3.7 Flash & 3.x First)
+DEFAULT_MODELS = [
     "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3.1-pro-preview",
+    "gemini-2.5-pro",
     "gemini-flash-latest",
+    "gemini-2.0-flash",
 ]
+
+env_model = os.getenv("AI_GENERAL_MODEL")
+CANDIDATE_MODELS = [env_model] + [m for m in DEFAULT_MODELS if m != env_model] if env_model else DEFAULT_MODELS
 
 class GeminiService:
     def __init__(self):
