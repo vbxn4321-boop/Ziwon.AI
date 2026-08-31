@@ -24,6 +24,8 @@ interface AiStrategyTabProps {
   isMatching: boolean;
   matchingResult: any;
   onStartMatching: () => void;
+  isLoggedIn?: boolean;
+  onPromptLogin?: () => void;
 }
 
 export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
@@ -35,6 +37,8 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
   isMatching,
   matchingResult,
   onStartMatching,
+  isLoggedIn = false,
+  onPromptLogin,
 }) => {
   return (
     <div className="space-y-6">
@@ -81,8 +85,63 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
             </button>
           </div>
         </div>
+      ) : !isLoggedIn ? (
+        /* 🔒 Blind/Blur Teaser State for Unauthenticated Users */
+        <div className="relative rounded-3xl overflow-hidden border border-blue-200/80 bg-gradient-to-b from-blue-50/30 to-slate-100/60 p-6 sm:p-8 space-y-6">
+          {/* Glassmorphism Centered Lock Banner */}
+          <div className="relative z-20 max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-blue-200 shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 flex items-center justify-center mx-auto text-white shadow-lg shadow-blue-500/25">
+              <Lock className="w-7 h-7" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Gemini AI 합격 전략 리포트 생성 완료</span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight leading-snug">
+                로그인 후 전체 AI 합격 전략을 무료로 확인하세요
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                이 공고의 <strong>3-Step 합격 로드맵, 심사위원 배점표 심층 분석, 가점 확보 요건, 필수 제출 서류 체크리스트</strong>가 준비되어 있습니다.
+              </p>
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <button
+                type="button"
+                onClick={onPromptLogin}
+                className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-md shadow-blue-600/30 transition-all cursor-pointer transform hover:-translate-y-0.5"
+              >
+                ⚡ 3초 간편 로그인하고 전체 리포트 열람하기
+              </button>
+              <p className="text-[11px] text-slate-400">
+                카카오 · 구글 · 이메일로 3초 만에 무료 열람 가능합니다
+              </p>
+            </div>
+          </div>
+
+          {/* Blurred Background Teaser Preview */}
+          <div className="filter blur-[7px] select-none pointer-events-none opacity-50 space-y-6 max-h-[420px] overflow-hidden">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-3">
+              <div className="h-5 bg-slate-200 rounded w-1/3"></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-24 bg-blue-100 rounded-xl"></div>
+                <div className="h-24 bg-amber-100 rounded-xl"></div>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-3">
+              <div className="h-5 bg-slate-200 rounded w-1/4"></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="h-28 bg-indigo-100 rounded-xl"></div>
+                <div className="h-28 bg-indigo-100 rounded-xl"></div>
+                <div className="h-28 bg-indigo-100 rounded-xl"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : (
-        /* Analyzed Strategy Report */
+        /* Analyzed Strategy Report for Logged-in Users */
         <div className="space-y-6">
           {/* Header & Controls */}
           <div className="bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white p-5 rounded-2xl border border-blue-200 flex items-center justify-between flex-wrap gap-3 shadow-xs">

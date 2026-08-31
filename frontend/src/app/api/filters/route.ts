@@ -6,7 +6,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const onlyClosed = searchParams.get("onlyClosed") === "true";
     const statusMode = searchParams.get("statusMode") || (onlyClosed ? "closed" : "active");
-    const source = searchParams.get("source") || "";
+    const rawSource = searchParams.get("source") || searchParams.get("portal") || "";
+    let source = rawSource.toUpperCase();
+    if (source === "KSTARTUP") source = "K_STARTUP";
     const timeFilter = searchParams.get("timeFilter") || "all";
 
     const programs = await prisma.supportProgram.findMany({
@@ -141,6 +143,9 @@ export async function GET(req: NextRequest) {
           recentCount,
           urgentCount,
         },
+        categories,
+        regions,
+        organizers,
         data: {
           categories,
           regions,

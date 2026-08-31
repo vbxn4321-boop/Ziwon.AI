@@ -4,11 +4,14 @@ import { prisma } from "@/lib/db";
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const query = searchParams.get("q") || "";
+    const query = (searchParams.get("q") || searchParams.get("search") || "").trim();
     const region = searchParams.get("region") || "";
     const category = searchParams.get("category") || "";
     const organizer = searchParams.get("organizer") || "";
-    const source = searchParams.get("source") || "";
+    const rawSource = searchParams.get("source") || searchParams.get("portal") || "";
+    let source = rawSource.toUpperCase();
+    if (source === "KSTARTUP") source = "K_STARTUP";
+
     const founderStage =
       searchParams.get("founderStage") ||
       searchParams.get("stage") ||
@@ -160,6 +163,7 @@ export async function GET(req: NextRequest) {
         statusMode,
         sort,
         timeFilter,
+        programs,
         data: programs,
       },
       {

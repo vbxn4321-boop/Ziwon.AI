@@ -17,6 +17,7 @@ import { SupportProgram } from "@/components/ProgramCard";
 import { getJwtToken } from "@/lib/supabase-client";
 import { fetchMyCompany, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
+import LoginPromptModal from "@/components/auth/LoginPromptModal";
 
 // Modularized Sub-Components & Helpers
 import { getDDay } from "@/components/program-detail/detail-helpers";
@@ -56,8 +57,42 @@ export default function ProgramDetailPage() {
   const [isMatching, setIsMatching] = useState(false);
   const [matchingResult, setMatchingResult] = useState<any>(null);
 
+  // Login Conversion Prompt Modal State
+  const [loginPromptState, setLoginPromptState] = useState<{
+    isOpen: boolean;
+    title?: string;
+    subtitle?: string;
+    featureBadge?: string;
+  }>({ isOpen: false });
+
   // UI helpers
   const [shareToast, setShareToast] = useState(false);
+
+  // Auth State
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const syncAuth = async () => {
+    let token = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
+    if (!token) {
+      token = await getJwtToken();
+    }
+    setIsLoggedIn(!!token);
+    if (token) {
+      try {
+        const comp = await fetchMyCompany(token);
+        setUserCompany(comp);
+      } catch {}
+    }
+  };
+
+  useEffect(() => {
+    syncAuth();
+    const handleAuthChange = () => syncAuth();
+    window.addEventListener("ziwon_auth_change", handleAuthChange);
+    return () => {
+      window.removeEventListener("ziwon_auth_change", handleAuthChange);
+    };
+  }, []);
 
   // Initial Fetch
   useEffect(() => {
@@ -105,13 +140,25 @@ export default function ProgramDetailPage() {
     }
   };
 
+  const checkIsLoggedIn = async (): Promise<string | null> => {
+    let token = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
+    if (!token) {
+      token = await getJwtToken();
+    }
+    return token;
+  };
+
   const handleToggleBookmark = async () => {
     try {
       setBookmarkLoading(true);
-      const token = await getJwtToken();
+      const token = await checkIsLoggedIn();
       if (!token) {
-        alert("관심 공고를 찜하려면 먼저 로그인해 주세요.");
-        router.push("/login");
+        setLoginPromptState({
+          isOpen: true,
+          title: "관심 공고를 찜하고 마감 알림을 받아보세요",
+          subtitle: "로그인하시면 마감 D-Day 알림 및 맞춤형 지원사업 변경 소식을 실시간으로 확인하실 수 있습니다.",
+          featureBadge: "❤️ 관심 공고 찜하기",
+        });
         return;
       }
       const res = await toggleBookmarkOnBackend(token, programId);
@@ -189,6 +236,17 @@ export default function ProgramDetailPage() {
   // On-Demand AI Deep Analysis Trigger
   const handleRunLiveAnalysis = async () => {
     if (!program) return;
+    const token = await checkIsLoggedIn();
+    if (!token) {
+      setLoginPromptState({
+        isOpen: true,
+        title: "AI 심층 합격 전략은 회원 전용 혜택이에요",
+        subtitle: "3초 간편 로그인 후 이 공고의 HWP 첨부 서식 분석과 3-Step 합격 공략 리포트를 바로 확인해 보세요.",
+        featureBadge: "✨ AI 핵심 합격 분석",
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     setAnalysisError(null);
     try {
@@ -222,9 +280,14 @@ export default function ProgramDetailPage() {
   const handleStartMatching = async (companyOverride?: any) => {
     setGateState(null);
 
-    const token = await getJwtToken();
+    const token = await checkIsLoggedIn();
     if (!token) {
-      setGateState("unauthenticated");
+      setLoginPromptState({
+        isOpen: true,
+        title: "내 기업 맞춤 1:1 적합도 분석",
+        subtitle: "로그인 후 내 기업 정보(업력/소재지/매출)와 이 공고의 지원 자격을 1초 만에 비교 채점해 드립니다.",
+        featureBadge: "🎯 1:1 맞춤 적합도 분석",
+      });
       return;
     }
 
@@ -418,6 +481,16 @@ export default function ProgramDetailPage() {
             isMatching={isMatching}
             matchingResult={matchingResult}
             onStartMatching={() => handleStartMatching()}
+            isLoggedIn={isLoggedIn}
+            onPromptLogin={() =>
+              setLoginPromptState({
+                isOpen: true,
+                title: "AI 심층 합격 전략은 회원 전용 혜택이에요",
+                subtitle:
+                  "3초 간편 로그인 후 이 공고의 HWP 첨부 서식 분석과 3-Step 합격 공략 리포트를 바로 확인해 보세요.",
+                featureBadge: "✨ AI 핵심 합격 분석",
+              })
+            }
           />
         )}
 
@@ -440,6 +513,16 @@ export default function ProgramDetailPage() {
           }}
         />
       )}
+
+      {/* Login Conversion Modal */}
+      <LoginPromptModal
+        isOpen={loginPromptState.isOpen}
+        onClose={() => setLoginPromptState((prev) => ({ ...prev, isOpen: false }))}
+        title={loginPromptState.title}
+        subtitle={loginPromptState.subtitle}
+        featureBadge={loginPromptState.featureBadge}
+        redirectUrl={`/programs/${programId}`}
+      />
     </div>
   );
 }

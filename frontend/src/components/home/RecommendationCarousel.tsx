@@ -100,8 +100,8 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-      {isLoggedIn && myCompany ? (
-        /* 1. Logged in and has company profile: Show Active Recommendation Carousel */
+      {myCompany ? (
+        /* 1. Has Company Profile (Logged-in profile OR Guest quick persona) */
         <div
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
@@ -121,7 +121,13 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
               <div>
                 <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                   <h3 className="font-extrabold text-base sm:text-lg text-slate-900">
-                    🎯 <span className="text-blue-700">{myCompany.name}</span> 님을 위한 맞춤 추천 지원사업
+                    🎯{" "}
+                    {myCompany.isGuest ? (
+                      <span className="text-blue-700">3초 맞춤 설정</span>
+                    ) : (
+                      <span className="text-blue-700">{myCompany.name}</span>
+                    )}
+                    {" "}님을 위한 맞춤 추천 지원사업
                   </h3>
                   {recommendedPrograms.length > 0 && (
                     <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[11px] font-bold shadow-2xs">
@@ -131,19 +137,31 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
                   🏢 {myCompany.industry || "전체 업종"} • 📍 {myCompany.region || "전국"} 소재 기업 조건 맞춤 알고리즘 매칭
+                  {myCompany.isGuest && " (비로그인 체험 모드)"}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={onOpenCompanyModal}
-                className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 font-bold text-xs transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>기업 정보 변경</span>
-              </button>
+              {myCompany.isGuest ? (
+                <button
+                  type="button"
+                  onClick={() => router.push("/login")}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>로그인하고 이 조건 저장</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenCompanyModal}
+                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 font-bold text-xs transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>기업 정보 변경</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -228,8 +246,8 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
             </div>
           ) : (
             <div className="text-center py-8 text-xs text-slate-500 space-y-2">
-              <p>현재 기업 조건에 딱 맞는 전용 추천 공고를 조회 중입니다.</p>
-              <p className="text-slate-400">아래 전체 공고 검색에서 원하는 지원사업을 탐색해 보세요.</p>
+              <p>현재 조건에 부합하는 진행 중 전용 추천 공고를 조회 중입니다.</p>
+              <p className="text-slate-400">아래 전체 공고 피드에서 원하는 지원사업을 탐색해 보세요.</p>
             </div>
           )}
         </div>
@@ -259,7 +277,7 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
           </button>
         </div>
       ) : (
-        /* 3. Not Logged In: Guide user to Log in */
+        /* 3. Not Logged In and No Persona Selected */
         <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white border border-blue-200/80 rounded-3xl p-5 sm:p-6 flex items-center justify-between flex-wrap gap-4 shadow-xs">
           <div className="flex items-center space-x-3.5">
             <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center flex-shrink-0 text-white shadow-sm shadow-blue-600/20">
@@ -270,7 +288,7 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
                 로그인하고 내 기업 맞춤 지원사업을 추천받아 보세요
               </h4>
               <p className="text-xs text-slate-500 mt-0.5">
-                로그인 후 기업 정보(업력, 업종, 소재지)를 등록하시면 합격률 높은 맞춤형 정부지원사업을 1초 만에 큐레이션해 드립니다.
+                상단 3초 퀵 온보딩 칩을 누르시거나 로그인 후 기업 정보를 등록하시면 합격률 높은 맞춤형 공고를 1초 만에 큐레이션해 드립니다.
               </p>
             </div>
           </div>

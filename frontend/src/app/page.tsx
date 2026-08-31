@@ -1,562 +1,203 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Sparkles } from "lucide-react";
-import { Header } from "../components/Header";
-import { SupportProgram } from "../components/ProgramCard";
-import { PsstPlanGenerator } from "../components/PsstPlanGenerator";
-import Footer from "../components/Footer";
-import CompanyProfileModal from "../components/auth/CompanyProfileModal";
-import { fetchPlanDetail, fetchMyCompany } from "@/lib/backend-client";
-import { supabase, getJwtToken } from "@/lib/supabase-client";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import {
+  Sparkles,
+  Zap,
+  Building2,
+  BriefcaseBusiness,
+  Bot,
+  ShieldCheck,
+  FileText,
+  ArrowRight,
+  Database,
+  Search,
+  CheckCircle2,
+} from "lucide-react";
+import { Header } from "@/components/Header";
+import Footer from "@/components/Footer";
+import { TossGatewayHero } from "@/components/home/TossGatewayHero";
 
-// Modularized Sub-Components
-import { LiveBriefingBanner, StatsData } from "@/components/home/LiveBriefingBanner";
-import { RecommendationCarousel } from "@/components/home/RecommendationCarousel";
-import { FilterSection, FilterItem } from "@/components/home/FilterSection";
-import { ProgramListGrid } from "@/components/home/ProgramListGrid";
+export default function HomePage() {
+  const [stats, setStats] = useState({
+    totalCount: 1662,
+    activeCount: 1662,
+    todayCount: 0,
+    recentCount: 60,
+    urgentCount: 223,
+  });
 
-// Memory cache store for instant navigation restoration (SWR pattern)
-const memoryProgramsCache = new Map<
-  string,
-  {
-    programs: SupportProgram[];
-    total: number;
-    hasMore: boolean;
-    timestamp: number;
-  }
->();
-
-let memoryFiltersCache: {
-  categories: FilterItem[];
-  regions: FilterItem[];
-  organizers: FilterItem[];
-  stats: StatsData;
-  timestamp: number;
-} | null = null;
-
-function HomePageContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
-  const [activeNavTab, setActiveNavTab] = useState<"notices" | "psst">("notices");
-  const [selectedTargetProgramForPlan, setSelectedTargetProgramForPlan] = useState<string>("");
-  const [selectedPlanToLoad, setSelectedPlanToLoad] = useState<any>(null);
-
-  const [programs, setPrograms] = useState<SupportProgram[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
-
-  // User Company Profile & Tailored Recommendations
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [myCompany, setMyCompany] = useState<any>(null);
-  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
-  const [recommendedPrograms, setRecommendedPrograms] = useState<SupportProgram[]>([]);
-  const [loadingRecommended, setLoadingRecommended] = useState(false);
-
-  // Live Feed Notification for Newly Collected Notices
-  const [newlyArrivedPrograms, setNewlyArrivedPrograms] = useState<SupportProgram[]>([]);
-
-  // 1. Time / Curation Quick Filter: 'today' | 'recent' | 'urgent' | 'all'
-  const [timeFilter, setTimeFilter] = useState<"today" | "recent" | "urgent" | "all">("all");
-
-  // 2. Sort Options: 'latest' | 'deadline'
-  const [sortOption, setSortOption] = useState<"latest" | "deadline">("latest");
-
-  // 3. Closed Notice Mode Filter
-  const [onlyClosed, setOnlyClosed] = useState(false);
-
-  // 4. Live DB Briefing Stats
-  const [stats, setStats] = useState<StatsData>(
-    memoryFiltersCache?.stats || {
-      totalCount: 0,
-      activeCount: 0,
-      todayCount: 0,
-      recentCount: 0,
-      urgentCount: 0,
-    }
-  );
-
-  const [dbCategories, setDbCategories] = useState<FilterItem[]>(
-    memoryFiltersCache?.categories || [{ name: "전체", count: 0 }]
-  );
-  const [dbRegions, setDbRegions] = useState<FilterItem[]>(
-    memoryFiltersCache?.regions || [{ name: "전체", count: 0 }]
-  );
-  const [dbOrganizers, setDbOrganizers] = useState<FilterItem[]>(
-    memoryFiltersCache?.organizers || [{ name: "전체", count: 0 }]
-  );
-
-  // Top Nav Unified Portal Filter: 'all' | 'bizinfo' | 'kstartup'
-  const [mainPortalMode, setMainPortalMode] = useState<"all" | "bizinfo" | "kstartup">("all");
-
-  // Unified Smart Sub-Filter Tab Mode: 'category' | 'ministry' | 'region' | 'stage'
-  const [filterTabMode, setFilterTabMode] = useState<"category" | "ministry" | "region" | "stage">("category");
-  const [selectedCategory, setSelectedCategory] = useState("전체");
-  const [selectedOrganizer, setSelectedOrganizer] = useState("전체");
-  const [selectedRegion, setSelectedRegion] = useState("전체");
-  const [selectedStage, setSelectedStage] = useState("전체");
-
-  // Filter Expansion & Sub-segment states
-  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
-  const [organizerSegment, setOrganizerSegment] = useState<"all" | "public" | "private">("all");
-  const [organizerSearch, setOrganizerSearch] = useState("");
-
-  const getFilterKey = (query = searchQuery) => {
-    return `${mainPortalMode}_${filterTabMode}_${selectedCategory}_${selectedOrganizer}_${selectedRegion}_${selectedStage}_${timeFilter}_${sortOption}_${onlyClosed}_${query.trim()}`;
-  };
-
-  // 1. Initial Load & Auth Sync
   useEffect(() => {
-    fetchFiltersFromDb();
-    loadUserCompanyProfile();
-
-    const handleAuthChange = () => {
-      loadUserCompanyProfile();
-    };
-    window.addEventListener("ziwon_auth_change", handleAuthChange);
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      loadUserCompanyProfile();
-    });
-
-    return () => {
-      window.removeEventListener("ziwon_auth_change", handleAuthChange);
-      subscription.unsubscribe();
-    };
+    fetch("/api/filters")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success && j.stats) {
+          setStats(j.stats);
+        }
+      })
+      .catch(() => {});
   }, []);
-
-  // Process URL Query Parameters
-  useEffect(() => {
-    const tabParam = searchParams.get("tab");
-    const planIdParam = searchParams.get("planId");
-    const programTitleParam = searchParams.get("programTitle");
-
-    if (tabParam === "psst") {
-      setActiveNavTab("psst");
-      if (programTitleParam) {
-        setSelectedTargetProgramForPlan(programTitleParam);
-      }
-      if (planIdParam) {
-        (async () => {
-          try {
-            const token = await getJwtToken();
-            if (token) {
-              const plan = await fetchPlanDetail(token, planIdParam);
-              if (plan && plan.planJson) {
-                const parsed = JSON.parse(plan.planJson);
-                setSelectedPlanToLoad(parsed);
-                setSelectedTargetProgramForPlan(plan.targetProgramTitle || plan.title || "");
-              }
-            }
-          } catch (err) {
-            console.error("Failed to load plan from URL:", err);
-          }
-        })();
-      }
-    } else {
-      setActiveNavTab("notices");
-    }
-  }, [searchParams]);
-
-  // Load User Company Profile
-  const loadUserCompanyProfile = async () => {
-    try {
-      const token = await getJwtToken();
-      if (!token) {
-        setIsLoggedIn(false);
-        setMyCompany(null);
-        setRecommendedPrograms([]);
-        return;
-      }
-      setIsLoggedIn(true);
-      const comp = await fetchMyCompany(token);
-      if (comp && comp.name) {
-        setMyCompany(comp);
-        fetchTailoredRecommendations(comp);
-      } else {
-        setMyCompany(null);
-        setRecommendedPrograms([]);
-      }
-    } catch (e) {
-      console.warn("Failed to load company profile:", e);
-      setIsLoggedIn(false);
-      setMyCompany(null);
-      setRecommendedPrograms([]);
-    }
-  };
-
-  // Fetch Tailored Recommendations
-  const fetchTailoredRecommendations = async (company: any) => {
-    try {
-      setLoadingRecommended(true);
-      const params = new URLSearchParams();
-      params.set("limit", "10");
-      params.set("onlyActive", "true");
-      if (company.region && company.region !== "전국") {
-        params.set("region", company.region);
-      }
-      if (company.industry) {
-        params.set("industry", company.industry);
-      }
-      const res = await fetch(`/api/support-programs?${params.toString()}`);
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        setRecommendedPrograms(json.data);
-      }
-    } catch (e) {
-      console.error("Failed to fetch recommendations:", e);
-    } finally {
-      setLoadingRecommended(false);
-    }
-  };
-
-  // Fetch Dynamic DB Filters & Live Briefing Stats
-  const fetchFiltersFromDb = async (
-    portalMode = mainPortalMode,
-    closed = onlyClosed,
-    time = timeFilter
-  ) => {
-    try {
-      const params = new URLSearchParams();
-      if (portalMode === "bizinfo") params.set("source", "BIZINFO");
-      if (portalMode === "kstartup") params.set("source", "K_STARTUP");
-      if (closed) params.set("onlyClosed", "true");
-      if (time && time !== "all") params.set("timeFilter", time);
-
-      const res = await fetch(`/api/filters?${params.toString()}`);
-      const json = await res.json();
-      if (json.success && json.data) {
-        const cats = json.data.categories || [{ name: "전체", count: 0 }];
-        const regs = json.data.regions || [{ name: "전체", count: 0 }];
-        const orgs = json.data.organizers || [{ name: "전체", count: 0 }];
-        const newStats = json.stats || {
-          totalCount: json.totalCount || 0,
-          activeCount: json.stats?.activeCount || 0,
-          todayCount: json.stats?.todayCount || 0,
-          recentCount: json.stats?.recentCount || 0,
-          urgentCount: json.stats?.urgentCount || 0,
-        };
-
-        setDbCategories(cats);
-        setDbRegions(regs);
-        setDbOrganizers(orgs);
-        setStats(newStats);
-      }
-    } catch (error) {
-      console.error("Failed to fetch dynamic DB filters:", error);
-    }
-  };
-
-  useEffect(() => {
-    fetchFiltersFromDb(mainPortalMode, onlyClosed, timeFilter);
-  }, [mainPortalMode, onlyClosed, timeFilter]);
-
-  // Fetch Support Programs from API
-  const fetchPrograms = async (
-    pageNumber = 1,
-    query = searchQuery,
-    isInitial = false
-  ) => {
-    try {
-      if (pageNumber === 1) setLoading(true);
-      else setLoadingMore(true);
-
-      const cacheKey = getFilterKey(query);
-      if (
-        pageNumber === 1 &&
-        isInitial &&
-        memoryProgramsCache.has(cacheKey)
-      ) {
-        const cached = memoryProgramsCache.get(cacheKey)!;
-        if (Date.now() - cached.timestamp < 1000 * 60 * 3) {
-          setPrograms(cached.programs);
-          setTotalCount(cached.total);
-          setHasMore(cached.hasMore);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const params = new URLSearchParams();
-      params.set("page", String(pageNumber));
-      params.set("limit", "9");
-
-      if (mainPortalMode === "bizinfo") params.set("source", "BIZINFO");
-      if (mainPortalMode === "kstartup") params.set("source", "K_STARTUP");
-
-      if (selectedCategory !== "전체") params.set("category", selectedCategory);
-      if (selectedOrganizer !== "전체") params.set("organizer", selectedOrganizer);
-      if (selectedRegion !== "전체") params.set("region", selectedRegion);
-      if (selectedStage !== "전체") params.set("stage", selectedStage);
-
-      if (onlyClosed) {
-        params.set("onlyClosed", "true");
-      } else {
-        if (timeFilter === "today") params.set("timeFilter", "today");
-        else if (timeFilter === "recent") params.set("timeFilter", "recent");
-        else if (timeFilter === "urgent") {
-          params.set("timeFilter", "urgent");
-          params.set("sort", "deadline");
-        } else {
-          params.set("timeFilter", "all");
-          params.set("onlyActive", "true");
-        }
-      }
-
-      if (sortOption === "deadline" && timeFilter !== "urgent") {
-        params.set("sort", "deadline");
-      }
-
-      if (query.trim()) params.set("q", query.trim());
-
-      const res = await fetch(`/api/support-programs?${params.toString()}`);
-      const json = await res.json();
-
-      if (json.success) {
-        const newPrograms = json.data || [];
-        const total = json.total ?? json.totalCount ?? json.pagination?.total ?? 0;
-
-        setPrograms(newPrograms);
-        setTotalCount(total);
-        setHasMore(false);
-
-        if (pageNumber === 1) {
-          memoryProgramsCache.set(cacheKey, {
-            programs: newPrograms,
-            total,
-            hasMore: false,
-            timestamp: Date.now(),
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch programs:", err);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
-
-  // Trigger Fetch when Filters Change
-  useEffect(() => {
-    setPage(1);
-    fetchPrograms(1, searchQuery, true);
-  }, [
-    mainPortalMode,
-    filterTabMode,
-    selectedCategory,
-    selectedOrganizer,
-    selectedRegion,
-    selectedStage,
-    timeFilter,
-    sortOption,
-    onlyClosed,
-  ]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
-    fetchPrograms(1, searchQuery);
-  };
-
-  const handleQuickTagClick = (tag: string) => {
-    setSearchQuery(tag);
-    setPage(1);
-    fetchPrograms(1, tag);
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-    fetchPrograms(newPage, searchQuery);
-    const targetEl = document.getElementById("program-list-section");
-    if (targetEl) {
-      targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      window.scrollTo({ top: 480, behavior: "smooth" });
-    }
-  };
-
-  const resetAllFilters = () => {
-    setMainPortalMode("all");
-    setFilterTabMode("category");
-    setSelectedCategory("전체");
-    setSelectedOrganizer("전체");
-    setSelectedRegion("전체");
-    setSelectedStage("전체");
-    setTimeFilter("all");
-    setSortOption("latest");
-    setOnlyClosed(false);
-    setSearchQuery("");
-    setOrganizerSearch("");
-    setOrganizerSegment("all");
-    setIsFilterExpanded(false);
-    setPage(1);
-  };
-
-  const handleApplyNewPrograms = () => {
-    setPrograms((prev) => [...newlyArrivedPrograms, ...prev]);
-    setNewlyArrivedPrograms([]);
-    window.scrollTo({ top: 400, behavior: "smooth" });
-  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-blue-600 selection:text-white font-sans antialiased">
-      <Header
-        activeNavTab={activeNavTab}
-        setActiveNavTab={(tab: "notices" | "psst") => {
-          setActiveNavTab(tab);
-          if (tab === "psst") {
-            setSelectedPlanToLoad(null);
-            setSelectedTargetProgramForPlan("");
-          }
-        }}
-        mainPortalMode={mainPortalMode === "all" ? "bizinfo" : mainPortalMode}
-        setMainPortalMode={setMainPortalMode}
-        totalCount={totalCount}
-      />
+      {/* Global Navigation Header */}
+      <Header />
 
-      {/* VIEW 1: PSST BUSINESS PLAN GENERATOR */}
-      {activeNavTab === "psst" ? (
-        <main className="w-full flex-1 flex flex-col overflow-hidden">
-          <PsstPlanGenerator
-            initialProgramTitle={selectedTargetProgramForPlan}
-            initialPlanData={selectedPlanToLoad}
-            onBackToNotices={() => {
-              setActiveNavTab("notices");
-              setSelectedPlanToLoad(null);
-            }}
-          />
-        </main>
-      ) : (
-        /* VIEW 2: SUPPORT PROGRAM NOTICES */
-        <div className="flex-1 flex flex-col space-y-6">
-          {/* Floating Toast Notification for Fresh Incoming Programs */}
-          {newlyArrivedPrograms.length > 0 && (
-            <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-bounce">
-              <button
-                onClick={handleApplyNewPrograms}
-                className="px-5 py-2.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-extrabold text-xs shadow-2xl shadow-blue-500/30 border border-blue-400 flex items-center space-x-2 cursor-pointer hover:scale-105 transition-transform"
-              >
-                <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
-                <span>새로 수집된 공고 {newlyArrivedPrograms.length}건이 있습니다 [지금 보기 ↻]</span>
-              </button>
+      <main className="flex-1 flex flex-col space-y-16 pb-16">
+        {/* 1. 3-Gateway Hero (Toss Business Reference Style) */}
+        <TossGatewayHero />
+
+        {/* 2. Live Platform Stats & Trust Bar */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-xs">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-slate-100">
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-500">실시간 진행 중 공고</span>
+                <p className="text-2xl sm:text-3xl font-black text-slate-900">
+                  {stats.activeCount.toLocaleString()}<span className="text-sm font-bold text-blue-600 ml-1">건</span>
+                </p>
+                <span className="text-[11px] text-slate-400">기업마당 & K-Startup 100% 동기화</span>
+              </div>
+
+              <div className="space-y-1 pt-4 md:pt-0">
+                <span className="text-xs font-bold text-slate-500">최근 3일 신규 수집</span>
+                <p className="text-2xl sm:text-3xl font-black text-indigo-600">
+                  {stats.recentCount.toLocaleString()}<span className="text-sm font-bold ml-1">건</span>
+                </p>
+                <span className="text-[11px] text-slate-400">매시간 최신 공고 자동 크롤링</span>
+              </div>
+
+              <div className="space-y-1 pt-4 md:pt-0">
+                <span className="text-xs font-bold text-slate-500">마감 임박 (D-7)</span>
+                <p className="text-2xl sm:text-3xl font-black text-rose-600">
+                  {stats.urgentCount.toLocaleString()}<span className="text-sm font-bold ml-1">건</span>
+                </p>
+                <span className="text-[11px] text-slate-400">접수 기한 놓침 방지 알림</span>
+              </div>
+
+              <div className="space-y-1 pt-4 md:pt-0">
+                <span className="text-xs font-bold text-slate-500">AI 심사 분석 모델</span>
+                <p className="text-2xl sm:text-3xl font-black text-purple-600">
+                  Gemini 3.7<span className="text-sm font-bold ml-1">Pro</span>
+                </p>
+                <span className="text-[11px] text-slate-400">HWP/PDF 공고문 팩트 딥러닝</span>
+              </div>
             </div>
-          )}
+          </div>
+        </section>
 
-          {/* 1. Hero & Live Briefing Stats Section */}
-          <LiveBriefingBanner
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            onSearch={handleSearch}
-            onQuickTagClick={handleQuickTagClick}
-            stats={stats}
-            timeFilter={timeFilter}
-            setTimeFilter={setTimeFilter}
-            setSortOption={setSortOption}
-            onlyClosed={onlyClosed}
-            setOnlyClosed={setOnlyClosed}
-          />
-
-          {/* 2. Personalized Recommendation Auto-Carousel */}
-          <RecommendationCarousel
-            myCompany={myCompany}
-            isLoggedIn={isLoggedIn}
-            recommendedPrograms={recommendedPrograms}
-            loadingRecommended={loadingRecommended}
-            onOpenCompanyModal={() => {
-              if (!isLoggedIn) {
-                router.push("/login");
-              } else {
-                setIsCompanyModalOpen(true);
-              }
-            }}
-            onProgramClick={(id) => router.push(`/programs/${id}`)}
-          />
-
-          {/* 3. Unified Smart Filter Section */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-            <FilterSection
-              mainPortalMode={mainPortalMode}
-              setMainPortalMode={setMainPortalMode}
-              sortOption={sortOption}
-              setSortOption={setSortOption}
-              onlyClosed={onlyClosed}
-              setOnlyClosed={setOnlyClosed}
-              resetAllFilters={resetAllFilters}
-              filterTabMode={filterTabMode}
-              setFilterTabMode={setFilterTabMode}
-              isFilterExpanded={isFilterExpanded}
-              setIsFilterExpanded={setIsFilterExpanded}
-              totalCount={totalCount}
-              dbCategories={dbCategories}
-              dbOrganizers={dbOrganizers}
-              dbRegions={dbRegions}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-              selectedOrganizer={selectedOrganizer}
-              setSelectedOrganizer={setSelectedOrganizer}
-              selectedRegion={selectedRegion}
-              setSelectedRegion={setSelectedRegion}
-              selectedStage={selectedStage}
-              setSelectedStage={setSelectedStage}
-              organizerSegment={organizerSegment}
-              setOrganizerSegment={setOrganizerSegment}
-              organizerSearch={organizerSearch}
-              setOrganizerSearch={setOrganizerSearch}
-            />
+        {/* 3. 3-Feature Showcase Grid (Why Ziwon.AI) */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-8">
+          <div className="text-center max-w-2xl mx-auto space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              정부지원사업 합격, <br />
+              <span className="text-blue-600">Ziwon.AI</span>와 함께하면 쉬워집니다
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              복잡한 40페이지 공고문을 읽지 않아도, AI가 핵심 자격과 사업계획서를 완성해 드립니다.
+            </p>
           </div>
 
-          {/* 4. Support Program Card Feed Grid */}
-          <ProgramListGrid
-            programs={programs}
-            totalCount={totalCount}
-            loading={loading}
-            currentPage={page}
-            totalPages={Math.max(1, Math.ceil(totalCount / 9))}
-            pageSize={9}
-            onPageChange={handlePageChange}
-            onProgramClick={(id) => router.push(`/programs/${id}`)}
-            onResetFilters={resetAllFilters}
-            timeFilter={timeFilter}
-            onlyClosed={onlyClosed}
-          />
-        </div>
-      )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Feature 1 */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-7 space-y-4 shadow-xs hover:border-blue-300 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-2xs">
+                <Search className="w-6 h-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="font-black text-lg text-slate-900">3초 퀵 온보딩 매칭</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  창업 업력(예비/1년/3년/7년), 관심 분야(R&D/사업화/수출), 소재지만 선택하면 1,600여 개 공고 중 내 조건에 딱 맞는 공고만 0.1초 만에 걸러냅니다.
+                </p>
+              </div>
+              <Link
+                href="/explore"
+                className="inline-flex items-center space-x-1.5 text-xs font-bold text-blue-600 hover:text-blue-700"
+              >
+                <span>초간편 탐색 체험하기</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
 
-      {/* Company Profile Modal */}
-      <CompanyProfileModal
-        isOpen={isCompanyModalOpen}
-        onClose={() => setIsCompanyModalOpen(false)}
-        onSaved={(comp) => {
-          setMyCompany(comp);
-          setIsCompanyModalOpen(false);
-          if (comp) fetchTailoredRecommendations(comp);
-        }}
-      />
+            {/* Feature 2 */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-7 space-y-4 shadow-xs hover:border-indigo-300 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="font-black text-lg text-slate-900">PSST 사업계획서 10초 생성</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  문제인식(P)·실현가능성(S)·성장전략(S)·팀구성(T) 표준 4대 항목을 정부 심사 기준에 맞춘 전문적인 비즈니스 문체로 즉시 도출하고 다운로드합니다.
+                </p>
+              </div>
+              <Link
+                href="/consultant"
+                className="inline-flex items-center space-x-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700"
+              >
+                <span>PSST AI 작성기 열기</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
 
+            {/* Feature 3 */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-7 space-y-4 shadow-xs hover:border-purple-300 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 shadow-2xs">
+                <Bot className="w-6 h-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="font-black text-lg text-slate-900">심사위원 가점 정밀 분석</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  첨부된 HWP/PDF 공고문 원문을 파싱하여 필수 제출 서류 체크리스트, 탈락 방지 결격요건, 특허/인증 가점 요건을 100% 팩트 기반으로 진단합니다.
+                </p>
+              </div>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center space-x-1.5 text-xs font-bold text-purple-600 hover:text-purple-700"
+              >
+                <span>맞춤 대시보드 바로가기</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Bottom Full Banner CTA */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+          <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 rounded-3xl p-8 sm:p-12 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-2 text-center md:text-left">
+              <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-bold text-blue-200">
+                1초 만에 무료로 시작하기
+              </span>
+              <h3 className="text-2xl sm:text-3xl font-black leading-tight">
+                지금 바로 내 기업에 딱 맞는 <br />
+                정부지원사업을 찾아보세요
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-200">
+                회원가입 없이도 모든 공고와 AI 퀵 온보딩 매칭을 즉시 체험하실 수 있습니다.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+              <Link
+                href="/explore"
+                className="px-6 py-3.5 rounded-2xl bg-white text-slate-900 hover:bg-slate-100 font-extrabold text-xs sm:text-sm shadow-md transition-all text-center"
+              >
+                🌱 처음 이용자 3초 매칭 시작
+              </Link>
+              <Link
+                href="/dashboard"
+                className="px-6 py-3.5 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-extrabold text-xs sm:text-sm transition-all text-center"
+              >
+                🏢 실시간 맞춤 대시보드
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Global Footer */}
       <Footer />
     </div>
-  );
-}
-
-export default function HomePage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] text-slate-500 text-xs">
-          지원사업 공고를 불러오는 중입니다...
-        </div>
-      }
-    >
-      <HomePageContent />
-    </Suspense>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase, saveLocalAuth } from "@/lib/supabase-client";
 import {
   backendLogin,
@@ -27,8 +27,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect") || "/dashboard";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -94,7 +97,10 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+          redirectTo:
+            typeof window !== "undefined"
+              ? `${window.location.origin}${redirectUrl}`
+              : undefined,
         },
       });
       if (error) throw error;
@@ -122,10 +128,10 @@ export default function LoginPage() {
       if (res.accessToken) {
         saveLocalAuth(res.accessToken, res.user, res.refreshToken);
       }
-      setSuccessMsg("로그인 성공! 메인 화면으로 이동합니다.");
+      setSuccessMsg("로그인 성공! 이동합니다.");
       setTimeout(() => {
-        router.push("/");
-      }, 600);
+        router.push(redirectUrl);
+      }, 500);
     } catch (err: any) {
       setErrorMsg(err.message || "로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.");
     } finally {
@@ -198,7 +204,7 @@ export default function LoginPage() {
       }
       setSuccessMsg("비밀번호가 성공적으로 변경되었습니다! 로그인 처리됩니다.");
       setTimeout(() => {
-        router.push("/");
+        router.push(redirectUrl);
       }, 700);
     } catch (err: any) {
       setErrorMsg(err.message || "비밀번호 변경 실패");
@@ -528,5 +534,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        </div>
+      }
+    >
+      <LoginFormContent />
+    </Suspense>
   );
 }
