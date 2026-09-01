@@ -50,6 +50,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [socialLoading, setSocialLoading] = useState<"kakao" | "google" | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -220,9 +221,9 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
       const securePassword = await hashClientPassword(password);
 
       if (mode === "signup") {
-        const res = await backendSignup(email, securePassword, fullName);
+        const res = await backendSignup(email, securePassword, fullName, rememberMe);
         if (res.accessToken) {
-          saveLocalAuth(res.accessToken, res.user, res.refreshToken);
+          saveLocalAuth(res.accessToken, res.user, res.refreshToken, rememberMe);
         }
         setSuccessMsg("회원가입이 완료되었습니다! 자동 로그인됩니다.");
         setTimeout(() => {
@@ -231,9 +232,9 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
         }, 1000);
       } else {
         // Normal Login
-        const res = await backendLogin(email, securePassword);
+        const res = await backendLogin(email, securePassword, rememberMe);
         if (res.accessToken) {
-          saveLocalAuth(res.accessToken, res.user, res.refreshToken);
+          saveLocalAuth(res.accessToken, res.user, res.refreshToken, rememberMe);
         }
         setSuccessMsg("로그인 성공!");
         setTimeout(() => {
@@ -741,6 +742,24 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
                   )}
                 </div>
               )}
+
+              {/* 로그인 상태 유지 (Remember Me) 체크박스 */}
+              <div className="flex items-center justify-between px-0.5 py-1">
+                <label className="flex items-center space-x-2 cursor-pointer select-none group">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500 cursor-pointer transition-colors"
+                  />
+                  <span className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
+                    로그인 상태 유지
+                  </span>
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  {rememberMe ? "30일간 자동 로그인" : "창 닫을 때 로그아웃"}
+                </span>
+              </div>
 
               {/* 3. Main Login / Signup Submit Button */}
               <button

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { supabase, clearLocalAuth, getJwtToken } from "@/lib/supabase-client";
 import { checkBackendHealth, backendLogout } from "@/lib/backend-client";
+import { initAuthStore, getInMemoryUser, getInMemoryToken } from "@/lib/auth-store";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
 
@@ -50,25 +51,18 @@ export const Header: React.FC<HeaderProps> = ({
   const [showSavedPlansModal, setShowSavedPlansModal] = useState(false);
 
   const syncCurrentUser = () => {
-    if (typeof window !== "undefined") {
-      const localUserStr = localStorage.getItem("ziwon_auth_user");
-      if (localUserStr) {
-        try {
-          setSessionUser(JSON.parse(localUserStr));
-          return;
-        } catch {}
-      }
+    const memUser = getInMemoryUser();
+    if (memUser) {
+      setSessionUser(memUser);
+      return;
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setSessionUser(session.user);
       } else {
-        const localUserStr =
-          typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
-        if (!localUserStr) {
-          setSessionUser(null);
-        }
+        const currentUser = getInMemoryUser();
+        setSessionUser(currentUser || null);
       }
     });
   };
@@ -86,9 +80,23 @@ export const Header: React.FC<HeaderProps> = ({
     const interval = setInterval(checkBackend, 30000);
 
     setMounted(true);
-    syncCurrentUser();
 
-    const handleLocalAuthChange = () => syncCurrentUser();
+    // [보안 표준] 앱 마운트 시 HttpOnly 쿠키 기반 무음 세션 복원
+    initAuthStore().then((user) => {
+      if (user) {
+        setSessionUser(user);
+      } else {
+        syncCurrentUser();
+      }
+    });
+
+    const handleLocalAuthChange = (e?: any) => {
+      if (e?.detail?.user !== undefined) {
+        setSessionUser(e.detail.user);
+      } else {
+        syncCurrentUser();
+      }
+    };
     window.addEventListener("ziwon_auth_change", handleLocalAuthChange);
 
     const {
@@ -97,11 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
       if (session?.user) {
         setSessionUser(session.user);
       } else {
-        const localUserStr =
-          typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
-        if (!localUserStr) {
-          setSessionUser(null);
-        }
+        syncCurrentUser();
       }
     });
 
@@ -117,6 +121,8 @@ export const Header: React.FC<HeaderProps> = ({
       const token = await getJwtToken();
       if (token) {
         await backendLogout(token);
+      } else {
+        await backendLogout();
       }
     } catch (e) {
       console.warn("Logout error:", e);
@@ -139,11 +145,10 @@ export const Header: React.FC<HeaderProps> = ({
     { href: "/consultant", label: "💼 PSST 전문가", icon: BriefcaseBusiness, id: "consultant" },
   ];
 
-  const handleNavClick = (e: React.MouseEvent, item: (typeof navLinks)[0]) => {
+  const handleNavClick = async (e: React.MouseEvent, item: (typeof navLinks)[0]) => {
     if (item.id === "dashboard" || item.id === "consultant") {
-      const localToken =
-        typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
-      if (!sessionUser && !localToken) {
+      const token = await getJwtToken();
+      if (!sessionUser && !token) {
         e.preventDefault();
         router.push(`/login?redirect=${encodeURIComponent(item.href)}`);
       }
@@ -198,27 +203,36 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
 
           {/* Right: Auth & Profile */}
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center space-x-2">
             {mounted && sessionUser ? (
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={() => setShowSavedPlansModal(true)}
                   title="저장된 사업계획서 보관함"
-                  className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center space-x-1"
+                  className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
                 >
                   <FolderHeart className="w-3.5 h-3.5 text-rose-500" />
                   <span className="hidden sm:inline">보관함</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setShowCompanyModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                <Link
+                  href="/mypage"
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5 ${
+                    pathname === "/mypage"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-blue-500/20"
+                      : "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                  }`}
+                  title="마이페이지로 이동"
                 >
-                  <Building2 className="w-3.5 h-3.5" />
+                  <User className="w-3.5 h-3.5" />
                   <span className="max-w-[100px] truncate">{displayName}</span>
-                </button>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    pathname === "/mypage" ? "bg-white/20 text-white" : "bg-blue-200/60 text-blue-800"
+                  }`}>
+                    MY
+                  </span>
+                </Link>
 
                 <button
                   type="button"

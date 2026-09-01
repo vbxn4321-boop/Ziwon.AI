@@ -72,10 +72,7 @@ export default function ProgramDetailPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const syncAuth = async () => {
-    let token = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
-    if (!token) {
-      token = await getJwtToken();
-    }
+    const token = await getJwtToken();
     setIsLoggedIn(!!token);
     if (token) {
       try {
@@ -141,11 +138,7 @@ export default function ProgramDetailPage() {
   };
 
   const checkIsLoggedIn = async (): Promise<string | null> => {
-    let token = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
-    if (!token) {
-      token = await getJwtToken();
-    }
-    return token;
+    return await getJwtToken();
   };
 
   const handleToggleBookmark = async () => {

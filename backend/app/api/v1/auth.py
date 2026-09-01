@@ -4,7 +4,7 @@ import secrets
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, Cookie
 from pydantic import BaseModel
 from sqlalchemy import text
 from app.core.database import SessionLocal
@@ -50,19 +50,44 @@ def create_access_token(user_id: str, email: str, name: Optional[str] = None) ->
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, remember_me: bool = True) -> str:
     if not settings.JWT_SECRET:
         raise ValueError("JWT_SECRET 환경변수가 설정되지 않았습니다.")
     payload = {
         "sub": user_id,
         "type": "refresh",
+        "rem": remember_me,
         "jti": str(uuid.uuid4()),
-        "exp": datetime.utcnow() + timedelta(days=30),  # 30-day Long-Lived Refresh Token
+        "exp": datetime.utcnow() + timedelta(days=30 if remember_me else 1),
     }
     refresh_token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-    # Save to Redis with 30-day TTL
-    redis_client.save_refresh_token(user_id, refresh_token, ttl=30 * 86400)
+    # Save to Redis with appropriate TTL
+    redis_client.save_refresh_token(user_id, refresh_token, ttl=(30 * 86400 if remember_me else 86400))
     return refresh_token
+
+COOKIE_NAME = "ziwon_refresh_token"
+
+def set_refresh_cookie(response: Response, token: str, remember_me: bool = True):
+    kwargs = {
+        "key": COOKIE_NAME,
+        "value": token,
+        "httponly": True,
+        "secure": True,
+        "samesite": "lax",
+        "path": "/",
+    }
+    if remember_me:
+        kwargs["max_age"] = 30 * 86400
+
+    response.set_cookie(**kwargs)
+
+def clear_refresh_cookie(response: Response):
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
 
 # Schemas
 class SendOtpRequest(BaseModel):
@@ -76,13 +101,15 @@ class SignUpRequest(BaseModel):
     email: str
     password: str
     fullName: Optional[str] = None
+    rememberMe: Optional[bool] = True
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+    rememberMe: Optional[bool] = True
 
 class RefreshTokenRequest(BaseModel):
-    refreshToken: str
+    refreshToken: Optional[str] = None
 
 @router.post("/send-otp", summary="이메일 6자리 인증번호 발송 (Redis 3분 TTL)")
 def send_otp(req: SendOtpRequest):
@@ -112,7 +139,7 @@ def verify_otp(req: VerifyOtpRequest):
     return {"success": True, "message": "이메일 인증이 성공적으로 완료되었습니다."}
 
 @router.post("/signup", summary="이메일 회원가입 및 이중 토큰(Access + Refresh) 발급")
-def signup(req: SignUpRequest):
+def signup(req: SignUpRequest, response: Response):
     email = req.email.strip().lower()
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="비밀번호는 최소 6자 이상이어야 합니다.")
@@ -145,7 +172,9 @@ def signup(req: SignUpRequest):
         redis_client.clear_otp_verified(email)
 
         access_token = create_access_token(user_id=user_id, email=email, name=name)
-        refresh_token = create_refresh_token(user_id=user_id)
+        is_remember = req.rememberMe is not False
+        refresh_token = create_refresh_token(user_id=user_id, remember_me=is_remember)
+        set_refresh_cookie(response, refresh_token, remember_me=is_remember)
         return {
             "success": True,
             "accessToken": access_token,
@@ -167,7 +196,7 @@ def signup(req: SignUpRequest):
         db.close()
 
 @router.post("/login", summary="이메일 로그인 및 이중 토큰(Access + Refresh) 발급")
-def login(req: LoginRequest):
+def login(req: LoginRequest, response: Response):
     email = req.email.strip().lower()
     if not req.password:
         raise HTTPException(status_code=400, detail="비밀번호를 입력해주세요.")
@@ -197,7 +226,9 @@ def login(req: LoginRequest):
         user_name = row[2]
 
         access_token = create_access_token(user_id=user_id, email=user_email, name=user_name)
-        refresh_token = create_refresh_token(user_id=user_id)
+        is_remember = req.rememberMe is not False
+        refresh_token = create_refresh_token(user_id=user_id, remember_me=is_remember)
+        set_refresh_cookie(response, refresh_token, remember_me=is_remember)
         return {
             "success": True,
             "accessToken": access_token,
@@ -214,27 +245,47 @@ def login(req: LoginRequest):
         db.close()
 
 @router.post("/refresh", summary="Access Token 및 Refresh Token 자동 갱신 (RTR)")
-def refresh_token_endpoint(req: RefreshTokenRequest):
-    raw_refresh = req.refreshToken.strip()
+def refresh_token_endpoint(
+    response: Response,
+    req: Optional[RefreshTokenRequest] = None,
+    ziwon_refresh_token: Optional[str] = Cookie(None)
+):
+    raw_refresh = ""
+    if req and req.refreshToken:
+        raw_refresh = req.refreshToken.strip()
+    elif ziwon_refresh_token:
+        raw_refresh = ziwon_refresh_token.strip()
+
     if not raw_refresh:
+        clear_refresh_cookie(response)
         raise HTTPException(status_code=400, detail="리프레시 토큰이 전달되지 않았습니다.")
 
     try:
         payload = jwt.decode(raw_refresh, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
+        if response:
+            clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="리프레시 토큰이 만료되었습니다. 다시 로그인해주세요.")
     except jwt.PyJWTError:
+        if response:
+            clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="유효하지 않은 리프레시 토큰입니다.")
 
     if payload.get("type") != "refresh":
+        if response:
+            clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="토큰 타입이 일치하지 않습니다. (Refresh Token 필요)")
 
     user_id = payload.get("sub")
     if not user_id:
+        if response:
+            clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail="토큰에 유저 식별자가 누락되었습니다.")
 
     # Validate against active token in Redis
     if not redis_client.validate_refresh_token(user_id, raw_refresh):
+        if response:
+            clear_refresh_cookie(response)
         raise HTTPException(
             status_code=401,
             detail="만료되었거나 이미 사용된 리프레시 토큰입니다. 다시 로그인해주세요.",
@@ -249,16 +300,21 @@ def refresh_token_endpoint(req: RefreshTokenRequest):
         ).fetchone()
 
         if not user_row:
+            if response:
+                clear_refresh_cookie(response)
             raise HTTPException(status_code=404, detail="사용자 정보를 찾을 수 없습니다.")
 
         email = user_row[1]
         name = user_row[2]
 
-        # Issue new Access Token (30m) & Rotated Refresh Token (30d) - Refresh Token Rotation (RTR)
+        is_remember = payload.get("rem", True)
+        # Issue new Access Token (30m) & Rotated Refresh Token
         new_access_token = create_access_token(user_id=user_id, email=email, name=name)
-        new_refresh_token = create_refresh_token(user_id=user_id)
+        new_refresh_token = create_refresh_token(user_id=user_id, remember_me=is_remember)
+        if response:
+            set_refresh_cookie(response, new_refresh_token, remember_me=is_remember)
 
-        print(f"[Redis RTR] Token refreshed & rotated successfully for user: {email}")
+        print(f"[Redis RTR] Token refreshed & rotated successfully for user: {email} (rememberMe={is_remember})")
         return {
             "success": True,
             "accessToken": new_access_token,
@@ -270,7 +326,7 @@ def refresh_token_endpoint(req: RefreshTokenRequest):
         db.close()
 
 @router.post("/reset-password", summary="비밀번호 재설정 (OTP 인증 완료 필수)")
-def reset_password(req: LoginRequest):
+def reset_password(req: LoginRequest, response: Response):
     email = req.email.strip().lower()
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="비밀번호는 최소 6자 이상이어야 합니다.")
@@ -302,6 +358,7 @@ def reset_password(req: LoginRequest):
 
         access_token = create_access_token(user_id=user_id, email=email_val, name=name_val)
         refresh_token = create_refresh_token(user_id=user_id)
+        set_refresh_cookie(response, refresh_token)
         return {
             "success": True,
             "message": "비밀번호가 성공적으로 변경되었습니다.",
@@ -324,7 +381,8 @@ def reset_password(req: LoginRequest):
         db.close()
 
 @router.post("/logout", summary="로그아웃 (Access Token 블랙리스트 및 Redis Refresh Token 파기)")
-def logout(request: Request):
+def logout(request: Request, response: Response):
+    clear_refresh_cookie(response)
     auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
     if auth_header:
         parts = auth_header.split()

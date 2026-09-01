@@ -26,25 +26,25 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
         <div className="flex items-start justify-between flex-wrap gap-3 border-b border-amber-100 pb-4">
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold text-xs border border-amber-200">
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-xs border border-amber-300">
                 🚀 K-Startup 창업 지원사업
               </span>
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200">
                 {program.category || "일반창업"}
               </span>
               <span
-                className={`px-2.5 py-0.5 rounded-md text-xs font-bold border ${
+                className={`px-2.5 py-0.5 rounded-md text-xs font-extrabold border ${
                   ddayInfo.isClosed
-                    ? "bg-slate-100 text-slate-500 border-slate-200"
+                    ? "bg-slate-100 text-slate-600 border-slate-300"
                     : ddayInfo.isUrgent
-                    ? "bg-rose-50 text-rose-700 border-rose-200"
-                    : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    ? "bg-rose-100 text-rose-800 border-rose-300"
+                    : "bg-emerald-100 text-emerald-800 border border-emerald-300"
                 }`}
               >
                 {ddayInfo.text}
               </span>
             </div>
-            <h1 className="text-lg sm:text-2xl font-extrabold text-slate-900 break-words leading-snug">
+            <h1 className="text-lg sm:text-2xl font-black text-slate-900 break-words leading-snug tracking-tight">
               {cleanHtml(kst(["biz_pbanc_nm", "intg_pbanc_biz_nm", "공고명"])) || program.title}
             </h1>
           </div>
@@ -54,7 +54,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
               href={kst(["aply_mthd_onli_rcpt_istc", "detl_pg_url"])!}
               target="_blank"
               rel="noreferrer"
-              className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold flex items-center space-x-1.5 transition-colors flex-shrink-0 shadow-2xs"
+              className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center space-x-1.5 transition-colors flex-shrink-0 shadow-2xs"
             >
               <span>K-Startup 온라인 접수처</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -64,21 +64,21 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
 
         {/* 4 Key Condition Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-100 space-y-1.5 flex flex-col justify-start">
-            <span className="text-[11px] text-amber-800 font-bold block">창업 업력 조건</span>
+          <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200/80 space-y-1.5 flex flex-col justify-start">
+            <span className="text-xs text-amber-950 font-extrabold block">창업 업력 조건</span>
             <div className="flex-1">{renderConditionChips(kst(["biz_enyy", "창업업력"]), "공고문 참조", "amber")}</div>
           </div>
-          <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-100 space-y-1.5 flex flex-col justify-start">
-            <span className="text-[11px] text-amber-800 font-bold block">대상 연령</span>
+          <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200/80 space-y-1.5 flex flex-col justify-start">
+            <span className="text-xs text-amber-950 font-extrabold block">대상 연령</span>
             <div className="flex-1">{renderConditionChips(kst(["aply_trgt_age", "대상연령"]), "공고문 참조", "amber")}</div>
           </div>
-          <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-100 space-y-1.5 flex flex-col justify-start">
-            <span className="text-[11px] text-amber-800 font-bold block">지원 지역</span>
+          <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200/80 space-y-1.5 flex flex-col justify-start">
+            <span className="text-xs text-amber-950 font-extrabold block">지원 지역</span>
             <div className="flex-1">{renderConditionChips(kst(["supt_regin", "지역"]) || program.region, "전국", "blue")}</div>
           </div>
-          <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-100 space-y-1.5 flex flex-col justify-start">
-            <span className="text-[11px] text-amber-800 font-bold block">접수 기간</span>
-            <span className="font-semibold text-slate-800 text-xs break-words leading-relaxed block">
+          <div className="bg-amber-50/70 p-4 rounded-xl border border-amber-200/80 space-y-1.5 flex flex-col justify-start">
+            <span className="text-xs text-amber-950 font-extrabold block">접수 기간</span>
+            <span className="font-bold text-slate-900 text-xs break-words leading-relaxed block">
               {kst(["pbanc_rcpt_bgng_dt"]) && kst(["pbanc_rcpt_end_dt"])
                 ? `${formatNoticeDate(kst(["pbanc_rcpt_bgng_dt"]))} ~ ${formatNoticeDate(kst(["pbanc_rcpt_end_dt"]))}`
                 : "공고문 참조"}
@@ -89,32 +89,46 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
         {/* Extended Detail Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
           {cleanHtml(kst(["aply_trgt_ctnt", "신청대상"])) && (
-            <div className="text-xs bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-700 leading-relaxed space-y-1">
-              <strong className="text-emerald-700 font-bold block text-[11px]">🎯 신청 대상 상세</strong>
-              <p className="text-slate-800 whitespace-pre-wrap">{cleanHtml(kst(["aply_trgt_ctnt", "신청대상"]))}</p>
+            <div className="text-xs bg-slate-50/80 p-4 rounded-xl border border-slate-200 text-slate-800 leading-relaxed space-y-1.5">
+              <strong className="text-emerald-800 font-extrabold block text-xs flex items-center space-x-1">
+                <span>🎯 신청 대상 상세</span>
+              </strong>
+              <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
+                {cleanHtml(kst(["aply_trgt_ctnt", "신청대상"]))}
+              </p>
             </div>
           )}
           {cleanHtml(kst(["aply_excl_trgt_ctnt", "제외대상"])) && (
-            <div className="text-xs bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-700 leading-relaxed space-y-1">
-              <strong className="text-rose-700 font-bold block text-[11px]">🚫 신청 제외 대상</strong>
-              <p className="text-slate-800 whitespace-pre-wrap">{cleanHtml(kst(["aply_excl_trgt_ctnt", "제외대상"]))}</p>
+            <div className="text-xs bg-slate-50/80 p-4 rounded-xl border border-slate-200 text-slate-800 leading-relaxed space-y-1.5">
+              <strong className="text-rose-800 font-extrabold block text-xs flex items-center space-x-1">
+                <span>🚫 신청 제외 대상</span>
+              </strong>
+              <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
+                {cleanHtml(kst(["aply_excl_trgt_ctnt", "제외대상"]))}
+              </p>
             </div>
           )}
         </div>
 
         {/* Agency and Contact Info */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50/80 p-4 rounded-xl border border-slate-200">
           <div>
-            <span className="text-slate-500 font-bold block text-[11px]">소관/주관기관</span>
-            <span className="text-slate-800 font-semibold">{cleanHtml(kst(["pbanc_ntrp_nm", "소관기관"])) || program.organizer || "공고문 참조"}</span>
+            <span className="text-slate-600 font-bold block text-[11px]">소관/주관기관</span>
+            <span className="text-slate-900 font-bold text-xs">
+              {cleanHtml(kst(["pbanc_ntrp_nm", "소관기관"])) || program.organizer || "공고문 참조"}
+            </span>
           </div>
           <div>
-            <span className="text-slate-500 font-bold block text-[11px]">수행/운영기관</span>
-            <span className="text-slate-800 font-semibold">{cleanHtml(kst(["exct_istt_nm", "수행기관"])) || program.executingAgency || "창업진흥원"}</span>
+            <span className="text-slate-600 font-bold block text-[11px]">수행/운영기관</span>
+            <span className="text-slate-900 font-bold text-xs">
+              {cleanHtml(kst(["exct_istt_nm", "수행기관"])) || program.executingAgency || "창업진흥원"}
+            </span>
           </div>
           <div>
-            <span className="text-amber-800 font-bold block text-[11px]">문의처</span>
-            <span className="text-slate-800 font-semibold">{cleanHtml(kst(["tel_no", "cntct_no", "문의처"])) || "공고문 참조"}</span>
+            <span className="text-slate-600 font-bold block text-[11px]">문의처</span>
+            <span className="text-slate-900 font-bold text-xs">
+              {cleanHtml(kst(["tel_no", "cntct_no", "문의처"])) || "공고문 참조"}
+            </span>
           </div>
         </div>
       </div>

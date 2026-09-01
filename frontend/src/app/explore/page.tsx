@@ -7,7 +7,8 @@ import Footer from "@/components/Footer";
 import { NewbieModeView } from "@/components/home/NewbieModeView";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import { SupportProgram } from "@/components/ProgramCard";
-import { supabase } from "@/lib/supabase-client";
+import { supabase, getJwtToken } from "@/lib/supabase-client";
+import { getInMemoryUser } from "@/lib/auth-store";
 import { fetchMyCompany } from "@/lib/backend-client";
 
 function ExploreContent() {
@@ -23,42 +24,37 @@ function ExploreContent() {
   const [programs, setPrograms] = useState<SupportProgram[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Recommendations & Profile
+  // Auth & Profile
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [myCompany, setMyCompany] = useState<any>(null);
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [recommendedPrograms, setRecommendedPrograms] = useState<SupportProgram[]>([]);
   const [loadingRecommended, setLoadingRecommended] = useState(false);
 
-  const fetchTailoredRecommendations = async (comp: any) => {
-    setLoadingRecommended(true);
+  // Recommendations Loader
+  const fetchTailoredRecommendations = async (company: any) => {
+    if (!company) return;
     try {
-      const params = new URLSearchParams({
-        limit: "6",
-        region: comp.region || "",
-        industry: comp.industry || comp.category || "",
-        stage: comp.stage || "",
-      });
-      const res = await fetch(`/api/support-programs/recommendations?${params.toString()}`);
-      const data = await res.json();
-      const recList = data.programs || data.data || [];
-      setRecommendedPrograms(recList);
+      setLoadingRecommended(true);
+      const res = await fetch(`/api/support-programs?limit=4&sortBy=deadline`);
+      if (res.ok) {
+        const json = await res.json();
+        setRecommendedPrograms(json.data || []);
+      }
     } catch (e) {
-      console.warn("Failed to fetch recommendations:", e);
+      console.warn("Failed to load recommendations:", e);
     } finally {
       setLoadingRecommended(false);
     }
   };
 
   const syncUserAndCompany = async () => {
-    let currentUser: any = null;
+    let currentUser: any = getInMemoryUser();
 
-    if (typeof window !== "undefined") {
-      const localUserStr = localStorage.getItem("ziwon_auth_user");
-      if (localUserStr) {
-        try {
-          currentUser = JSON.parse(localUserStr);
-        } catch {}
+    if (!currentUser) {
+      const token = await getJwtToken();
+      if (token) {
+        currentUser = getInMemoryUser();
       }
     }
 

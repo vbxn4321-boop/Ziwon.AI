@@ -9,7 +9,8 @@ import { FilterItem } from "@/components/home/FilterSection";
 import { StatsData } from "@/components/home/LiveBriefingBanner";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import { SupportProgram } from "@/components/ProgramCard";
-import { supabase } from "@/lib/supabase-client";
+import { supabase, getJwtToken } from "@/lib/supabase-client";
+import { getInMemoryUser } from "@/lib/auth-store";
 import { fetchMyCompany } from "@/lib/backend-client";
 
 function DashboardContent() {
@@ -50,13 +51,18 @@ function DashboardContent() {
   const [organizerSegment, setOrganizerSegment] = useState<"all" | "public" | "private">("all");
   const [organizerSearch, setOrganizerSearch] = useState("");
 
-  // Recommendations & Profile
+  // Custom multi-select filters
+  const [filterValues, setFilterValues] = useState<Record<string, string[]>>({});
+  const [filterOptions, setFilterOptions] = useState<FilterItem[]>([]);
+
+  // Auth & Profile
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [myCompany, setMyCompany] = useState<any>(null);
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [recommendedPrograms, setRecommendedPrograms] = useState<SupportProgram[]>([]);
   const [loadingRecommended, setLoadingRecommended] = useState(false);
 
+  // Recommendations Loader
   const fetchTailoredRecommendations = async (comp: any) => {
     setLoadingRecommended(true);
     try {
@@ -78,14 +84,12 @@ function DashboardContent() {
   };
 
   const syncUserAndCompany = async () => {
-    let currentUser: any = null;
+    let currentUser: any = getInMemoryUser();
 
-    if (typeof window !== "undefined") {
-      const localUserStr = localStorage.getItem("ziwon_auth_user");
-      if (localUserStr) {
-        try {
-          currentUser = JSON.parse(localUserStr);
-        } catch {}
+    if (!currentUser) {
+      const token = await getJwtToken();
+      if (token) {
+        currentUser = getInMemoryUser();
       }
     }
 

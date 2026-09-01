@@ -54,6 +54,9 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     handleDownloadPdf,
   } = usePsstPlan(initialProgramTitle, initialPlanData);
 
+  // Derive 3-step workflow progress for header
+  const currentStep = generatedResult ? 3 : isGenerating ? 2 : 1;
+
   return (
     <div className="fixed inset-0 z-50 flex bg-slate-950 text-slate-100 font-sans select-text overflow-hidden">
       {/* 1. Left Icon Sidebar */}
@@ -80,6 +83,8 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           isSavingPlan={isSavingPlan}
           saveSuccessMsg={saveSuccessMsg}
           onDownloadPdf={handleDownloadPdf}
+          targetProgramTitle={formData.targetProgramTitle}
+          currentStep={currentStep}
         />
 
         {/* 2-Column Split Workspace */}

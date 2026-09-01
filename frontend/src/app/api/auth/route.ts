@@ -43,8 +43,8 @@ function generateAccessToken(userId: string, email: string, name?: string | null
   return `${header}.${payload}.${signature}`;
 }
 
-// 30일 장기 Refresh Token 발급
-function generateRefreshToken(userId: string): string {
+// 30일 장기 Refresh Token 또는 브라우저 세션용 Refresh Token 발급
+function generateRefreshToken(userId: string, rememberMe: boolean = true): string {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
     throw new Error("JWT_SECRET 환경변수가 설정되지 않았습니다.");
@@ -54,8 +54,9 @@ function generateRefreshToken(userId: string): string {
     JSON.stringify({
       sub: userId,
       type: "refresh",
+      rem: rememberMe,
       jti: crypto.randomUUID(),
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // 30 days
+      exp: Math.floor(Date.now() / 1000) + (rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24), // 30일 또는 1일
     })
   ).toString("base64url");
   const signature = crypto
@@ -88,10 +89,48 @@ function verifyJwt(token: string): { valid: boolean; payload?: any; error?: stri
   }
 }
 
+// -------------------------------------------------------------
+// [보안] HttpOnly 쿠키 헬퍼 함수 (Remember Me 지원)
+// -------------------------------------------------------------
+const REFRESH_COOKIE_NAME = "ziwon_refresh_token";
+const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30일 (초 단위)
+
+function setRefreshCookie(res: NextResponse, token: string, rememberMe: boolean = true) {
+  const cookieOptions: any = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  };
+
+  // 로그인 상태 유지(rememberMe) 체크 시 30일 영속 쿠키 설정, 미체크 시 브라우저 종료 시 자동 파기되는 세션 쿠키 설정
+  if (rememberMe) {
+    cookieOptions.maxAge = COOKIE_MAX_AGE;
+  }
+
+  res.cookies.set(REFRESH_COOKIE_NAME, token, cookieOptions);
+}
+
+function clearRefreshCookie(res: NextResponse) {
+  res.cookies.set(REFRESH_COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { action, email, code, password, fullName, refreshToken } = body;
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+    const { action, email, code, password, fullName, refreshToken, rememberMe = true } = body;
     const cleanEmail = (email || "").trim().toLowerCase();
 
     // -------------------------------------------------------------
@@ -148,7 +187,7 @@ export async function POST(req: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // 3. [보안] 회원가입 (이메일 인증 완료자만 허용 + 비밀번호 Bcrypt 12라운드 + 이중 토큰 발급)
+    // 3. [보안] 회원가입 (이메일 인증 완료자만 허용 + 비밀번호 Bcrypt 12라운드 + HttpOnly 토큰 발급)
     // -------------------------------------------------------------
     if (action === "signup") {
       // 1) 서버 측 이메일 인증 완료 여부 엄격 검증
@@ -199,12 +238,12 @@ export async function POST(req: NextRequest) {
       delete OTP_CACHE[cleanEmail];
 
       const accessToken = generateAccessToken(user.id, user.email, user.name);
-      const newRefreshToken = generateRefreshToken(user.id);
+      const isRememberMe = rememberMe !== false;
+      const newRefreshToken = generateRefreshToken(user.id, isRememberMe);
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         accessToken,
-        refreshToken: newRefreshToken,
         tokenType: "Bearer",
         expiresIn: 1800,
         user: {
@@ -213,6 +252,8 @@ export async function POST(req: NextRequest) {
           name: user.name,
         },
       });
+      setRefreshCookie(res, newRefreshToken, isRememberMe);
+      return res;
     }
 
     // -------------------------------------------------------------
@@ -252,12 +293,12 @@ export async function POST(req: NextRequest) {
       }
 
       const accessToken = generateAccessToken(user.id, user.email, user.name);
-      const newRefreshToken = generateRefreshToken(user.id);
+      const isRememberMe = rememberMe !== false;
+      const newRefreshToken = generateRefreshToken(user.id, isRememberMe);
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         accessToken,
-        refreshToken: newRefreshToken,
         tokenType: "Bearer",
         expiresIn: 1800,
         user: {
@@ -266,41 +307,62 @@ export async function POST(req: NextRequest) {
           name: user.name,
         },
       });
+      setRefreshCookie(res, newRefreshToken, isRememberMe);
+      return res;
     }
 
     // -------------------------------------------------------------
-    // 5. [보안] 토큰 자동 갱신 (Refresh Token ➔ 새 Access + Refresh)
+    // 5. [보안] 토큰 무음 자동 갱신 (HttpOnly Cookie ➔ 새 Access + 회전된 Refresh RTR)
     // -------------------------------------------------------------
     if (action === "refresh") {
-      if (!refreshToken) {
-        return NextResponse.json({ error: "리프레시 토큰이 누락되었습니다." }, { status: 400 });
+      // 1) HttpOnly 쿠키 우선 확인, 바디 파라미터 백업 지원
+      const cookieRefresh = req.cookies.get(REFRESH_COOKIE_NAME)?.value;
+      const rawRefresh = (cookieRefresh || refreshToken || "").trim();
+
+      if (!rawRefresh) {
+        const errorRes = NextResponse.json({ error: "리프레시 토큰이 누락되었습니다." }, { status: 401 });
+        clearRefreshCookie(errorRes);
+        return errorRes;
       }
 
-      const verified = verifyJwt(refreshToken);
+      const verified = verifyJwt(rawRefresh);
       if (!verified.valid || !verified.payload) {
-        return NextResponse.json({ error: verified.error || "유효하지 않은 리프레시 토큰입니다." }, { status: 401 });
+        const errorRes = NextResponse.json({ error: verified.error || "유효하지 않은 리프레시 토큰입니다." }, { status: 401 });
+        clearRefreshCookie(errorRes);
+        return errorRes;
       }
 
       if (verified.payload.type !== "refresh") {
-        return NextResponse.json({ error: "올바른 리프레시 토큰 형식이 아닙니다." }, { status: 401 });
+        const errorRes = NextResponse.json({ error: "올바른 리프레시 토큰 형식이 아닙니다." }, { status: 401 });
+        clearRefreshCookie(errorRes);
+        return errorRes;
       }
 
       const userId = verified.payload.sub;
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) {
-        return NextResponse.json({ error: "사용자를 찾을 수 없습니다." }, { status: 404 });
+        const errorRes = NextResponse.json({ error: "사용자를 찾을 수 없습니다." }, { status: 404 });
+        clearRefreshCookie(errorRes);
+        return errorRes;
       }
 
+      const isRememberMe = verified.payload.rem !== false;
       const newAccessToken = generateAccessToken(user.id, user.email, user.name);
-      const newRefreshToken = generateRefreshToken(user.id);
+      const newRefreshToken = generateRefreshToken(user.id, isRememberMe);
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
         tokenType: "Bearer",
         expiresIn: 1800,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        },
       });
+      setRefreshCookie(res, newRefreshToken, isRememberMe);
+      return res;
     }
 
     // -------------------------------------------------------------
@@ -340,11 +402,10 @@ export async function POST(req: NextRequest) {
       const accessToken = generateAccessToken(user.id, user.email, user.name);
       const newRefreshToken = generateRefreshToken(user.id);
 
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         message: "비밀번호가 성공적으로 재설정되었습니다.",
         accessToken,
-        refreshToken: newRefreshToken,
         tokenType: "Bearer",
         expiresIn: 1800,
         user: {
@@ -353,13 +414,17 @@ export async function POST(req: NextRequest) {
           name: user.name,
         },
       });
+      setRefreshCookie(res, newRefreshToken);
+      return res;
     }
 
     // -------------------------------------------------------------
-    // 7. [보안] 로그아웃
+    // 7. [보안] 로그아웃 (HttpOnly 쿠키 즉시 삭제)
     // -------------------------------------------------------------
     if (action === "logout") {
-      return NextResponse.json({ success: true, message: "성공적으로 로그아웃되었습니다." });
+      const res = NextResponse.json({ success: true, message: "성공적으로 로그아웃되었습니다." });
+      clearRefreshCookie(res);
+      return res;
     }
 
     return NextResponse.json({ error: "올바르지 않은 요청입니다." }, { status: 400 });

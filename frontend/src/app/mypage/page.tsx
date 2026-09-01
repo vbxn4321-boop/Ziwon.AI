@@ -52,6 +52,7 @@ import {
   toggleBookmarkOnBackend,
 } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
+import { getInMemoryUser } from "@/lib/auth-store";
 
 // Format Korean Won currency into readable text (e.g. 150000000 -> "1억 5,000만 원")
 function formatKoreanCurrency(amountStr: string): string {
@@ -243,11 +244,9 @@ export default function MyPage() {
       }
       setToken(jwt);
 
-      const localUserStr = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
-      if (localUserStr) {
-        try {
-          setUser(JSON.parse(localUserStr));
-        } catch {}
+      const memUser = getInMemoryUser();
+      if (memUser) {
+        setUser(memUser);
       }
 
       await loadAllData(jwt);

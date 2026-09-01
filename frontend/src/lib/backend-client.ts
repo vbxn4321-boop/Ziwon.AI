@@ -38,6 +38,7 @@ export async function backendSendOtp(email: string) {
   const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ action: "send-otp", email }),
   });
   const json = await res.json();
@@ -49,6 +50,7 @@ export async function backendVerifyOtp(email: string, code: string) {
   const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ action: "verify-otp", email, code }),
   });
   const json = await res.json();
@@ -56,22 +58,24 @@ export async function backendVerifyOtp(email: string, code: string) {
   return json;
 }
 
-export async function backendSignup(email: string, password: string, fullName?: string) {
+export async function backendSignup(email: string, password: string, fullName?: string, rememberMe: boolean = true) {
   const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "signup", email, password, fullName }),
+    credentials: "include",
+    body: JSON.stringify({ action: "signup", email, password, fullName, rememberMe }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "회원가입 실패");
   return json;
 }
 
-export async function backendLogin(email: string, password: string) {
+export async function backendLogin(email: string, password: string, rememberMe: boolean = true) {
   const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "login", email, password }),
+    credentials: "include",
+    body: JSON.stringify({ action: "login", email, password, rememberMe }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "로그인 실패");
@@ -82,6 +86,7 @@ export async function backendResetPassword(email: string, password: string) {
   const res = await fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ action: "reset-password", email, password }),
   });
   const json = await res.json();
@@ -89,21 +94,22 @@ export async function backendResetPassword(email: string, password: string) {
   return json;
 }
 
-
 export async function backendLogout(token?: string) {
   try {
-    // 1. Clear session via /api/auth
+    // 1. Clear HttpOnly Cookie via /api/auth
     await fetch("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ action: "logout" }),
     });
 
-    // 2. Also notify FastAPI Backend if running in background
+    // 2. Also notify FastAPI Backend if running in background (for Redis token blacklist)
     if (token) {
       fetch(`${BACKEND_BASE_URL}/auth/logout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        credentials: "include",
       }).catch(() => {});
     }
     return { success: true };
@@ -112,64 +118,45 @@ export async function backendLogout(token?: string) {
   }
 }
 
-export async function backendRefreshToken(refreshToken?: string): Promise<{ accessToken: string; refreshToken: string } | null> {
-  const tokenToUse = refreshToken || (typeof window !== "undefined" ? localStorage.getItem("ziwon_refresh_token") : null);
-  if (!tokenToUse) return null;
-
-  try {
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "refresh", refreshToken: tokenToUse }),
-    });
-
-    if (!res.ok) {
-      // Refresh token expired or invalidated -> clear local auth
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("ziwon_auth_token");
-        localStorage.removeItem("ziwon_refresh_token");
-        localStorage.removeItem("ziwon_auth_user");
-        window.dispatchEvent(new Event("ziwon_auth_change"));
-      }
-      return null;
-    }
-
-    const data = await res.json();
-    if (data.accessToken && typeof window !== "undefined") {
-      localStorage.setItem("ziwon_auth_token", data.accessToken);
-      if (data.refreshToken) {
-        localStorage.setItem("ziwon_refresh_token", data.refreshToken);
-      }
-      window.dispatchEvent(new Event("ziwon_auth_change"));
-    }
-    return data;
-  } catch (err) {
-    console.error("[backendRefreshToken] Refresh failed:", err);
-    return null;
+/**
+ * [보안 표준] HttpOnly 쿠키 기반 무음 토큰 갱신
+ */
+export async function backendRefreshToken(_refreshToken?: string): Promise<{ accessToken: string } | null> {
+  const { performSilentRefresh } = await import("./auth-store");
+  const newToken = await performSilentRefresh();
+  if (newToken) {
+    return { accessToken: newToken };
   }
+  return null;
 }
 
 /**
- * Enhanced fetch wrapper with Automatic Silent Refresh
+ * Enhanced fetch wrapper with In-Memory Access Token & Automatic Silent Refresh
  */
 export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-  let token = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
-  if (!token) {
-    token = await getJwtToken();
-  }
+  let token = await getJwtToken();
   const headers = new Headers(options.headers || {});
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  let res = await fetch(url, { ...options, headers });
+  let res = await fetch(url, {
+    ...options,
+    headers,
+    credentials: options.credentials || "include",
+  });
 
   // If 401 Unauthorized, attempt Silent Refresh once and retry
   if (res.status === 401 && typeof window !== "undefined") {
-    const refreshed = await backendRefreshToken();
-    if (refreshed?.accessToken) {
-      headers.set("Authorization", `Bearer ${refreshed.accessToken}`);
-      res = await fetch(url, { ...options, headers });
+    const { performSilentRefresh } = await import("./auth-store");
+    const refreshedToken = await performSilentRefresh();
+    if (refreshedToken) {
+      headers.set("Authorization", `Bearer ${refreshedToken}`);
+      res = await fetch(url, {
+        ...options,
+        headers,
+        credentials: options.credentials || "include",
+      });
     }
   }
 
@@ -239,13 +226,7 @@ export async function fetchMyProfile(token?: string) {
 }
 
 export async function fetchMyCompany(token?: string) {
-  let actualToken = token && typeof token === "string" && token.includes(".") ? token : null;
-  if (!actualToken && typeof window !== "undefined") {
-    actualToken = localStorage.getItem("ziwon_auth_token");
-  }
-  if (!actualToken) {
-    actualToken = await getJwtToken();
-  }
+  const actualToken = token || (await getJwtToken());
   if (!actualToken) {
     return null;
   }
