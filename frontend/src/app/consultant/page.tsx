@@ -8,6 +8,7 @@ import { PsstPlanGenerator } from "@/components/PsstPlanGenerator";
 import { ConsultantDirectorySection } from "@/components/consultant/ConsultantDirectorySection";
 import { fetchPlanDetail } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
+import { ProgramAnalysisContext } from "@/lib/ai/psst-generator";
 import {
   FileText,
   Sparkles,
@@ -26,6 +27,7 @@ function ConsultantContent() {
 
   const [selectedTargetProgramForPlan, setSelectedTargetProgramForPlan] = useState<string>("");
   const [selectedPlanToLoad, setSelectedPlanToLoad] = useState<any>(null);
+  const [selectedProgramAnalysis, setSelectedProgramAnalysis] = useState<ProgramAnalysisContext | undefined>(undefined);
   const [isFullStudioOpen, setIsFullStudioOpen] = useState(false);
 
   // Auth Guard
@@ -60,6 +62,17 @@ function ConsultantContent() {
       setSelectedTargetProgramForPlan(targetTitle);
       setIsFullStudioOpen(true);
     }
+
+    // Receive program analysis from query param (base64 encoded JSON) or sessionStorage
+    const analysisKey = searchParams.get("analysisKey");
+    if (analysisKey) {
+      try {
+        const stored = sessionStorage.getItem(`psst_analysis_${analysisKey}`);
+        if (stored) {
+          setSelectedProgramAnalysis(JSON.parse(stored));
+        }
+      } catch {}
+    }
   }, [searchParams]);
 
   // If user opens the full studio mode
@@ -69,10 +82,12 @@ function ConsultantContent() {
         <PsstPlanGenerator
           initialProgramTitle={selectedTargetProgramForPlan || undefined}
           initialPlanData={selectedPlanToLoad}
+          initialProgramAnalysis={selectedProgramAnalysis}
           onBackToNotices={() => {
             setIsFullStudioOpen(false);
             setSelectedPlanToLoad(null);
             setSelectedTargetProgramForPlan("");
+            setSelectedProgramAnalysis(undefined);
           }}
         />
       </main>

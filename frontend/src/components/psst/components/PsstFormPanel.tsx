@@ -119,108 +119,151 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
   ].filter(Boolean).length;
 
   const readyToGenerate =
-    filledCount >= 3 &&
-    formData.itemName.trim().length > 0 &&
-    formData.itemDescription.trim().length > 5;
+    (formData.itemName || "").trim().length > 0 &&
+    (formData.itemDescription || "").trim().length > 0;
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
-      {/* Top: Format Selector — most important per call discussion */}
-      <div className="flex-shrink-0 px-4 pt-4 pb-0 space-y-3">
-        {/* Target Format Picker */}
-        <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
-          <div className="flex items-center space-x-2 mb-1">
-            <Target className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-extrabold text-amber-300">목표 지원사업 공인 서식 선택</span>
-            <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
-              중기부·창진원 공인
+    <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3.5 text-xs">
+      {/* 1. Target Format Picker */}
+      <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-3.5 space-y-2.5 shadow-lg">
+        <div className="flex items-center space-x-2 mb-1">
+          <Target className="w-4 h-4 text-amber-400" />
+          <span className="text-xs font-extrabold text-amber-300">목표 지원사업 공인 서식 선택</span>
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
+            중기부·창진원 공인
+          </span>
+        </div>
+
+        <div className="relative">
+          <select
+            value={formData.targetProgramTitle}
+            onChange={(e) => setFormData({ ...formData, targetProgramTitle: e.target.value })}
+            className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3 py-2.5 text-slate-100 text-xs font-bold focus:outline-none focus:border-amber-400 transition-colors cursor-pointer appearance-none pr-8"
+            disabled={isGenerating}
+          >
+            {TARGET_PROGRAM_FORMATS.map((fmt) => (
+              <option key={fmt.id} value={fmt.name} className="bg-slate-900 text-slate-200 py-1">
+                [{fmt.badge}] {fmt.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400 pointer-events-none" />
+        </div>
+
+        {selectedFormat?.description && (
+          <div className="flex items-start space-x-1.5 text-[11px] text-amber-300/80 font-medium bg-amber-950/30 border border-amber-500/20 rounded-xl px-3 py-2">
+            <Lightbulb className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <span>{selectedFormat.description}</span>
+          </div>
+        )}
+
+        {/* Fill Progress */}
+        <div className="flex items-center space-x-2">
+          <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all"
+              style={{ width: `${(filledCount / 5) * 100}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-slate-400 font-bold flex-shrink-0">
+            {filledCount}/5 항목 입력
+          </span>
+        </div>
+      </div>
+
+      {/* 2. Program Analysis Context Banner — shown when linked from a notice */}
+      {formData.programAnalysis && (
+        <div className="bg-gradient-to-br from-indigo-950/80 via-blue-950/60 to-slate-900 border border-indigo-500/40 rounded-2xl p-4 space-y-3 shadow-lg">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <Target className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+              <span className="text-xs font-extrabold text-indigo-200">공고 맞춤 AI 전략 연동됨</span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-[10px] font-bold">
+              이 공고에 특화된 PSST 작성 활성화
             </span>
           </div>
 
-          <div className="relative">
-            <select
-              value={formData.targetProgramTitle}
-              onChange={(e) => setFormData({ ...formData, targetProgramTitle: e.target.value })}
-              className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-3 py-2.5 text-slate-100 text-xs font-bold focus:outline-none focus:border-amber-400 transition-colors cursor-pointer appearance-none pr-8"
-              disabled={isGenerating}
-            >
-              {TARGET_PROGRAM_FORMATS.map((fmt) => (
-                <option key={fmt.id} value={fmt.name} className="bg-slate-900 text-slate-200 py-1">
-                  [{fmt.badge}] {fmt.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400 pointer-events-none" />
-          </div>
-
-          {selectedFormat?.description && (
-            <div className="flex items-start space-x-1.5 text-[11px] text-amber-300/80 font-medium bg-amber-950/30 border border-amber-500/20 rounded-xl px-3 py-2">
-              <Lightbulb className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
-              <span>{selectedFormat.description}</span>
+          {/* Organizer Strategy */}
+          {formData.programAnalysis.organizerStrategy && (
+            <div className="text-[11px] bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2.5 space-y-1">
+              <p className="text-indigo-300 font-bold">{formData.programAnalysis.organizerStrategy.organizerName}</p>
+              <p className="text-slate-300 leading-relaxed">
+                <span className="text-blue-400 font-semibold">핵심 KPI:</span> {formData.programAnalysis.organizerStrategy.coreObjective}
+              </p>
+              <p className="text-slate-400 leading-relaxed">
+                <span className="text-amber-400 font-semibold">공략 전략:</span> {formData.programAnalysis.organizerStrategy.strategyTip}
+              </p>
             </div>
           )}
 
-          {/* Fill Progress */}
-          <div className="flex items-center space-x-2">
-            <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all"
-                style={{ width: `${(filledCount / 5) * 100}%` }}
-              />
+          {/* Evaluation Criteria Score Bars */}
+          {(formData.programAnalysis.evaluationCriteria?.items?.length || 0) > 0 && (
+            <div className="space-y-1.5">
+              <span className="text-[10.5px] font-bold text-slate-400 block">📊 심사 배점 기준 (AI가 이 비중으로 작성)</span>
+              {formData.programAnalysis.evaluationCriteria!.items!.slice(0, 4).map((item, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10.5px]">
+                  <span className="text-slate-300 min-w-0 flex-1 truncate" title={item.category}>{item.category}</span>
+                  <span className="text-indigo-300 font-bold flex-shrink-0">{item.scoreWeight}</span>
+                </div>
+              ))}
             </div>
-            <span className="text-[10px] text-slate-400 font-bold flex-shrink-0">
-              {filledCount}/5 항목 입력
-            </span>
+          )}
+
+          {/* Extra Points hint */}
+          {(formData.programAnalysis.extraPoints?.items?.length || 0) > 0 && (
+            <div className="flex items-start space-x-1.5 text-[10.5px] text-emerald-300/90 bg-emerald-950/30 border border-emerald-700/30 rounded-xl px-2.5 py-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <span>가점 요건: {formData.programAnalysis.extraPoints!.items.slice(0, 2).join(" / ")}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Company Auto-Fill Banner */}
+      {userCompany?.name && (
+        <div className="bg-blue-950/50 border border-blue-500/30 rounded-2xl p-3 flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <Building2 className="w-4 h-4 text-blue-400 flex-shrink-0" />
+            <div>
+              <span className="font-bold text-xs text-blue-100 block">{userCompany.name} 기업 프로필 연동됨</span>
+              <span className="text-[10.5px] text-blue-300/80">기업 정보가 아래 폼에 자동 채워졌습니다.</span>
+            </div>
           </div>
+          {onPrefillFromCompany && (
+            <button
+              type="button"
+              onClick={onPrefillFromCompany}
+              className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 text-[10.5px] font-semibold transition-all cursor-pointer flex-shrink-0"
+            >
+              다시 채우기
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 4. Section: 기본 정보 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center space-x-1.5 border-b border-slate-800 pb-2.5">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+          <span className="font-bold text-slate-200 text-xs">기본 정보 입력</span>
+          <span className="text-[10px] text-slate-500 ml-auto">* 필수 항목</span>
         </div>
 
-        {/* Company Auto-Fill Banner */}
-        {userCompany?.name && (
-          <div className="bg-blue-950/50 border border-blue-500/30 rounded-2xl p-3 flex items-center justify-between gap-2">
-            <div className="flex items-center space-x-2">
-              <Building2 className="w-4 h-4 text-blue-400 flex-shrink-0" />
-              <div>
-                <span className="font-bold text-xs text-blue-100 block">{userCompany.name} 기업 프로필 연동됨</span>
-                <span className="text-[10.5px] text-blue-300/80">기업 정보가 아래 폼에 자동 채워졌습니다.</span>
-              </div>
-            </div>
-            {onPrefillFromCompany && (
-              <button
-                type="button"
-                onClick={onPrefillFromCompany}
-                className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 text-[10.5px] font-semibold transition-all cursor-pointer flex-shrink-0"
-              >
-                다시 채우기
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Scrollable Form Body */}
-      <div className="flex-1 px-4 py-3 overflow-y-auto space-y-3 text-[11px]">
-        {/* Section: 기본 정보 */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center space-x-1.5 border-b border-slate-800 pb-2.5">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
-            <span className="font-bold text-slate-200 text-xs">기본 정보 입력</span>
-            <span className="text-[10px] text-slate-500 ml-auto">* 필수 항목</span>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-slate-400 font-semibold flex items-center space-x-1">
-              <span>👤 대표자 / 기업명</span>
-              <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.companyName}
-              onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-              placeholder="ex) (주)지윈에이아이 또는 홍길동 대표 (예비창업자)"
-              disabled={isGenerating}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-          </div>
+        <div className="space-y-1">
+          <label className="text-slate-400 font-semibold flex items-center space-x-1">
+            <span>👤 대표자 / 기업명</span>
+            <span className="text-rose-400">*</span>
+          </label>
+          <input
+            type="text"
+            value={formData.companyName}
+            onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+            placeholder="ex) (주)지윈에이아이 또는 홍길동 대표 (예비창업자)"
+            disabled={isGenerating}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
+          />
+        </div>
 
           <div className="space-y-1">
             <label className="text-slate-400 font-semibold flex items-center space-x-1">
@@ -400,7 +443,6 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
             </li>
           </ol>
         </div>
-      </div>
     </div>
   );
 };

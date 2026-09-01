@@ -33,10 +33,12 @@ import {
   Bookmark,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SupportProgram } from "./ProgramCard";
 import { getJwtToken } from "@/lib/supabase-client";
 import { fetchMyCompany, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
+import { navigateToPsstStudio } from "@/lib/psst-navigator";
 
 interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
@@ -354,6 +356,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   onAnalysisComplete,
   onCreatePsstPlan,
 }) => {
+  const router = useRouter();
   // Main tabs: AI Analysis ("ai"), Document Viewer ("viewer"), Attachments ("docs"), Official Sources ("sources")
   const [activeTab, setActiveTab] = useState<"ai" | "viewer" | "docs" | "sources">("viewer");
   const [isMaximized, setIsMaximized] = useState(false);
@@ -835,18 +838,23 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                         <span>{isMatching ? "적합도 분석 중..." : "내 기업 적합도 분석"}</span>
                       </button>
 
-                      {onCreatePsstPlan && (
-                        <button
-                          onClick={() => {
+                      <button
+                        onClick={() => {
+                          if (onCreatePsstPlan) {
                             onCreatePsstPlan(selectedProgram.title);
-                            onClose();
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs transition-all flex items-center space-x-1.5 shadow-md shadow-purple-600/30"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>PSST 사업계획서 생성</span>
-                        </button>
-                      )}
+                          } else {
+                            navigateToPsstStudio(router, {
+                              programTitle: selectedProgram.title,
+                              programAnalysis: liveAnalysis || (selectedProgram.analyses && selectedProgram.analyses[0]),
+                            });
+                          }
+                          onClose();
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs transition-all flex items-center space-x-1.5 shadow-md shadow-purple-600/30 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>PSST 사업계획서 생성</span>
+                      </button>
                       <button
                         onClick={() => setActiveTab("viewer")}
                         className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center space-x-1.5"

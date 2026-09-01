@@ -1,4 +1,4 @@
-import { PsstBusinessPlanResult, PsstGeneratorInput } from "@/lib/ai/psst-generator";
+import { PsstBusinessPlanResult, PsstGeneratorInput, ProgramAnalysisContext } from "@/lib/ai/psst-generator";
 
 export type PsstSectionKey = "overview" | "problem" | "solution" | "scaleUp" | "team" | "evaluation";
 export type CreationMode = "chat" | "form";
@@ -8,6 +8,8 @@ export interface PsstPlanGeneratorProps {
   initialProgramTitle?: string;
   initialPlanData?: any;
   onBackToNotices?: () => void;
+  /** 공고 상세 페이지에서 넘어온 경우, 해당 공고의 AI 심층분석 결과를 전달 */
+  initialProgramAnalysis?: ProgramAnalysisContext;
 }
 
 export interface ChatMessage {
@@ -35,3 +37,4 @@ export interface InterviewProgress {
 }
 
 export type PsstFormData = PsstGeneratorInput & { budget?: string };
+export type { ProgramAnalysisContext };

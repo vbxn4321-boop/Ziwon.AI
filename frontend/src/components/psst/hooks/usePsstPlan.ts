@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { PsstBusinessPlanResult, PsstGeneratorInput } from "@/lib/ai/psst-generator";
+import { PsstBusinessPlanResult, PsstGeneratorInput, ProgramAnalysisContext } from "@/lib/ai/psst-generator";
 import {
   ChatMessage,
   CreationMode,
@@ -12,7 +12,7 @@ import { DEFAULT_INITIAL_MESSAGE, DEFAULT_SUGGESTIONS } from "../constants";
 import { savePlanToBackend, fetchMyCompany } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
 
-export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any) {
+export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any, initialProgramAnalysis?: ProgramAnalysisContext) {
   // Mode: "chat" (AI Chatbot Interview) vs "form" (Quick Form Input)
   const [creationMode, setCreationMode] = useState<CreationMode>("form");
 
@@ -23,31 +23,39 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any)
   const [userCompany, setUserCompany] = useState<any>(null);
 
   // Initial parsed plan
-  const parsedInitialPlan = initialPlanData
-    ? typeof initialPlanData.planJson === "string"
-      ? JSON.parse(initialPlanData.planJson)
-      : initialPlanData.planJson || initialPlanData
-    : null;
+  const parsedInitialPlan =
+    initialPlanData && (initialPlanData.planJson || initialPlanData.overview)
+      ? typeof initialPlanData.planJson === "string"
+        ? JSON.parse(initialPlanData.planJson)
+        : initialPlanData.planJson || initialPlanData
+      : null;
+
+  const validInitialPlan =
+    parsedInitialPlan && parsedInitialPlan.overview && parsedInitialPlan.overview.title
+      ? parsedInitialPlan
+      : null;
 
   // Form Data
   const [formData, setFormData] = useState<PsstFormData>({
-    companyName: parsedInitialPlan?.overview?.companyName || "",
-    itemName: parsedInitialPlan?.overview?.title || "",
-    industry: parsedInitialPlan?.overview?.industry || "",
-    targetCustomer: parsedInitialPlan?.overview?.summaryTable?.targetUsers || "",
-    itemDescription: parsedInitialPlan?.overview?.itemSummary || "",
-    coreStrengths: parsedInitialPlan?.solution?.competitorDifferentiation || "",
+    companyName: validInitialPlan?.overview?.companyName || "",
+    itemName: validInitialPlan?.overview?.title || "",
+    industry: validInitialPlan?.overview?.industry || "",
+    targetCustomer: validInitialPlan?.overview?.summaryTable?.targetUsers || "",
+    itemDescription: validInitialPlan?.overview?.itemSummary || "",
+    coreStrengths: validInitialPlan?.solution?.competitorDifferentiation || "",
     targetProgramTitle:
       initialPlanData?.targetProgramTitle ||
       initialProgramTitle ||
-      "2026년 중소벤처기업부 초기창업패키지",
-    budget: parsedInitialPlan?.overview?.summaryTable?.targetBudget || "",
+      "2026년 중소벤처기업부 예비창업패키지",
+    budget: validInitialPlan?.overview?.summaryTable?.targetBudget || "",
+    // Attach linked program analysis context if provided
+    programAnalysis: initialProgramAnalysis || undefined,
   });
 
   // Auto-fetch user company profile on mount and pre-fill form if empty
   useEffect(() => {
     const loadCompanyAndPrefill = async () => {
-      if (parsedInitialPlan) return; // If restoring existing plan, don't overwrite
+      if (validInitialPlan) return; // If restoring existing plan, don't overwrite
       try {
         const token = await getJwtToken();
         if (!token) return;
@@ -83,7 +91,7 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any)
     };
 
     loadCompanyAndPrefill();
-  }, [initialProgramTitle, parsedInitialPlan]);
+  }, [initialProgramTitle, validInitialPlan]);
 
   // Chat Messages for Chatbot Interview Mode
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -100,19 +108,19 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any)
   // Interactive Suggestion Pills and Checklist Progress
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
   const [interviewProgress, setInterviewProgress] = useState<InterviewProgress>({
-    itemTarget: !!parsedInitialPlan,
-    problem: !!parsedInitialPlan,
-    solution: !!parsedInitialPlan,
-    scaleUp: !!parsedInitialPlan,
-    team: !!parsedInitialPlan,
-    currentStep: parsedInitialPlan ? 5 : 1,
-    completedCount: parsedInitialPlan ? 5 : 0,
+    itemTarget: !!validInitialPlan,
+    problem: !!validInitialPlan,
+    solution: !!validInitialPlan,
+    scaleUp: !!validInitialPlan,
+    team: !!validInitialPlan,
+    currentStep: validInitialPlan ? 5 : 1,
+    completedCount: validInitialPlan ? 5 : 0,
   });
 
   // Business Plan Result State
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResult, setGeneratedResult] = useState<PsstBusinessPlanResult | null>(
-    parsedInitialPlan || null
+    validInitialPlan
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
@@ -332,25 +340,38 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any)
   // 3. Generate PSST directly from Quick Form
   const handleGenerateFromForm = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!formData.itemName.trim() || !formData.itemDescription.trim()) {
-      setErrorMessage("창업 아이템명과 사업 내용은 필수 입력 항목입니다.");
+    if (!formData.itemName.trim()) {
+      setErrorMessage("창업 아이템명을 입력해 주세요.");
+      return;
+    }
+    if (!formData.itemDescription.trim()) {
+      setErrorMessage("사업 내용 & 개발 필요성을 간단히 작성해 주세요.");
       return;
     }
 
     setIsGenerating(true);
     setErrorMessage(null);
 
+    const payload: PsstFormData = {
+      ...formData,
+      companyName: formData.companyName.trim() || userCompany?.name || "예비창업자",
+      industry: formData.industry.trim() || "ICT / 신산업 융합",
+    };
+
     try {
       const res = await fetch("/api/ai/psst-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
       if (json.success && json.plan) {
         setGeneratedResult(json.plan);
         setActiveSection("overview");
+        if (docScrollRef.current) {
+          docScrollRef.current.scrollTop = 0;
+        }
       } else {
         setErrorMessage(json.error || "사업계획서 생성에 실패했습니다.");
       }
