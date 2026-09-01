@@ -1,5 +1,44 @@
 import { GoogleGenAI } from "@google/genai";
 
+export interface ProgramAnalysisContext {
+  organizerStrategy?: {
+    organizerName: string;
+    agencyName?: string;
+    programNature: string;
+    coreObjective: string;
+    strategyTip: string;
+  };
+  evaluationCriteria?: {
+    steps?: string[];
+    items?: Array<{
+      category: string;
+      scoreWeight: string;
+      evaluationFocus: string;
+      writingStrategy: string;
+    }>;
+    summary?: string;
+  };
+  extraPoints?: {
+    items: string[];
+    summary: string;
+  };
+  excludedConditions?: {
+    items: string[];
+    summary: string;
+  };
+  summaryReport?: string[];
+  targetEligibility?: {
+    allowedRegions?: string[];
+    allowedIndustries?: string[];
+    summary?: string;
+  };
+  budgetAndAmount?: {
+    maxAmountWon?: number;
+    selfPaymentRatioPercent?: number;
+    summary?: string;
+  };
+}
+
 export interface PsstGeneratorInput {
   companyName: string;
   itemName: string;
@@ -8,6 +47,8 @@ export interface PsstGeneratorInput {
   itemDescription: string;
   coreStrengths?: string;
   targetProgramTitle?: string;
+  /** 연계 공고의 AI 심층분석 데이터 — 공고 특성에 맞춘 맞춤형 사업계획서 작성에 사용 */
+  programAnalysis?: ProgramAnalysisContext;
 }
 
 export interface PsstBusinessPlanResult {
@@ -122,6 +163,40 @@ export async function generatePsstBusinessPlan(
   const ai = new GoogleGenAI({ apiKey });
   const candidateModels = getCandidateModels("reasoning");
 
+  // Build program-specific context block if analysis data is provided
+  const programContextBlock = input.programAnalysis
+    ? `
+[🎯 연계 공고 AI 심층분석 데이터 — 이 공고에 특화된 맞춤형 사업계획서를 작성하라]
+이 사업계획서는 아래 공고의 특성과 심사위원 의도에 완벽히 맞춰서 작성되어야 합니다. 범용적 PSST가 아닌, 이 공고만을 위한 "타겟 맞춤 전략 사업계획서"를 작성하십시오.
+
+▶ 주관기관 성격 & 사업 목적
+- 주관기관: ${input.programAnalysis.organizerStrategy?.organizerName || ""}
+- 지원사업 성격: ${input.programAnalysis.organizerStrategy?.programNature || ""}
+- 기관 핵심 요구 KPI: ${input.programAnalysis.organizerStrategy?.coreObjective || ""}
+- 심사위원 공략 전략: ${input.programAnalysis.organizerStrategy?.strategyTip || ""}
+
+▶ 심사 배점 기준 & 고득점 작성법 (배점표를 실제 작성에 반영)
+${(input.programAnalysis.evaluationCriteria?.items || []).map((item) => `  • [${item.category}] (${item.scoreWeight}) — 착안점: ${item.evaluationFocus} / 전략: ${item.writingStrategy}`).join("\n")}
+
+▶ 가점 확보 전략 (사업계획서에서 해당 항목을 적극 어필할 것)
+${(input.programAnalysis.extraPoints?.items || []).map((i) => `  • ${i}`).join("\n")}
+
+▶ 3-Step 합격 공략 브리핑
+${(input.programAnalysis.summaryReport || []).map((step, i) => `  STEP ${i + 1}: ${step}`).join("\n")}
+
+▶ 지원 자격 / 지역 / 산업 조건
+- 허용 지역: ${(input.programAnalysis.targetEligibility?.allowedRegions || ["제한 없음"]).join(", ")}
+- 허용 업종: ${(input.programAnalysis.targetEligibility?.allowedIndustries || ["전 분야"]).join(", ")}
+- 지원 규모: ${input.programAnalysis.budgetAndAmount?.summary || "공고문 참조"}
+
+[공고 맞춤 작성 필수 지시사항]
+1. 위 배점 기준에서 배점이 높은 항목일수록 해당 PSST 섹션의 분량과 구체성을 대폭 강화하십시오.
+2. 주관기관의 핵심 KPI(고용창출, 매출증대, 기술이전 등)가 사업계획서 전체에 관통하도록 서술하십시오.
+3. 가점 요건(특허, 청년/여성 창업, 벤처인증, 지역 소재 등)에 해당하는 경우 각 섹션에서 반드시 명시적으로 어필하십시오.
+4. 지역 기반 공고라면 지역 경제 기여, 지역 일자리 창출, 정주 여건 개선을 모든 섹션에 녹여내십시오.
+`
+    : `\n[목표 지원사업]: ${input.targetProgramTitle || "중소벤처기업부 예비/초기 창업지원사업"}\n표준 PSST 프레임워크로 범용 사업계획서를 작성하세요.`;
+
   const prompt = `
 [역할]
 당신은 대한민국 중소벤처기업부, 창업진흥원, 기술보증기금의 공인 스타트업 심사위원이자 최고 전문 창업 컨설턴트입니다.
@@ -134,12 +209,13 @@ export async function generatePsstBusinessPlan(
 - 주요 타겟 고객: ${input.targetCustomer || "해당 산업군 수요 고객"}
 - 아이템 핵심 설명: ${input.itemDescription}
 - 주요 강점 및 차별화 요소: ${input.coreStrengths || "자체 기술력 및 맞춤형 서비스"}
-- (연계 목표 지원사업): ${input.targetProgramTitle || "중소벤처기업부 예비/초기 창업지원사업"}
+${programContextBlock}
 
 [엄격한 작성 원칙 - 상투적 목업/더미 텍스트 절대 금지]:
 1. **사용자 입력/대화 100% 반영**: 사용자가 인터뷰나 입력폼에서 언급한 실제 아이템, 고객군, 기술, BM을 최우선으로 반영하세요.
-2. **도메인 특화 실전 팩트 기반 작성**: 뻔한 일반론("혁신적인 솔루션", "우수한 기술력") 대신, 해당 산업군(스마트농업, 물류, 헬스케어 등)의 실제 현장 고통, 실제 기술 스택(센서 사양, 통신 프로토콜, 모델 아키텍처), 실제 과금 단가 및 유통 구조를 구체적 수치와 명칭으로 서술하세요.
+2. **도메인 특화 실전 팩트 기반 작성**: 뻔한 일반론("혁신적인 솔루션", "우수한 기술력") 대신, 해당 산업군의 실제 현장 고통, 실제 기술 스택, 실제 과금 단가 및 유통 구조를 구체적 수치와 명칭으로 서술하세요.
 3. **심사위원 관점 합격 논리 & 표(Table) 완벽 생성**: 심사위원이 한눈에 파악할 수 있도록 개요 요약표, TAM-SAM-SOM 시장규모, 경쟁사 비교표(competitorTable), Q1~Q4 로드맵(roadmapTable), 소요 예산 집행표(budgetTable), 팀원 명단(memberList)을 도메인에 맞게 정밀하게 생성하세요.
+4. **공고 맞춤 전략 반영**: 위 공고 AI 분석 데이터가 제공된 경우, 배점 비중이 높은 항목일수록 해당 PSST 섹션의 분량과 근거를 강화하세요.
 
 [출력 요구사항 - 반드시 유효한 JSON 형식만 출력]
 {

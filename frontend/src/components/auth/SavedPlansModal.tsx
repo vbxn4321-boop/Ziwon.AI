@@ -126,7 +126,7 @@ export default function SavedPlansModal({
         alert("사업계획서 데이터를 불러오는 중 오류가 발생했습니다.");
       }
     } else {
-      router.push(`/?tab=psst&planId=${plan.id}`);
+      router.push(`/consultant?planId=${plan.id}`);
       onClose();
     }
   };

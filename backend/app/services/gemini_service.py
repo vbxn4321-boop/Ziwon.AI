@@ -46,7 +46,15 @@ class GeminiService:
         [사업 내용 & 개발 필요성]: {input_data.itemDescription}
         [핵심 기술 및 차별화 강점]: {input_data.coreStrengths}
 
-        위 정보를 바탕으로 Overview, Problem, Solution, Scale-up, Team, EvaluationReport가 모두 포함된 고품질 PSST 사업계획서 JSON을 생성하십시오.
+        반드시 다음 구조의 JSON만 출력하십시오:
+        {{
+          "overview": {{ "title": "아이템명", "companyName": "기업명", "industry": "산업", "itemSummary": "요약", "summaryTable": {{ "itemCategory": "분야", "targetUsers": "타겟", "coreFeature": "기능", "monetization": "수익모델", "targetBudget": "예산" }} }},
+          "problem": {{ "title": "1. 문제인식", "marketPainPoint": "고통", "targetCustomerProblem": "고객문제", "developmentNecessity": "필요성", "tamSamSom": {{ "tam": "전체", "sam": "유효", "som": "수익" }} }},
+          "solution": {{ "title": "2. 실현가능성", "coreTechnologyAndFeatures": "기술", "competitorDifferentiation": "차별성", "implementationPlan": "계획", "competitorTable": [], "roadmapTable": [] }},
+          "scaleUp": {{ "title": "3. 성장전략", "businessModelAndRevenue": "BM", "marketEntryAndMarketing": "마케팅", "fundingAndBudgetPlan": "자금계획", "budgetTable": [] }},
+          "team": {{ "title": "4. 팀구성", "founderAndTeamCompetency": "역량", "rolesAndResponsibilities": "역할", "collaborationNetwork": "네트워크", "memberList": [] }},
+          "evaluationReport": {{ "score": 88, "grade": "A", "gradeDescription": "우수", "strengths": [], "weaknesses": [], "improvementRecommendations": [], "expectedQuestions": [] }}
+        }}
         """
 
         last_error = None

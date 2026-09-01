@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Edit3, FileText } from "lucide-react";
+import { Edit3, FileText, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import { CanvasTheme, PsstFormData, PsstSectionKey } from "../types";
 import { SECTION_LABELS } from "../constants";
@@ -12,6 +12,7 @@ interface PsstDocumentViewerProps {
   activeSection: PsstSectionKey;
   generatedResult: PsstBusinessPlanResult | null;
   formData: PsstFormData;
+  isGenerating?: boolean;
   isDirectEditing: boolean;
   setIsDirectEditing: React.Dispatch<React.SetStateAction<boolean>>;
   docScrollRef: React.RefObject<HTMLDivElement | null>;
@@ -24,12 +25,15 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
   activeSection,
   generatedResult,
   formData,
+  isGenerating = false,
   isDirectEditing,
   setIsDirectEditing,
   docScrollRef,
   sectionRefs,
   onScrollToSection,
 }) => {
+  const hasValidPlan = !!(generatedResult && generatedResult.overview && generatedResult.overview.title);
+
   return (
     <div
       id="psst-document-canvas"
@@ -49,36 +53,75 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 font-bold text-xs border border-blue-500/20">
             {SECTION_LABELS[activeSection] || "창업아이템 개요(요약)"}
           </span>
-          {generatedResult?.evaluationReport && (
+          {hasValidPlan && generatedResult?.evaluationReport && (
             <span className="text-[11px] text-slate-400 font-medium">
               (점수: {generatedResult.evaluationReport.score}점 · {generatedResult.evaluationReport.grade})
             </span>
           )}
         </div>
 
-        <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={() => setIsDirectEditing((prev) => !prev)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1.5 border cursor-pointer ${
-              isDirectEditing
-                ? "bg-emerald-600 text-white border-emerald-500 shadow-md"
-                : canvasTheme === "dark"
-                ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
-                : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
-            }`}
-          >
-            <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{isDirectEditing ? "💾 편집 완료" : "✏️ 직접편집"}</span>
-          </button>
-        </div>
+        {hasValidPlan && (
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setIsDirectEditing((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center space-x-1.5 border cursor-pointer ${
+                isDirectEditing
+                  ? "bg-emerald-600 text-white border-emerald-500 shadow-md"
+                  : canvasTheme === "dark"
+                  ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isDirectEditing ? "💾 편집 완료" : "✏️ 직접편집"}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Document Paper Body Container */}
-      <div ref={docScrollRef as any} className="flex-1 p-4 sm:p-8 overflow-y-auto space-y-6">
-        {generatedResult ? (
+      <div ref={docScrollRef as any} className="flex-1 p-4 sm:p-8 overflow-y-auto space-y-6 flex flex-col">
+        {isGenerating ? (
+          /* Real-time AI Generation Loading View */
+          <div className="max-w-2xl mx-auto rounded-3xl border border-blue-500/40 bg-gradient-to-b from-blue-950/80 via-slate-900 to-slate-950 p-8 sm:p-12 text-center space-y-6 my-auto shadow-2xl w-full">
+            <div className="w-16 h-16 rounded-2xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/30 animate-bounce">
+              <Sparkles className="w-8 h-8 animate-spin text-amber-300" />
+            </div>
+            <div className="space-y-2 max-w-md mx-auto">
+              <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold inline-block animate-pulse">
+                ⚡ Gemini 3.7 AI 엔진 실시간 작성 중
+              </span>
+              <h3 className="text-lg sm:text-xl font-black text-white">
+                공고 맞춤형 PSST 사업계획서를 작성하고 있습니다
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                주관기관 심사 기준과 배점표를 반영하여 문제인식, 실현기술, 비즈니스 모델, 예산표, 100점 심사역 리포트를 정밀 도출 중입니다. (약 10~15초 소요)
+              </p>
+            </div>
+
+            <div className="space-y-2 text-left max-w-md mx-auto text-xs text-slate-300 bg-slate-950/80 border border-slate-800 p-4 rounded-2xl">
+              <div className="flex items-center space-x-2 text-blue-400 font-bold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>1. 공고 배점표 & 주관기관 성격 분석 반영 중...</span>
+              </div>
+              <div className="flex items-center space-x-2 text-indigo-400 font-bold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>2. 문제인식(P) & 실현가능성(S) 핵심 기술 작성 중...</span>
+              </div>
+              <div className="flex items-center space-x-2 text-purple-400 font-bold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>3. 성장전략(S) BM & 소요 예산 집행표 도출 중...</span>
+              </div>
+              <div className="flex items-center space-x-2 text-emerald-400 font-bold">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>4. 팀구성(T) 역량 & 심사위원 100점 평가 리포트 채점 중...</span>
+              </div>
+            </div>
+          </div>
+        ) : hasValidPlan && generatedResult ? (
           <div
-            className={`max-w-3xl mx-auto rounded-3xl p-8 sm:p-10 shadow-2xl space-y-8 transition-colors ${
+            className={`max-w-3xl mx-auto rounded-3xl p-8 sm:p-10 shadow-2xl space-y-8 transition-colors w-full ${
               canvasTheme === "dark"
                 ? "bg-slate-900/90 border border-slate-800 text-slate-200"
                 : "bg-white border border-slate-200 text-slate-900"
@@ -466,25 +509,46 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           </div>
         ) : (
           /* Paper Sheet Empty Placeholder */
-          <div className="max-w-3xl mx-auto rounded-3xl border border-slate-800 bg-slate-900/60 p-12 text-center space-y-4 my-auto shadow-xl">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/10">
+          <div className="max-w-2xl mx-auto rounded-3xl border border-slate-800 bg-slate-900/80 p-8 sm:p-12 text-center space-y-6 my-auto shadow-2xl w-full">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
               <FileText className="w-8 h-8" />
             </div>
-            <div className="space-y-1.5 max-w-md mx-auto">
-              <h3 className="text-base font-bold text-slate-100">
-                작성된 사업계획서가 이곳에 실시간으로 렌더링됩니다
+            <div className="space-y-2 max-w-md mx-auto">
+              <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold inline-block">
+                실시간 PSST 문서 시트 대기 중
+              </span>
+              <h3 className="text-lg sm:text-xl font-black text-slate-100">
+                작성된 사업계획서가 이곳에 실시간 렌더링됩니다
               </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                좌측의 <b>[💬 AI 챗봇 인터뷰 모드]</b>에서 대화를 나누시거나, <b>[⚡ 퀵 폼 모드]</b>에서
-                정보를 입력하고 생성 버튼을 누르면 정부 표준 PSST 한글 전문이 완성됩니다.
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                좌측 폼에서 <strong className="text-blue-300">창업 아이템명</strong>과 <strong className="text-blue-300">사업 내용</strong>을 입력하신 후 <br className="hidden sm:inline" />
+                <strong className="text-white bg-blue-600/40 px-2 py-0.5 rounded-md border border-blue-500/40">[🚀 AI 사업계획서 초안 생성하기]</strong> 버튼을 누르면 정부 표준 PSST 한글 전문이 완성됩니다.
               </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[11px] text-slate-400 max-w-lg mx-auto">
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
+                <span className="text-blue-400 font-bold block text-xs">P. 문제인식</span>
+                <span className="text-[10px] text-slate-500">시장 페인포인트</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
+                <span className="text-indigo-400 font-bold block text-xs">S. 실현가능성</span>
+                <span className="text-[10px] text-slate-500">핵심 기술 로드맵</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
+                <span className="text-purple-400 font-bold block text-xs">S. 성장전략</span>
+                <span className="text-[10px] text-slate-500">BM & 예산 집행표</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
+                <span className="text-emerald-400 font-bold block text-xs">T. 팀구성</span>
+                <span className="text-[10px] text-slate-500">역량 & 심사 배점</span>
+              </div>
             </div>
           </div>
         )}
       </div>
 
       {/* ── Floating Right Index Anchor Nav ── */}
-      {generatedResult && (
+      {hasValidPlan && (
         <div className="absolute right-3 top-16 flex flex-col space-y-1.5 z-20">
           <button
             type="button"

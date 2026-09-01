@@ -67,7 +67,7 @@ export const ProgramHeader: React.FC<ProgramHeaderProps> = ({
 
         {/* PSST Plan Creation Link */}
         <Link
-          href={`/?tab=psst&programTitle=${encodeURIComponent(program.title)}`}
+          href={`/consultant?targetTitle=${encodeURIComponent(program.title)}`}
           className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm shadow-blue-600/20"
         >
           <Sparkles className="w-4 h-4" />

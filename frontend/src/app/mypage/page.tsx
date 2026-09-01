@@ -52,6 +52,7 @@ import {
   toggleBookmarkOnBackend,
 } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
+import { getInMemoryUser } from "@/lib/auth-store";
 
 // Format Korean Won currency into readable text (e.g. 150000000 -> "1억 5,000만 원")
 function formatKoreanCurrency(amountStr: string): string {
@@ -243,11 +244,9 @@ export default function MyPage() {
       }
       setToken(jwt);
 
-      const localUserStr = typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_user") : null;
-      if (localUserStr) {
-        try {
-          setUser(JSON.parse(localUserStr));
-        } catch {}
+      const memUser = getInMemoryUser();
+      if (memUser) {
+        setUser(memUser);
       }
 
       await loadAllData(jwt);
@@ -372,7 +371,7 @@ export default function MyPage() {
 
   // 5. Open Plan in Main PSST Workspace via Query Param
   const handleOpenPlanInWorkspace = (plan: any) => {
-    router.push(`/?tab=psst&planId=${plan.id}`);
+    router.push(`/consultant?planId=${plan.id}`);
   };
 
   // 6. Open Program Detail Page DIRECTLY
@@ -409,12 +408,7 @@ export default function MyPage() {
   return (
     <div className="min-h-screen flex flex-col text-slate-900 bg-[#f8fafc]">
       {/* Top Header */}
-      <Header
-        activeNavTab="notices"
-        setActiveNavTab={(tab) => router.push(tab === "psst" ? "/?tab=psst" : "/")}
-        mainPortalMode="bizinfo"
-        setMainPortalMode={() => router.push("/")}
-      />
+      <Header />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* 1. Top Enterprise Summary Hero Dashboard */}
@@ -1105,7 +1099,7 @@ export default function MyPage() {
               </div>
 
               <Link
-                href="/?tab=psst"
+                href="/consultant"
                 className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-xs flex items-center space-x-1"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -1119,7 +1113,7 @@ export default function MyPage() {
                 <p className="text-sm font-semibold text-slate-700">아직 저장된 사업계획서가 없습니다.</p>
                 <p className="text-slate-500">AI 사업계획서 작성기에서 표준 PSST 계획서를 생성해 보세요.</p>
                 <Link
-                  href="/?tab=psst"
+                  href="/consultant"
                   className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs hover:bg-blue-100 transition-all mt-2"
                 >
                   <span>사업계획서 만들러 가기</span>
@@ -1287,7 +1281,7 @@ export default function MyPage() {
           selectedProgram={selectedProgramForModal}
           onClose={() => setSelectedProgramForModal(null)}
           onCreatePsstPlan={(title) => {
-            router.push(`/?tab=psst&targetProgram=${encodeURIComponent(title)}`);
+            router.push(`/consultant?targetTitle=${encodeURIComponent(title)}`);
           }}
         />
       )}

@@ -4,6 +4,8 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Sparkles, Building2, BriefcaseBusiness } from "lucide-react";
 
+import { getJwtToken } from "@/lib/supabase-client";
+
 export type PersonaMode = "newbie" | "business" | "consultant";
 
 interface TossGatewayHeroProps {
@@ -28,53 +30,58 @@ export const TossGatewayHero: React.FC<TossGatewayHeroProps> = ({
       },
       cardSubtitle: "정부지원사업이 처음이라면",
       cardTitle: "초간편 맞춤 탐색",
-      description: "어떤 지원사업을 찾아야 할지 막막할 때,\n창업 업력과 관심 분야만 선택하면 딱 맞는 공고를 찾아드려요.",
-      buttonText: "둘러보기",
-      footerDesc: "누구에게나 있는 시작, 맞춤 공고를 편하게 만나보세요.",
-      gradient: "from-[#1e3a8a] via-[#1d4ed8] to-[#2563eb]",
-      borderActive: "ring-4 ring-blue-500/30 border-blue-400",
+      desc: "복잡한 서류 없이 3가지 기본 정보만으로 즉시 맞춤 공고를 추천받아보세요.",
+      tags: ["#3초매칭", "#쉬운용어해설", "#필터링"],
+      cta: "초간편 지원사업 찾기",
+      badgeColor: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+      footerDesc: "누구나 1분 만에 끝내는 맞춤 공고 조회.",
+      gradient: "from-[#090d16] via-[#0f172a] to-[#042f2e]",
+      borderActive: "ring-4 ring-emerald-500/30 border-emerald-400",
     },
     {
       id: "business" as PersonaMode,
       route: "/dashboard",
       topBadge: {
         icon: Building2,
-        title: "🏢 기업 대표 · 실무자",
-        sub: "내 기업 맞춤 포털",
+        title: "🏢 기업 대표님",
+        sub: "맞춤 성장 관리",
       },
-      cardSubtitle: "내 기업 맞춤 공고가 필요하다면",
-      cardTitle: "실시간 맞춤 대시보드",
-      description: "내 기업 조건에 맞춘 신규 지원사업과\n마감 임박 공고를 매일 실시간으로 챙겨드릴게요.",
-      buttonText: "대시보드 보기",
-      footerDesc: "전국 1,600여 개 공고를 놓치지 않고 챙겨드립니다.",
-      gradient: "from-[#0f172a] via-[#1e293b] to-[#1e40af]",
-      borderActive: "ring-4 ring-indigo-500/30 border-indigo-400",
+      cardSubtitle: "사업자등록을 마친 대표님을 위해",
+      cardTitle: "기업 맞춤 대시보드",
+      desc: "업력, 지역, 특허, 기술인증 정보를 바탕으로 우리 기업에 딱 맞는 공고를 관리합니다.",
+      tags: ["#기업프로필", "#정밀적합도", "#D-Day알림"],
+      cta: "기업 대시보드 입장",
+      badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+      footerDesc: "신청 가능한 최적의 정부지원 공고 캘린더.",
+      gradient: "from-[#090d16] via-[#0f172a] to-[#1e1b4b]",
+      borderActive: "ring-4 ring-blue-500/30 border-blue-400",
     },
     {
       id: "consultant" as PersonaMode,
       route: "/consultant",
       topBadge: {
         icon: BriefcaseBusiness,
-        title: "💼 전문 컨설턴트 · PM",
-        sub: "PSST AI 전문가 도구",
+        title: "💼 PSST 전문가",
+        sub: "AI 사업계획서",
       },
-      cardSubtitle: "사업계획서 작성이 필요하다면",
-      cardTitle: "AI 사업계획서 & 심사 배점",
-      description: "정부 표준 PSST 사업계획서 10초 자동 작성과\n심사위원 배점표 및 결격요건을 정밀하게 분석해 드려요.",
-      buttonText: "전문가 도구 열기",
+      cardSubtitle: "선정 확률을 극대화하는",
+      cardTitle: "AI 사업계획서 코치",
+      desc: "선정 확률 92%의 PSST 표준 양식 기반으로 지원사업 합격 사업계획서를 자동 생성합니다.",
+      tags: ["#PSST표준", "#AI자동작성", "#사업계획서"],
+      cta: "PSST 코칭 시작하기",
+      badgeColor: "bg-purple-500/10 text-purple-600 border-purple-500/20",
       footerDesc: "합격률을 높여주는 심사위원 배점표와 서식 자동 작성.",
       gradient: "from-[#090d16] via-[#111827] to-[#312e81]",
       borderActive: "ring-4 ring-purple-500/30 border-purple-400",
     },
   ];
 
-  const handleCardClick = (g: (typeof gateways)[0]) => {
+  const handleCardClick = async (g: (typeof gateways)[0]) => {
     if (onSelectMode) {
       onSelectMode(g.id);
     }
     if (g.id === "business" || g.id === "consultant") {
-      const localToken =
-        typeof window !== "undefined" ? localStorage.getItem("ziwon_auth_token") : null;
+      const localToken = await getJwtToken();
       if (!localToken) {
         router.push(`/login?redirect=${encodeURIComponent(g.route)}`);
         return;
@@ -165,7 +172,7 @@ export const TossGatewayHero: React.FC<TossGatewayHeroProps> = ({
                       {g.cardTitle}
                     </h3>
                     <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-line pt-1 opacity-90">
-                      {g.description}
+                      {g.desc}
                     </p>
                   </div>
 
@@ -178,7 +185,7 @@ export const TossGatewayHero: React.FC<TossGatewayHeroProps> = ({
                           : "bg-white/15 backdrop-blur-md border-white/30 text-white group-hover:bg-white group-hover:text-slate-900"
                       }`}
                     >
-                      <span>{g.buttonText}</span>
+                      <span>{g.cta}</span>
                       <div className="w-5 h-5 rounded-full bg-white/20 group-hover:bg-slate-900/10 flex items-center justify-center transition-transform group-hover:translate-x-0.5">
                         <ArrowRight className="w-3 h-3" />
                       </div>

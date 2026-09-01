@@ -33,10 +33,12 @@ import {
   Bookmark,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SupportProgram } from "./ProgramCard";
 import { getJwtToken } from "@/lib/supabase-client";
 import { fetchMyCompany, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
+import { navigateToPsstStudio } from "@/lib/psst-navigator";
 
 interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
@@ -84,7 +86,7 @@ function renderConditionChips(
   colorScheme: "amber" | "blue" | "teal" | "purple" = "amber"
 ) {
   if (!rawString || !rawString.trim()) {
-    return <span className="text-slate-400 text-xs">{fallback}</span>;
+    return <span className="text-slate-500 font-medium text-xs">{fallback}</span>;
   }
   const clean = cleanHtml(rawString);
   const items = clean
@@ -93,14 +95,14 @@ function renderConditionChips(
     .filter(Boolean);
 
   if (items.length <= 1) {
-    return <span className="font-semibold text-slate-200 text-xs break-words leading-relaxed">{clean}</span>;
+    return <span className="font-bold text-slate-900 text-xs break-words leading-relaxed">{clean}</span>;
   }
 
   const colorClasses = {
-    amber: "bg-amber-500/15 text-amber-200 border-amber-500/30",
-    blue: "bg-blue-500/15 text-blue-200 border-blue-500/30",
-    teal: "bg-teal-500/15 text-teal-200 border-teal-500/30",
-    purple: "bg-purple-500/15 text-purple-200 border-purple-500/30",
+    amber: "bg-amber-100 text-amber-950 border-amber-300 font-bold",
+    blue: "bg-blue-100 text-blue-950 border-blue-300 font-bold",
+    teal: "bg-emerald-100 text-emerald-950 border-emerald-300 font-bold",
+    purple: "bg-purple-100 text-purple-950 border-purple-300 font-bold",
   }[colorScheme];
 
   return (
@@ -108,7 +110,7 @@ function renderConditionChips(
       {items.map((item, idx) => (
         <span
           key={idx}
-          className={`px-2 py-0.5 rounded-md text-[11px] font-medium border break-all leading-tight ${colorClasses}`}
+          className={`px-2.5 py-1 rounded-lg text-xs border break-all leading-tight shadow-2xs ${colorClasses}`}
         >
           {item}
         </span>
@@ -354,6 +356,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   onAnalysisComplete,
   onCreatePsstPlan,
 }) => {
+  const router = useRouter();
   // Main tabs: AI Analysis ("ai"), Document Viewer ("viewer"), Attachments ("docs"), Official Sources ("sources")
   const [activeTab, setActiveTab] = useState<"ai" | "viewer" | "docs" | "sources">("viewer");
   const [isMaximized, setIsMaximized] = useState(false);
@@ -835,18 +838,23 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                         <span>{isMatching ? "적합도 분석 중..." : "내 기업 적합도 분석"}</span>
                       </button>
 
-                      {onCreatePsstPlan && (
-                        <button
-                          onClick={() => {
+                      <button
+                        onClick={() => {
+                          if (onCreatePsstPlan) {
                             onCreatePsstPlan(selectedProgram.title);
-                            onClose();
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs transition-all flex items-center space-x-1.5 shadow-md shadow-purple-600/30"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>PSST 사업계획서 생성</span>
-                        </button>
-                      )}
+                          } else {
+                            navigateToPsstStudio(router, {
+                              programTitle: selectedProgram.title,
+                              programAnalysis: liveAnalysis || (selectedProgram.analyses && selectedProgram.analyses[0]),
+                            });
+                          }
+                          onClose();
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs transition-all flex items-center space-x-1.5 shadow-md shadow-purple-600/30 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>PSST 사업계획서 생성</span>
+                      </button>
                       <button
                         onClick={() => setActiveTab("viewer")}
                         className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center space-x-1.5"

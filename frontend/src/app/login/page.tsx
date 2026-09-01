@@ -34,6 +34,7 @@ function LoginFormContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Forgot password mode states
   const [isForgotMode, setIsForgotMode] = useState(false);
@@ -124,9 +125,9 @@ function LoginFormContent() {
 
     try {
       const securePassword = await hashClientPassword(password);
-      const res = await backendLogin(email, securePassword);
+      const res = await backendLogin(email, securePassword, rememberMe);
       if (res.accessToken) {
-        saveLocalAuth(res.accessToken, res.user, res.refreshToken);
+        saveLocalAuth(res.accessToken, res.user, res.refreshToken, rememberMe);
       }
       setSuccessMsg("로그인 성공! 이동합니다.");
       setTimeout(() => {
@@ -330,6 +331,24 @@ function LoginFormContent() {
                     className="w-full bg-white border border-slate-300 focus:border-blue-600 focus:ring-1 focus:ring-blue-100 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors shadow-2xs"
                   />
                 </div>
+              </div>
+
+              {/* 로그인 상태 유지 (Remember Me) 체크박스 */}
+              <div className="flex items-center justify-between px-0.5 py-1">
+                <label className="flex items-center space-x-2 cursor-pointer select-none group">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition-colors"
+                  />
+                  <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                    로그인 상태 유지
+                  </span>
+                </label>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  {rememberMe ? "30일간 자동 로그인" : "창 닫을 때 로그아웃"}
+                </span>
               </div>
 
               <button

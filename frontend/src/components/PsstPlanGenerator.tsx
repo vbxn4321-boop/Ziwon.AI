@@ -15,6 +15,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
   initialProgramTitle,
   initialPlanData,
   onBackToNotices,
+  initialProgramAnalysis,
 }) => {
   const {
     userCompany,
@@ -52,7 +53,11 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     handleCopyFullText,
     handleSavePlan,
     handleDownloadPdf,
-  } = usePsstPlan(initialProgramTitle, initialPlanData);
+  } = usePsstPlan(initialProgramTitle, initialPlanData, initialProgramAnalysis);
+
+  // Derive 3-step workflow progress for header
+  const hasValidPlan = !!(generatedResult && generatedResult.overview && generatedResult.overview.title);
+  const currentStep = hasValidPlan ? 3 : isGenerating ? 2 : 1;
 
   return (
     <div className="fixed inset-0 z-50 flex bg-slate-950 text-slate-100 font-sans select-text overflow-hidden">
@@ -71,7 +76,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           setCreationMode={setCreationMode}
           canvasTheme={canvasTheme}
           setCanvasTheme={setCanvasTheme}
-          hasResult={!!generatedResult}
+          hasResult={hasValidPlan}
           isCopied={isCopied}
           onCopyFullText={handleCopyFullText}
           onResetNew={handleResetNew}
@@ -80,6 +85,8 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           isSavingPlan={isSavingPlan}
           saveSuccessMsg={saveSuccessMsg}
           onDownloadPdf={handleDownloadPdf}
+          targetProgramTitle={formData.targetProgramTitle}
+          currentStep={currentStep}
         />
 
         {/* 2-Column Split Workspace */}
@@ -123,6 +130,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
             activeSection={activeSection}
             generatedResult={generatedResult}
             formData={formData}
+            isGenerating={isGenerating}
             isDirectEditing={isDirectEditing}
             setIsDirectEditing={setIsDirectEditing}
             docScrollRef={docScrollRef}
