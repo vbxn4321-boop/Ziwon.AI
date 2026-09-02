@@ -405,18 +405,35 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                   </p>
                 </div>
 
-                {/* Government Subsidy Budget Allocation Table */}
+                {/* Government Subsidy / Non-cash Space Allocation Table */}
                 {generatedResult.scaleUp.budgetTable && generatedResult.scaleUp.budgetTable.length > 0 && (
                   <div className="space-y-2 pt-2">
-                    <h3 className="text-sm font-bold text-purple-300">💰 정부지원금 비목별 소요 예산 집행 계획표</h3>
+                    <h3 className="text-sm font-bold text-purple-300">
+                      {generatedResult.overview.summaryTable?.targetBudget?.includes("비현금성") ||
+                      generatedResult.scaleUp.fundingAndBudgetPlan?.includes("입주")
+                        ? "🏢 입주 공간 활용 및 연계 지원 / 자체 자금 로드맵"
+                        : "💰 정부지원금 비목별 소요 예산 집행 계획표"}
+                    </h3>
                     <div className="overflow-x-auto rounded-xl border border-purple-500/20 bg-slate-950/70">
                       <table className="w-full text-xs text-left">
                         <thead className="bg-purple-950/60 text-purple-200 border-b border-purple-500/20 font-bold">
                           <tr>
-                            <th className="p-2.5">비목 구분</th>
-                            <th className="p-2.5 text-right">집행 금액 (원)</th>
+                            <th className="p-2.5">
+                              {generatedResult.overview.summaryTable?.targetBudget?.includes("비현금성")
+                                ? "추진 구분"
+                                : "비목 구분"}
+                            </th>
+                            <th className="p-2.5 text-right">
+                              {generatedResult.overview.summaryTable?.targetBudget?.includes("비현금성")
+                                ? "소요/확보액"
+                                : "집행 금액 (원)"}
+                            </th>
                             <th className="p-2.5 text-center">비중</th>
-                            <th className="p-2.5">세부 산출 근거 및 내역</th>
+                            <th className="p-2.5">
+                              {generatedResult.overview.summaryTable?.targetBudget?.includes("비현금성")
+                                ? "세부 추진 내용 및 연계 방안"
+                                : "세부 산출 근거 및 내역"}
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800 text-slate-300 text-[11px]">

@@ -1424,12 +1424,12 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     <div className="flex-1 bg-slate-950/70 rounded-2xl border border-slate-800 overflow-hidden flex flex-col min-h-[480px]">
                       {isCurrentPdf ? (
                         /* 1. PDF Documents: Full Viewport PDF Viewer */
-                        <div className="w-full h-full flex-1 flex flex-col min-h-[520px]">
+                        <div className="w-full h-full flex-1 flex flex-col min-h-[750px]">
                           <iframe
                             src={`/api/download?url=${encodeURIComponent(
                               currentDoc.fileUrl
-                            )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
-                            className="w-full h-full flex-1 border-0 rounded-2xl bg-slate-900 min-h-[520px]"
+                            )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true#view=FitH&toolbar=1&navpanes=0`}
+                            className="w-full h-full flex-1 border-0 rounded-2xl bg-white min-h-[750px]"
                             title={currentDoc.fileName}
                           />
                         </div>
@@ -1589,6 +1589,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     doc.fileUrl &&
                     (doc.fileUrl.includes("fileDown.do") ||
                       doc.fileUrl.includes("FileDown.do") ||
+                      doc.fileUrl.includes("afile/fileDownload") ||
                       doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip)$/i));
 
                   const downloadHref = isDirectDownload
@@ -1717,32 +1718,52 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       ))}
                   </div>
 
-                  {/* 신청방법 */}
-                  {kst(["aply_mthd_onli_rcpt_istc", "신청방법"]) && (
+                  {/* 지원규모 및 혜택 */}
+                  {(kst(["supt_amt", "supt_scale", "budget", "지원규모"]) || selectedProgram.budget) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
-                      <p className="text-[10px] font-bold text-amber-400/80">신청방법</p>
-                      <p className="text-xs text-slate-300 leading-relaxed">
-                        {kst(["aply_mthd_onli_rcpt_istc", "신청방법"])}
+                      <p className="text-[10px] font-bold text-amber-400/80">💰 지원 규모 및 선발 혜택</p>
+                      <p className="text-xs text-slate-200 font-semibold leading-relaxed">
+                        {kst(["supt_amt", "supt_scale", "지원규모"]) || selectedProgram.budget}
                       </p>
                     </div>
                   )}
 
                   {/* 지원대상 상세 */}
-                  {kst(["aply_trgt_ctnt", "지원대상"]) && (
+                  {kst(["aply_trgt_ctnt", "지원대상", "신청대상"]) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
-                      <p className="text-[10px] font-bold text-amber-400/80">지원대상 상세</p>
+                      <p className="text-[10px] font-bold text-amber-400/80">🎯 지원대상 상세</p>
                       <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
-                        {kst(["aply_trgt_ctnt", "지원대상"])}
+                        {kst(["aply_trgt_ctnt", "지원대상", "신청대상"])}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 신청 제외대상 / 결격 요건 */}
+                  {kst(["aply_excl_trgt_ctnt", "excl_trgt_ctnt", "제외대상", "결격요건"]) && (
+                    <div className="bg-slate-950/60 rounded-xl p-3 border border-rose-900/40 space-y-1">
+                      <p className="text-[10px] font-bold text-rose-400">🚫 신청 제외 대상 (결격 요건)</p>
+                      <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
+                        {kst(["aply_excl_trgt_ctnt", "excl_trgt_ctnt", "제외대상", "결격요건"])}
                       </p>
                     </div>
                   )}
 
                   {/* 선정절차 */}
-                  {kst(["slctn_mthd_ctnt", "선정절차"]) && (
+                  {kst(["slctn_mthd_ctnt", "선정절차", "평가방법"]) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
-                      <p className="text-[10px] font-bold text-amber-400/80">선정절차 및 평가방법</p>
+                      <p className="text-[10px] font-bold text-indigo-400">⚖️ 선정절차 및 평가방법</p>
                       <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
-                        {kst(["slctn_mthd_ctnt", "선정절차"])}
+                        {kst(["slctn_mthd_ctnt", "선정절차", "평가방법"])}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 신청방법 */}
+                  {kst(["aply_mthd_onli_rcpt_istc", "신청방법"]) && (
+                    <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
+                      <p className="text-[10px] font-bold text-amber-400/80">📋 신청방법 및 접수처 안내</p>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {kst(["aply_mthd_onli_rcpt_istc", "신청방법"])}
                       </p>
                     </div>
                   )}

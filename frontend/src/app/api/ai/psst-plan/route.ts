@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePsstWithBackend } from "@/lib/backend-client";
 import { generatePsstBusinessPlan, PsstGeneratorInput } from "@/lib/ai/psst-generator";
+import { analyzeProgramForPsst } from "@/lib/parser/outline-extractor";
+import { prisma } from "@/lib/db";
 
 export const maxDuration = 60;
 
@@ -17,6 +19,34 @@ export async function POST(req: NextRequest) {
 
     console.log(`🚀 [PSST Plan API] Generating business plan for: ${body.itemName}...`);
 
+    // Auto-analyze program if targetProgramTitle is provided and grantType is not explicitly set
+    if (!body.grantType && body.targetProgramTitle) {
+      try {
+        const found = await prisma.supportProgram.findFirst({
+          where: { title: { contains: body.targetProgramTitle.slice(0, 20) } },
+          include: { documents: true, sources: true },
+        });
+        if (found) {
+          const docTexts = found.documents.map((d) => d.extractedText || "").filter(Boolean);
+          const rawData = found.sources[0]?.rawData || "";
+          const analysis = analyzeProgramForPsst(
+            found.title,
+            found.targetDescription || "",
+            docTexts,
+            rawData
+          );
+          body.grantType = analysis.grantType;
+          body.extractedOutline = analysis.outlines;
+          body.maxBudgetWon = analysis.maxBudgetWon;
+          console.log(
+            `🎯 [PSST API] Auto-detected grant type: ${analysis.grantType} (${analysis.grantDescription}) | Custom Outlines: ${analysis.outlines.length}`
+          );
+        }
+      } catch (dbErr: any) {
+        console.warn("[PSST API] Program auto-analysis skipped:", dbErr.message);
+      }
+    }
+
     // 1. Generate high-precision PSST Plan using Next.js AI Engine (supports full schema & program analysis context)
     try {
       const plan = await generatePsstBusinessPlan(body);
@@ -25,6 +55,8 @@ export async function POST(req: NextRequest) {
           success: true,
           source: "NEXTJS_NATIVE_GENERATOR",
           plan,
+          grantType: body.grantType || "CASH_GRANT",
+          extractedOutline: body.extractedOutline || [],
           generatedAt: new Date().toISOString(),
         });
       }

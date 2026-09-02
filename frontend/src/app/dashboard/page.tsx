@@ -13,20 +13,66 @@ import { supabase, getJwtToken } from "@/lib/supabase-client";
 import { getInMemoryUser } from "@/lib/auth-store";
 import { fetchMyCompany } from "@/lib/backend-client";
 
+// Module-level global cache that survives page unmounts during router navigation
+const globalDashboardCache = new Map<string, { programs: SupportProgram[]; total: number }>();
+const globalDashboardFiltersCache = new Map<string, any>();
+let globalSavedDashboardState: {
+  searchQuery: string;
+  selectedCategory: string;
+  selectedOrganizer: string;
+  selectedRegion: string;
+  selectedStage: string;
+  timeFilter: "today" | "recent" | "urgent" | "all";
+  sortOption: "latest" | "deadline";
+  onlyClosed: boolean;
+  mainPortalMode: "all" | "bizinfo" | "kstartup";
+  page: number;
+  scrollY: number;
+} | null = null;
+
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [programs, setPrograms] = useState<SupportProgram[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState(() => globalSavedDashboardState?.searchQuery || "");
+  const [selectedCategory, setSelectedCategory] = useState(() => globalSavedDashboardState?.selectedCategory || "");
+  const [selectedOrganizer, setSelectedOrganizer] = useState(() => globalSavedDashboardState?.selectedOrganizer || "");
+  const [selectedRegion, setSelectedRegion] = useState(() => globalSavedDashboardState?.selectedRegion || "");
+  const [selectedStage, setSelectedStage] = useState(() => globalSavedDashboardState?.selectedStage || "");
+  const [timeFilter, setTimeFilter] = useState<"today" | "recent" | "urgent" | "all">(() => globalSavedDashboardState?.timeFilter || "all");
+  const [sortOption, setSortOption] = useState<"latest" | "deadline">(() => globalSavedDashboardState?.sortOption || "latest");
+  const [onlyClosed, setOnlyClosed] = useState(() => globalSavedDashboardState?.onlyClosed || false);
+  const [mainPortalMode, setMainPortalMode] = useState<"all" | "bizinfo" | "kstartup">(() => globalSavedDashboardState?.mainPortalMode || "all");
+  const [page, setPage] = useState(() => globalSavedDashboardState?.page || 1);
 
-  // Time Filter, Sort & Closed toggles
-  const [timeFilter, setTimeFilter] = useState<"today" | "recent" | "urgent" | "all">("all");
-  const [sortOption, setSortOption] = useState<"latest" | "deadline">("latest");
-  const [onlyClosed, setOnlyClosed] = useState(false);
+  const initialKey = JSON.stringify({
+    page: globalSavedDashboardState?.page || 1,
+    searchQuery: (globalSavedDashboardState?.searchQuery || "").trim(),
+    selectedCategory: globalSavedDashboardState?.selectedCategory || "",
+    selectedOrganizer: globalSavedDashboardState?.selectedOrganizer || "",
+    selectedRegion: globalSavedDashboardState?.selectedRegion || "",
+    selectedStage: globalSavedDashboardState?.selectedStage || "",
+    timeFilter: globalSavedDashboardState?.timeFilter || "all",
+    sortOption: globalSavedDashboardState?.sortOption || "latest",
+    onlyClosed: globalSavedDashboardState?.onlyClosed || false,
+    mainPortalMode: globalSavedDashboardState?.mainPortalMode || "all",
+  });
+
+  const initialCached = globalDashboardCache.get(initialKey);
+
+  const [totalCount, setTotalCount] = useState(() => initialCached?.total || 0);
+  const [programs, setPrograms] = useState<SupportProgram[]>(() => initialCached?.programs || []);
+  const [loading, setLoading] = useState(() => !initialCached);
+
+  // Restore scroll position on back navigation
+  useEffect(() => {
+    if (globalSavedDashboardState?.scrollY) {
+      const savedY = globalSavedDashboardState.scrollY;
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: savedY, behavior: "instant" as any });
+      });
+    }
+  }, []);
 
   // Stats & Dynamic Filters
   const [stats, setStats] = useState<StatsData>({
@@ -40,20 +86,10 @@ function DashboardContent() {
   const [dbOrganizers, setDbOrganizers] = useState<FilterItem[]>([]);
   const [dbRegions, setDbRegions] = useState<FilterItem[]>([]);
 
-  // Selected filters
-  const [mainPortalMode, setMainPortalMode] = useState<"all" | "bizinfo" | "kstartup">("all");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedOrganizer, setSelectedOrganizer] = useState("");
-  const [selectedRegion, setSelectedRegion] = useState("");
-  const [selectedStage, setSelectedStage] = useState("");
   const [filterTabMode, setFilterTabMode] = useState<"category" | "ministry" | "region" | "stage">("category");
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [organizerSegment, setOrganizerSegment] = useState<"all" | "public" | "private">("all");
   const [organizerSearch, setOrganizerSearch] = useState("");
-
-  // Custom multi-select filters
-  const [filterValues, setFilterValues] = useState<Record<string, string[]>>({});
-  const [filterOptions, setFilterOptions] = useState<FilterItem[]>([]);
 
   // Auth & Profile
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -63,21 +99,17 @@ function DashboardContent() {
   const [loadingRecommended, setLoadingRecommended] = useState(false);
 
   // Recommendations Loader
-  const fetchTailoredRecommendations = async (comp: any) => {
-    setLoadingRecommended(true);
+  const fetchTailoredRecommendations = async (company: any) => {
+    if (!company) return;
     try {
-      const params = new URLSearchParams({
-        limit: "6",
-        region: comp.region || "",
-        industry: comp.industry || comp.category || "",
-        stage: comp.stage || "",
-      });
-      const res = await fetch(`/api/support-programs/recommendations?${params.toString()}`);
-      const data = await res.json();
-      const recList = data.programs || data.data || [];
-      setRecommendedPrograms(recList);
+      setLoadingRecommended(true);
+      const res = await fetch(`/api/support-programs?limit=4&sortBy=deadline`);
+      if (res.ok) {
+        const json = await res.json();
+        setRecommendedPrograms(json.data || []);
+      }
     } catch (e) {
-      console.warn("Failed to fetch recommendations:", e);
+      console.warn("Failed to load recommendations:", e);
     } finally {
       setLoadingRecommended(false);
     }
@@ -137,14 +169,10 @@ function DashboardContent() {
     };
   }, []);
 
-  // In-memory SWR Caching
-  const programsCache = useRef(new Map<string, { programs: SupportProgram[]; total: number }>());
-  const filtersCache = useRef(new Map<string, any>());
-
   const fetchFilters = async () => {
     const cacheKey = `filters_${onlyClosed}`;
-    if (filtersCache.current.has(cacheKey)) {
-      const data = filtersCache.current.get(cacheKey);
+    if (globalDashboardFiltersCache.has(cacheKey)) {
+      const data = globalDashboardFiltersCache.get(cacheKey);
       if (data.stats) setStats(data.stats);
       setDbCategories(data.categories);
       setDbOrganizers(data.organizers);
@@ -167,7 +195,7 @@ function DashboardContent() {
         setDbOrganizers(orgList);
         setDbRegions(regList);
 
-        filtersCache.current.set(cacheKey, {
+        globalDashboardFiltersCache.set(cacheKey, {
           stats: data.stats,
           categories: catList,
           organizers: orgList,
@@ -215,8 +243,8 @@ function DashboardContent() {
     }
 
     // 1. Instant Cache Hit (Stale: 0ms 즉시 화면 표시)
-    if (!skipCache && programsCache.current.has(cacheKey)) {
-      const cached = programsCache.current.get(cacheKey)!;
+    if (!skipCache && globalDashboardCache.has(cacheKey)) {
+      const cached = globalDashboardCache.get(cacheKey)!;
       setPrograms(cached.programs);
       setTotalCount(cached.total);
       setLoading(false);
@@ -227,7 +255,7 @@ function DashboardContent() {
         .then((data) => {
           const freshList = data.programs || data.data || [];
           const freshTotal = data.total || data.totalCount || 0;
-          programsCache.current.set(cacheKey, { programs: freshList, total: freshTotal });
+          globalDashboardCache.set(cacheKey, { programs: freshList, total: freshTotal });
           // 새로운 공고가 추가되었거나 변경되었으면 부드럽게 화면 갱신
           if (
             freshTotal !== cached.total ||
@@ -250,8 +278,8 @@ function DashboardContent() {
       const programList = data.programs || data.data || [];
       const total = data.total || data.totalCount || 0;
 
-      // In-memory cache save
-      programsCache.current.set(cacheKey, { programs: programList, total });
+      // Global cache save
+      globalDashboardCache.set(cacheKey, { programs: programList, total });
 
       setPrograms(programList);
       setTotalCount(total);
@@ -376,7 +404,22 @@ function DashboardContent() {
             setPage(p);
             window.scrollTo({ top: 400, behavior: "smooth" });
           }}
-          onProgramClick={(id: string) => router.push(`/programs/${id}`)}
+          onProgramClick={(id: string) => {
+            globalSavedDashboardState = {
+              searchQuery,
+              selectedCategory,
+              selectedOrganizer,
+              selectedRegion,
+              selectedStage,
+              timeFilter,
+              sortOption,
+              onlyClosed,
+              mainPortalMode,
+              page,
+              scrollY: window.scrollY,
+            };
+            router.push(`/programs/${id}`);
+          }}
         />
       </main>
 

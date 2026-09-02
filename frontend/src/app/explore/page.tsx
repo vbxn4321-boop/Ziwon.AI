@@ -11,18 +11,40 @@ import { supabase, getJwtToken } from "@/lib/supabase-client";
 import { getInMemoryUser } from "@/lib/auth-store";
 import { fetchMyCompany } from "@/lib/backend-client";
 
+// Module-level global cache that survives page unmounts during router navigation
+const globalExploreCache = new Map<string, { programs: SupportProgram[]; total: number }>();
+let globalSavedExploreState: {
+  searchQuery: string;
+  selectedStage: string;
+  selectedCategory: string;
+  selectedRegion: string;
+  page: number;
+  scrollY: number;
+} | null = null;
+
 function ExploreContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStage, setSelectedStage] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedRegion, setSelectedRegion] = useState("");
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [programs, setPrograms] = useState<SupportProgram[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState(() => globalSavedExploreState?.searchQuery || "");
+  const [selectedStage, setSelectedStage] = useState(() => globalSavedExploreState?.selectedStage || "");
+  const [selectedCategory, setSelectedCategory] = useState(() => globalSavedExploreState?.selectedCategory || "");
+  const [selectedRegion, setSelectedRegion] = useState(() => globalSavedExploreState?.selectedRegion || "");
+  const [page, setPage] = useState(() => globalSavedExploreState?.page || 1);
+
+  const initialKey = JSON.stringify({
+    page: globalSavedExploreState?.page || 1,
+    searchQuery: (globalSavedExploreState?.searchQuery || "").trim(),
+    selectedStage: globalSavedExploreState?.selectedStage || "",
+    selectedCategory: globalSavedExploreState?.selectedCategory || "",
+    selectedRegion: globalSavedExploreState?.selectedRegion || "",
+  });
+
+  const initialCached = globalExploreCache.get(initialKey);
+
+  const [totalCount, setTotalCount] = useState(() => initialCached?.total || 0);
+  const [programs, setPrograms] = useState<SupportProgram[]>(() => initialCached?.programs || []);
+  const [loading, setLoading] = useState(() => !initialCached);
 
   // Auth & Profile
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -30,6 +52,16 @@ function ExploreContent() {
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [recommendedPrograms, setRecommendedPrograms] = useState<SupportProgram[]>([]);
   const [loadingRecommended, setLoadingRecommended] = useState(false);
+
+  // Restore scroll position on back navigation
+  useEffect(() => {
+    if (globalSavedExploreState?.scrollY) {
+      const savedY = globalSavedExploreState.scrollY;
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: savedY, behavior: "instant" as any });
+      });
+    }
+  }, []);
 
   // Recommendations Loader
   const fetchTailoredRecommendations = async (company: any) => {
@@ -101,9 +133,6 @@ function ExploreContent() {
     };
   }, []);
 
-  // In-memory SWR Caching
-  const programsCache = useRef(new Map<string, { programs: SupportProgram[]; total: number }>());
-
   const fetchPrograms = async (skipCache = false) => {
     const cacheKey = JSON.stringify({
       page,
@@ -123,8 +152,8 @@ function ExploreContent() {
     });
 
     // 1. Instant Cache Hit (Stale: 0ms 즉시 화면 표시)
-    if (!skipCache && programsCache.current.has(cacheKey)) {
-      const cached = programsCache.current.get(cacheKey)!;
+    if (!skipCache && globalExploreCache.has(cacheKey)) {
+      const cached = globalExploreCache.get(cacheKey)!;
       setPrograms(cached.programs);
       setTotalCount(cached.total);
       setLoading(false);
@@ -135,7 +164,7 @@ function ExploreContent() {
         .then((data) => {
           const freshList = data.programs || data.data || [];
           const freshTotal = data.total || data.totalCount || 0;
-          programsCache.current.set(cacheKey, { programs: freshList, total: freshTotal });
+          globalExploreCache.set(cacheKey, { programs: freshList, total: freshTotal });
           if (
             freshTotal !== cached.total ||
             JSON.stringify(freshList.map((p: any) => p.id)) !==
@@ -157,8 +186,8 @@ function ExploreContent() {
       const programList = data.programs || data.data || [];
       const total = data.total || data.totalCount || 0;
 
-      // In-memory cache save
-      programsCache.current.set(cacheKey, { programs: programList, total });
+      // Module-level global cache save
+      globalExploreCache.set(cacheKey, { programs: programList, total });
 
       setPrograms(programList);
       setTotalCount(total);
@@ -251,7 +280,17 @@ function ExploreContent() {
             setPage(p);
             window.scrollTo({ top: 300, behavior: "smooth" });
           }}
-          onProgramClick={(id: string) => router.push(`/programs/${id}`)}
+          onProgramClick={(id: string) => {
+            globalSavedExploreState = {
+              searchQuery,
+              selectedStage,
+              selectedCategory,
+              selectedRegion,
+              page,
+              scrollY: window.scrollY,
+            };
+            router.push(`/programs/${id}`);
+          }}
           timeFilter="all"
           onlyClosed={false}
         />

@@ -49,6 +49,12 @@ export interface PsstGeneratorInput {
   targetProgramTitle?: string;
   /** 연계 공고의 AI 심층분석 데이터 — 공고 특성에 맞춘 맞춤형 사업계획서 작성에 사용 */
   programAnalysis?: ProgramAnalysisContext;
+  /** 공고문/서식에서 추출된 맞춤 목차 목록 */
+  extractedOutline?: string[];
+  /** 지원사업 성격 (직접 현금 지원 vs 비현금성 입주/보육/바우처) */
+  grantType?: "CASH_GRANT" | "NON_CASH_INCUBATION" | "VOUCHER_SERVICE" | "CONTEST";
+  /** 공고의 최대 지원 상한액 (원 단위) */
+  maxBudgetWon?: number;
 }
 
 export interface PsstBusinessPlanResult {
@@ -163,6 +169,53 @@ export async function generatePsstBusinessPlan(
   const ai = new GoogleGenAI({ apiKey });
   const candidateModels = getCandidateModels("reasoning");
 
+  // Determine budget directive based on grantType
+  let budgetDirective = "";
+  const isNonCash = input.grantType === "NON_CASH_INCUBATION";
+  const isVoucher = input.grantType === "VOUCHER_SERVICE";
+  const isContest = input.grantType === "CONTEST";
+
+  if (isNonCash) {
+    budgetDirective = `
+🚨 [초특급 필수 지침 — 비현금성 입주/보육 공고이므로 허위 예산(Hallucination) 생성 절대 금지]:
+- 본 공고는 '창업보육센터/인큐베이팅룸 입주 공간 지원' 공고이며, 현금 사업비가 직접 교부되지 않습니다.
+- 따라서 '정부지원금 7,000만원', '외주용역비 3,000만원' 등 정부지원금 현금 예산표를 절대 임의로 지어내지 마십시오.
+- overview.summaryTable.targetBudget에는 "비현금성 지원 (창업보육 및 사무공간 무상/할인 제공)"으로 표기하십시오.
+- scaleUp.fundingAndBudgetPlan에는 '입주 공간 활용 계획 및 보육센터 프로그램(멘토링, 네트워킹, 투자유치) 연계 활용 방안, 자체 자금 조달 로드맵'을 서술하십시오.
+- scaleUp.budgetTable에는 정부지원금 대신 '1) 입주 공간 활용 계획', '2) 센터 보육 프로그램 연계', '3) 자체 개발 자금 조달', '4) 민간 투자 유치 계획'을 항목으로 구성하십시오.
+`;
+  } else if (isVoucher) {
+    budgetDirective = `
+🚨 [바우처/서비스 지원 공고 지침]:
+- 본 공고는 바우처/전문 컨설팅/특허출원 지원 사업입니다. 바우처 및 서비스 활용 계획 중심으로 서술하고 허위 현금 교부 예산을 지어내지 마십시오.
+`;
+  } else if (isContest) {
+    budgetDirective = `
+🚨 [아이디어 공모전 / 경진대회 지침]:
+- 본 공고는 아이디어 공모전/경진대회(시상금 포상)입니다. 공모전 심사 기준에 맞춘 아이디어 독창성과 실현 계획 중심으로 서술하십시오.
+`;
+  } else {
+    budgetDirective = `
+💰 [현금 사업화 자금 지원사업 예산 편성 지침]:
+- 본 지원사업은 정부지원금(사업화자금) 지급 사업입니다. ${
+      input.maxBudgetWon
+        ? `공고의 최대 지원금인 ${(input.maxBudgetWon / 10_000_000).toLocaleString()}천만원 이내에서`
+        : "공고 성격에 맞는 적정 사업비(5천만원~1억원 선) 범위 내에서"
+    } 타당한 비목(인건비, 시제품제작비, 지재권취득비, 마케팅비)으로 예산 집행표를 정밀하게 편성하십시오.
+`;
+  }
+
+  // Custom outline directive if provided from HWP/PDF form
+  const outlineDirective =
+    input.extractedOutline && input.extractedOutline.length >= 2
+      ? `
+📋 [공고 공식 서식 목차 1:1 맞춤 지침]:
+첨부된 공식 서식 파일에서 다음 목차가 감지되었습니다:
+${input.extractedOutline.map((o, idx) => `  ${idx + 1}. ${o}`).join("\n")}
+위 공식 서식의 소제목과 목차 구성을 각 섹션(problem, solution, scaleUp, team)에 충실히 반영하여 작성하십시오.
+`
+      : "";
+
   // Build program-specific context block if analysis data is provided
   const programContextBlock = input.programAnalysis
     ? `
@@ -189,13 +242,16 @@ ${(input.programAnalysis.summaryReport || []).map((step, i) => `  STEP ${i + 1}:
 - 허용 업종: ${(input.programAnalysis.targetEligibility?.allowedIndustries || ["전 분야"]).join(", ")}
 - 지원 규모: ${input.programAnalysis.budgetAndAmount?.summary || "공고문 참조"}
 
+${budgetDirective}
+${outlineDirective}
+
 [공고 맞춤 작성 필수 지시사항]
 1. 위 배점 기준에서 배점이 높은 항목일수록 해당 PSST 섹션의 분량과 구체성을 대폭 강화하십시오.
 2. 주관기관의 핵심 KPI(고용창출, 매출증대, 기술이전 등)가 사업계획서 전체에 관통하도록 서술하십시오.
 3. 가점 요건(특허, 청년/여성 창업, 벤처인증, 지역 소재 등)에 해당하는 경우 각 섹션에서 반드시 명시적으로 어필하십시오.
 4. 지역 기반 공고라면 지역 경제 기여, 지역 일자리 창출, 정주 여건 개선을 모든 섹션에 녹여내십시오.
 `
-    : `\n[목표 지원사업]: ${input.targetProgramTitle || "중소벤처기업부 예비/초기 창업지원사업"}\n표준 PSST 프레임워크로 범용 사업계획서를 작성하세요.`;
+    : `\n[목표 지원사업]: ${input.targetProgramTitle || "중소벤처기업부 예비/초기 창업지원사업"}\n${budgetDirective}\n${outlineDirective}\n표준 PSST 프레임워크로 맞춤형 사업계획서를 작성하세요.`;
 
   const prompt = `
 [역할]
