@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { scrapeMissingAttachments } from "@/lib/parser/attachment-scraper";
 
-export const maxDuration = 30;
+export const maxDuration = 60; // 60s max execution time for scraping and syncing attachments
 
 export async function GET(
   req: NextRequest,
@@ -32,13 +32,16 @@ export async function GET(
       );
     }
 
+    const forceRefresh = req.nextUrl.searchParams.get("refresh") === "true";
+
     // Auto-resolve real binary attachment links if missing, pointing to webpage URL, or having corrupted text
     const needsScraping =
+      forceRefresh ||
       program.documents.length === 0 ||
       program.documents.some(
         (d) =>
           d.fileUrl.includes("selectSIIA200Detail") ||
-          d.fileUrl.includes("k-startup.go.kr") ||
+          d.fileUrl.includes("bizpbanc-ongoing.do") ||
           (d.extractedText && d.extractedText.includes("html lang style")) ||
           (d.extractedText && d.extractedText.includes(".basic-btn"))
       );

@@ -104,12 +104,41 @@ ${JSON.stringify(currentPlan, null, 2)}
     // Case 2: Full Plan Generation when information is sufficient
     if (isExplicitGenerateTrigger && isInformationSufficient) {
       console.log("🚀 [PSST Chat] Sufficient PSST dialogue context collected! Generating business plan with tables...");
+      
+      let grantType: any = "CASH_GRANT";
+      let extractedOutline: string[] = [];
+      let maxBudgetWon: number | undefined = undefined;
+
+      if (targetProgramTitle) {
+        try {
+          const { prisma } = await import("@/lib/db");
+          const found = await prisma.supportProgram.findFirst({
+            where: { title: { contains: targetProgramTitle.slice(0, 20) } },
+            include: { documents: true, sources: true },
+          });
+          if (found) {
+            const { analyzeProgramForPsst } = await import("@/lib/parser/outline-extractor");
+            const docTexts = found.documents.map((d) => d.extractedText || "").filter(Boolean);
+            const rawData = found.sources[0]?.rawData || "";
+            const analysis = analyzeProgramForPsst(found.title, found.targetDescription || "", docTexts, rawData);
+            grantType = analysis.grantType;
+            extractedOutline = analysis.outlines;
+            maxBudgetWon = analysis.maxBudgetWon;
+          }
+        } catch (e: any) {
+          console.warn("[PSST Chat] Program auto-analysis skipped:", e.message);
+        }
+      }
+
       const planInput: PsstGeneratorInput = {
         companyName: "예비창업기업",
         itemName: "대화 내용 기반 맞춤형 창업 아이템",
         industry: "대화 기반 신산업",
         itemDescription: `[사용자와의 1:1 심층 인터뷰 대화 전문]\n${conversationSummary}\n\n위 대화에서 사용자가 직접 언급한 실제 창업 아이템, 타겟 고객, 기술적 차별점, 문제점, 사업 모델, 팀 역량을 100% 정확하게 추출하여 PSST 사업계획서 전문을 완성해 주세요.`,
         targetProgramTitle: targetProgramTitle || "2026년 중소벤처기업부 초기창업패키지",
+        grantType,
+        extractedOutline,
+        maxBudgetWon,
       };
 
       const planResult = await generatePsstBusinessPlan(planInput);

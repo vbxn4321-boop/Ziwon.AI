@@ -257,16 +257,16 @@ export async function extractTextFromUrl(fileUrl: string, fileType: string): Pro
     // Python backend not running or network issue, smoothly fallback to Node parser
   }
 
-  // 2. Node.js local fallback parser
-  try {
-    const res = await fetch(fileUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Referer: "https://www.bizinfo.go.kr",
-      },
-      signal: AbortSignal.timeout(8000),
-    });
+    // 2. Node.js local fallback parser
+    try {
+      const res = await fetch(fileUrl, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Referer: "https://www.bizinfo.go.kr",
+        },
+        signal: AbortSignal.timeout(30000), // Solid 30s timeout for document downloading
+      });
 
     if (!res.ok) {
       throw new Error(`Failed to fetch file from URL (HTTP ${res.status}): ${fileUrl}`);

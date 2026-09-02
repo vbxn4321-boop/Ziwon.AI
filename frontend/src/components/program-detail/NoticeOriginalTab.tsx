@@ -1,11 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   FileText,
   RefreshCw,
   ExternalLink,
   Download,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
 } from "lucide-react";
 
 interface NoticeOriginalTabProps {
@@ -21,6 +24,7 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
   setSelectedDocIndex,
   onRefresh,
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const currentDoc = sortedDocs[selectedDocIndex] || sortedDocs[0] || null;
   const isCurrentPdf =
     currentDoc?.fileType?.toUpperCase() === "PDF" || currentDoc?.fileName?.toLowerCase().endsWith(".pdf");
@@ -82,7 +86,11 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
 
       {/* Main Viewer Canvas */}
       {currentDoc && (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col min-h-[650px]">
+        <div
+          className={`bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col transition-all duration-200 ${
+            isExpanded ? "min-h-[1150px] h-[95vh]" : "min-h-[900px] h-[85vh]"
+          }`}
+        >
           {/* Viewer Header */}
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2 text-xs">
             <div className="flex items-center space-x-2 min-w-0">
@@ -91,18 +99,30 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
             </div>
             <div className="flex items-center space-x-2">
               {isCurrentPdf && (
-                <a
-                  href={`/api/download?url=${encodeURIComponent(
-                    currentDoc.fileUrl
-                  )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors flex items-center space-x-1 font-semibold shadow-2xs"
-                  title="새 창으로 크게 보기"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
-                  <span>새 창 열기</span>
-                </a>
+                <>
+                  {/* Height Toggle (A4 Large / Standard) */}
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors flex items-center space-x-1 font-semibold shadow-2xs cursor-pointer"
+                    title={isExpanded ? "표준 높이로 축소" : "A4 세로 확장 보기"}
+                  >
+                    {isExpanded ? <Minimize2 className="w-3.5 h-3.5 text-slate-600" /> : <Maximize2 className="w-3.5 h-3.5 text-blue-600" />}
+                    <span>{isExpanded ? "표준 크기" : "A4 세로 크게보기"}</span>
+                  </button>
+
+                  <a
+                    href={`/api/download?url=${encodeURIComponent(
+                      currentDoc.fileUrl
+                    )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true#view=FitH`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors flex items-center space-x-1 font-semibold shadow-2xs"
+                    title="새 창으로 크게 보기"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                    <span>새 창 열기</span>
+                  </a>
+                </>
               )}
 
               <a
@@ -119,17 +139,18 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
           </div>
 
           {/* Viewer Body */}
-          <div className="flex-1 bg-[#f8fafc] p-1 flex flex-col min-h-[600px]">
+          <div className="flex-1 bg-[#2b2b2b] p-0 flex flex-col h-full">
             {isCurrentPdf ? (
               <iframe
                 src={`/api/download?url=${encodeURIComponent(
                   currentDoc.fileUrl
-                )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
-                className="w-full flex-1 min-h-[650px] rounded-xl border border-slate-200 bg-white"
+                )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true#view=FitH&toolbar=1&navpanes=0`}
+                className="w-full flex-1 h-full border-0 bg-white"
+                style={{ minHeight: isExpanded ? "1100px" : "850px" }}
                 title={currentDoc.fileName}
               />
             ) : (
-              <div className="flex-1 p-6 text-slate-800 space-y-4 max-h-[650px] overflow-y-auto custom-scrollbar">
+              <div className="flex-1 p-6 text-slate-800 space-y-4 max-h-[850px] overflow-y-auto custom-scrollbar bg-slate-50">
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-xs text-blue-800 flex items-center justify-between">
                   <span>💡 한글(HWP) 파일 텍스트 추출본입니다. 표/서식 작성은 상단 [한글 서식 다운로드] 후 한글 오피스에서 직접 진행해 주세요.</span>
                 </div>
