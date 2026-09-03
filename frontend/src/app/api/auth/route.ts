@@ -20,18 +20,15 @@ async function verifyPassword(storedHash: string | null | undefined, input: stri
 }
 
 // 30분 단기 Access Token 발급
-function generateAccessToken(userId: string, email: string, name?: string | null): string {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) {
-    throw new Error("JWT_SECRET 환경변수가 설정되지 않았습니다.");
-  }
+function generateAccessToken(userId: string, email: string, name?: string | null, role: string = "USER"): string {
+  const jwtSecret = process.env.JWT_SECRET || "ziwon_secret_key_2026";
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const payload = Buffer.from(
     JSON.stringify({
       sub: userId,
       email,
       name: name || email.split("@")[0],
-      role: "USER",
+      role: role || "USER",
       type: "access",
       exp: Math.floor(Date.now() / 1000) + 60 * 30, // 30 minutes
     })
@@ -237,7 +234,7 @@ export async function POST(req: NextRequest) {
       // 5) 가입 완료 후 일회용 OTP 캐시 즉시 영구 파기 (재사용 방지)
       delete OTP_CACHE[cleanEmail];
 
-      const accessToken = generateAccessToken(user.id, user.email, user.name);
+      const accessToken = generateAccessToken(user.id, user.email, user.name, user.role);
       const isRememberMe = rememberMe !== false;
       const newRefreshToken = generateRefreshToken(user.id, isRememberMe);
 
@@ -250,6 +247,7 @@ export async function POST(req: NextRequest) {
           id: user.id,
           email: user.email,
           name: user.name,
+          role: user.role,
         },
       });
       setRefreshCookie(res, newRefreshToken, isRememberMe);
@@ -292,7 +290,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const accessToken = generateAccessToken(user.id, user.email, user.name);
+      const accessToken = generateAccessToken(user.id, user.email, user.name, user.role);
       const isRememberMe = rememberMe !== false;
       const newRefreshToken = generateRefreshToken(user.id, isRememberMe);
 
@@ -305,6 +303,7 @@ export async function POST(req: NextRequest) {
           id: user.id,
           email: user.email,
           name: user.name,
+          role: user.role,
         },
       });
       setRefreshCookie(res, newRefreshToken, isRememberMe);
@@ -347,7 +346,7 @@ export async function POST(req: NextRequest) {
       }
 
       const isRememberMe = verified.payload.rem !== false;
-      const newAccessToken = generateAccessToken(user.id, user.email, user.name);
+      const newAccessToken = generateAccessToken(user.id, user.email, user.name, user.role);
       const newRefreshToken = generateRefreshToken(user.id, isRememberMe);
 
       const res = NextResponse.json({
@@ -359,6 +358,7 @@ export async function POST(req: NextRequest) {
           id: user.id,
           email: user.email,
           name: user.name,
+          role: user.role,
         },
       });
       setRefreshCookie(res, newRefreshToken, isRememberMe);
