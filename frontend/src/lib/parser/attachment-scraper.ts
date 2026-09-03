@@ -32,7 +32,7 @@ export async function scrapeMissingAttachments(
 
     if (!res.ok) return [];
 
-    const html = await res.text();
+    let html = await res.text();
     const urlObj = new URL(sourceUrl);
 
     // Helper to resolve absolute URL
@@ -42,6 +42,27 @@ export async function scrapeMissingAttachments(
       if (!clean.startsWith("http")) return `${urlObj.origin}/${clean}`;
       return clean;
     };
+
+    // Follow K-Startup client-side JS redirects (e.g., from ongoing to deadline notice URL)
+    const jsRedirectMatch = html.match(/var\s+fullUrl\s*=\s*['"]([^'"]+)['"]/i);
+    if (jsRedirectMatch && jsRedirectMatch[1]) {
+      const redirectUrl = toAbsoluteUrl(jsRedirectMatch[1]);
+      console.log(`🔍 [Dynamic Scraper] Following K-Startup JS redirect to: ${redirectUrl}`);
+      try {
+        const redirRes = await fetch(redirectUrl, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (redirRes.ok) {
+          html = await redirRes.text();
+        }
+      } catch (redirErr: any) {
+        console.warn("[Dynamic Scraper] Failed to follow K-Startup JS redirect:", redirErr.message);
+      }
+    }
 
     const candidateEntries: Array<{ url: string; fallbackName: string }> = [];
 
@@ -258,6 +279,23 @@ export async function scrapeMissingAttachments(
 
       await prisma.supportDocument.createMany({
         data: docRecords,
+      });
+    } else {
+      // Mark as scraped: No binary attachment files on original website (Online URL form or notice-only)
+      console.log(`ℹ️ [Dynamic Scraper] No binary attachments on page. Recording NOTICE_ONLY to prevent re-scraping...`);
+      await prisma.supportDocument.deleteMany({
+        where: { supportProgramId },
+      });
+      await prisma.supportDocument.create({
+        data: {
+          id: randomUUID(),
+          supportProgramId,
+          fileName: "[온라인 신청 공고] 별도 서식 파일 없음 (원문 웹페이지 직접 접수)",
+          fileUrl: sourceUrl,
+          fileType: "NOTICE_ONLY",
+          status: "PARSED",
+          extractedText: "본 공고는 별도의 HWP/PDF 서식 파일이 제공되지 않으며, 원문 웹페이지의 온라인 신청 폼 또는 접수처 링크를 통해 직접 신청하는 지원사업입니다.",
+        },
       });
     }
 

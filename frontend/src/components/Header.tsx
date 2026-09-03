@@ -204,6 +204,16 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right: Auth & Profile */}
           <div className="flex items-center space-x-2">
+            {mounted &&
+              (sessionUser?.role === "ADMIN" || sessionUser?.email === "qjawls2617@naver.com") && (
+                <Link
+                  href="/admin"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 text-[11px] font-bold transition-all flex items-center space-x-1 shadow-xs"
+                  title="운영 관리자 센터 (관리자 전용)"
+                >
+                  <span>⚙️ 관리자</span>
+                </Link>
+              )}
             {mounted && sessionUser ? (
               <div className="flex items-center space-x-2">
                 <button

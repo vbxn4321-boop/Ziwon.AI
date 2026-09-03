@@ -34,16 +34,27 @@ export async function GET(
 
     const forceRefresh = req.nextUrl.searchParams.get("refresh") === "true";
 
-    // Auto-resolve real binary attachment links if missing, pointing to webpage URL, or having corrupted text
+    // Check if notice already has documents or has already been checked/enriched
+    const alreadyEnriched = program.sources.some(
+      (s) =>
+        s.rawData &&
+        (s.rawData.includes("신청방법") ||
+          s.rawData.includes("지원내용") ||
+          s.rawData.includes("공고소개") ||
+          s.rawData.includes("문의처"))
+    );
+
+    // Auto-resolve real binary attachment links if missing and never checked, or having legacy corrupted text
     const needsScraping =
       forceRefresh ||
-      program.documents.length === 0 ||
+      (program.documents.length === 0 && !alreadyEnriched) ||
       program.documents.some(
         (d) =>
-          d.fileUrl.includes("selectSIIA200Detail") ||
-          d.fileUrl.includes("bizpbanc-ongoing.do") ||
-          (d.extractedText && d.extractedText.includes("html lang style")) ||
-          (d.extractedText && d.extractedText.includes(".basic-btn"))
+          d.fileType !== "NOTICE_ONLY" &&
+          (d.fileUrl.includes("selectSIIA200Detail") ||
+            d.fileUrl.includes("bizpbanc-ongoing.do") ||
+            (d.extractedText && d.extractedText.includes("html lang style")) ||
+            (d.extractedText && d.extractedText.includes(".basic-btn")))
       );
 
     if (needsScraping && program.sources.length > 0) {

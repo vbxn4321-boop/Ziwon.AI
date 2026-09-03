@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import uuid
 import json
 import httpx
@@ -7,6 +8,13 @@ import xml.etree.ElementTree as ET
 from sqlalchemy import text
 from app.core.database import SessionLocal
 from app.core.config import settings
+from app.services.dedup_service import normalize_title, DedupService
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 class CrawlerService:
     @staticmethod
@@ -78,7 +86,13 @@ class CrawlerService:
                     try:
                         res = await client.get(
                             data_gokr_url,
-                            params={"serviceKey": key_attempt, "pageNo": 1, "numOfRows": num_rows}
+                            params={
+                                "serviceKey": key_attempt,
+                                "page": 1,
+                                "perPage": num_rows,
+                                "pageNo": 1,
+                                "numOfRows": num_rows,
+                            }
                         )
                         if res.status_code == 200:
                             text_content = res.text
@@ -270,8 +284,22 @@ class CrawlerService:
                 new_count += 1
                 biz_inserted += 1
 
-            # 4. Process K-Startup Items
+            # 4. Process K-Startup Items with Bizinfo-First Canonical Deduplication
             kst_inserted = 0
+            kst_merged_to_biz = 0
+
+            # Preload active programs for fast matching
+            existing_programs_rows = db.execute(text('''
+                SELECT id, title, "endDate"
+                FROM "SupportProgram"
+                WHERE "duplicateStatus" != 'MERGED'
+            ''')).fetchall()
+
+            existing_programs_list = [
+                {"id": r[0], "title": r[1] or "", "endDate": r[2], "normTitle": normalize_title(r[1] or "")}
+                for r in existing_programs_rows
+            ]
+
             for item in kst_items:
                 raw_sn = str(item.get("pbanc_sn") or item.get("prch_cnpl_no") or item.get("공고번호") or item.get("id") or "").strip()
                 if not raw_sn:
@@ -280,8 +308,6 @@ class CrawlerService:
                 if ext_id in existing_ids or raw_sn in existing_ids:
                     continue
 
-                prog_id = str(uuid.uuid4())
-                src_id = str(uuid.uuid4())
                 title = (
                     item.get("biz_pbanc_nm")
                     or item.get("intg_pbanc_biz_nm")
@@ -290,11 +316,8 @@ class CrawlerService:
                     or item.get("사업명")
                     or f"K-Startup 지원사업 {raw_sn}"
                 )
-                organizer = item.get("pbanc_ntrp_nm") or item.get("소관기관") or "중소벤처기업부"
-                exec_agency = item.get("exct_istt_nm") or item.get("수행기관") or "창업진흥원"
-                category = item.get("supt_biz_clsfc") or item.get("지원분야") or "창업/사업화"
-                region = item.get("supt_regin") or item.get("지역") or "전국"
-                target_desc = item.get("aply_trgt_ctnt") or item.get("biz_enyy") or item.get("지원대상") or "창업 7년 이내 기업 및 예비창업자"
+                start_date = parse_date(item.get("pbanc_rcpt_bgng_dt") or item.get("접수시작일시"))
+                end_date = parse_date(item.get("pbanc_rcpt_end_dt") or item.get("접수마감일시"))
                 source_url = (
                     item.get("detl_pg_url")
                     or item.get("aply_mthd_onli_rcpt_istc")
@@ -302,55 +325,116 @@ class CrawlerService:
                     or "https://www.k-startup.go.kr"
                 )
 
-                start_date = parse_date(item.get("pbanc_rcpt_bgng_dt") or item.get("접수시작일시"))
-                end_date = parse_date(item.get("pbanc_rcpt_end_dt") or item.get("접수마감일시"))
+                # Check if this K-Startup notice matches an existing Bizinfo notice (Bizinfo-First Policy)
+                kst_norm = normalize_title(title)
+                matched_canonical_id = None
 
-                db.execute(
-                    text("""
-                    INSERT INTO "SupportProgram" (
-                        "id", "title", "organizer", "executingAgency", "category", "region",
-                        "targetDescription", "startDate", "endDate", "duplicateStatus", "createdAt", "updatedAt"
+                if len(kst_norm) >= 3:
+                    for prog in existing_programs_list:
+                        b_norm = prog["normTitle"]
+                        if not b_norm or len(b_norm) < 3:
+                            continue
+                        
+                        # Match test
+                        is_match = False
+                        if kst_norm == b_norm:
+                            is_match = True
+                        elif kst_norm in b_norm or b_norm in kst_norm:
+                            shorter = min(len(kst_norm), len(b_norm))
+                            longer = max(len(kst_norm), len(b_norm))
+                            if shorter / longer >= 0.7:
+                                is_match = True
+                        
+                        if is_match and DedupService.is_date_compatible(prog["endDate"], end_date):
+                            matched_canonical_id = prog["id"]
+                            break
+
+                src_id = str(uuid.uuid4())
+
+                if matched_canonical_id:
+                    # Duplicate found: DO NOT create new SupportProgram!
+                    # Connect SupportSource to the canonical Bizinfo program instead.
+                    db.execute(
+                        text("""
+                        INSERT INTO "SupportSource" (
+                            "id", "supportProgramId", "sourceType", "externalId", "sourceUrl", "rawTitle", "rawData", "createdAt"
+                        )
+                        VALUES (
+                            :id, :prog_id, 'K_STARTUP', :ext_id, :url, :rawTitle, :rawData, NOW()
+                        )
+                        """),
+                        {
+                            "id": src_id,
+                            "prog_id": matched_canonical_id,
+                            "ext_id": ext_id,
+                            "url": source_url,
+                            "rawTitle": title,
+                            "rawData": json.dumps(item, ensure_ascii=False),
+                        }
                     )
-                    VALUES (
-                        :id, :title, :organizer, :executingAgency, :category, :region,
-                        :targetDescription, :startDate, :endDate, 'UNIQUE', NOW(), NOW()
+                    existing_ids.add(ext_id)
+                    kst_merged_to_biz += 1
+                else:
+                    # Unique new notice: Insert both SupportProgram and SupportSource
+                    prog_id = str(uuid.uuid4())
+                    organizer = item.get("pbanc_ntrp_nm") or item.get("소관기관") or "중소벤처기업부"
+                    exec_agency = item.get("exct_istt_nm") or item.get("수행기관") or "창업진흥원"
+                    category = item.get("supt_biz_clsfc") or item.get("지원분야") or "창업/사업화"
+                    region = item.get("supt_regin") or item.get("지역") or "전국"
+                    target_desc = item.get("aply_trgt_ctnt") or item.get("biz_enyy") or item.get("지원대상") or "창업 7년 이내 기업 및 예비창업자"
+
+                    db.execute(
+                        text("""
+                        INSERT INTO "SupportProgram" (
+                            "id", "title", "organizer", "executingAgency", "category", "region",
+                            "targetDescription", "startDate", "endDate", "duplicateStatus", "createdAt", "updatedAt"
+                        )
+                        VALUES (
+                            :id, :title, :organizer, :executingAgency, :category, :region,
+                            :targetDescription, :startDate, :endDate, 'UNIQUE', NOW(), NOW()
+                        )
+                        """),
+                        {
+                            "id": prog_id,
+                            "title": title,
+                            "organizer": organizer,
+                            "executingAgency": exec_agency,
+                            "category": category,
+                            "region": region,
+                            "targetDescription": target_desc,
+                            "startDate": start_date,
+                            "endDate": end_date,
+                        }
                     )
-                    """),
-                    {
+
+                    db.execute(
+                        text("""
+                        INSERT INTO "SupportSource" (
+                            "id", "supportProgramId", "sourceType", "externalId", "sourceUrl", "rawTitle", "rawData", "createdAt"
+                        )
+                        VALUES (
+                            :id, :prog_id, 'K_STARTUP', :ext_id, :url, :rawTitle, :rawData, NOW()
+                        )
+                        """),
+                        {
+                            "id": src_id,
+                            "prog_id": prog_id,
+                            "ext_id": ext_id,
+                            "url": source_url,
+                            "rawTitle": title,
+                            "rawData": json.dumps(item, ensure_ascii=False),
+                        }
+                    )
+
+                    existing_programs_list.append({
                         "id": prog_id,
                         "title": title,
-                        "organizer": organizer,
-                        "executingAgency": exec_agency,
-                        "category": category,
-                        "region": region,
-                        "targetDescription": target_desc,
-                        "startDate": start_date,
                         "endDate": end_date,
-                    }
-                )
-
-                db.execute(
-                    text("""
-                    INSERT INTO "SupportSource" (
-                        "id", "supportProgramId", "sourceType", "externalId", "sourceUrl", "rawTitle", "rawData", "createdAt"
-                    )
-                    VALUES (
-                        :id, :prog_id, 'K_STARTUP', :ext_id, :url, :rawTitle, :rawData, NOW()
-                    )
-                    """),
-                    {
-                        "id": src_id,
-                        "prog_id": prog_id,
-                        "ext_id": ext_id,
-                        "url": source_url,
-                        "rawTitle": title,
-                        "rawData": json.dumps(item, ensure_ascii=False),
-                    }
-                )
-
-                existing_ids.add(ext_id)
-                new_count += 1
-                kst_inserted += 1
+                        "normTitle": kst_norm
+                    })
+                    existing_ids.add(ext_id)
+                    new_count += 1
+                    kst_inserted += 1
 
             # 5. Log Crawl Result
             db.execute(
@@ -361,8 +445,9 @@ class CrawlerService:
                 {"id": str(uuid.uuid4()), "count": new_count}
             )
             db.commit()
-            print(f"[Crawler Pipeline]: 🎉 DB 적재 완료 - 신규 저장: 총 {new_count}건 (기업마당: {biz_inserted}건, K-Startup: {kst_inserted}건)")
+            print(f"[Crawler Pipeline]: 🎉 DB 적재 완료 - 신규 저장: 총 {new_count}건 (기업마당: {biz_inserted}건, K-Startup 신규: {kst_inserted}건, K-Startup 중복 통합: {kst_merged_to_biz}건)")
             return new_count
+
         except Exception as e:
             db.rollback()
             print(f"[Crawler Pipeline DB Error]: ❌ 데이터베이스 트랜잭션 실패 - {type(e).__name__}: {e}")
