@@ -56,3 +56,8 @@ venv/
 *.pem
 .vscode/
 .idea/
+
+# Scratch & Temporary test scripts
+scratch/
+**/scratch/
+scratch_*
