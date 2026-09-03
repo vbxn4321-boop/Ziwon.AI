@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { HeartbeatSender } from "@/components/telemetry/HeartbeatSender";
 
 export const metadata: Metadata = {
   title: "Ziwon.AI | 기업지원사업 AI Finder & Consulting Platform",
@@ -22,6 +23,7 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased selection:bg-blue-600 selection:text-white">
+        <HeartbeatSender />
         {children}
       </body>
     </html>

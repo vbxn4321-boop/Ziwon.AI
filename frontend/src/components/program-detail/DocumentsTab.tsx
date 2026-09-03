@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { FileText, Download, Eye, X, Copy, Check } from "lucide-react";
+import { FileText, Download, Eye, X, Copy, Check, ExternalLink } from "lucide-react";
 
 interface DocumentsTabProps {
   sortedDocs: any[];
@@ -60,25 +60,37 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ sortedDocs }) => {
                     </button>
                   )}
 
-                  <a
-                    href={
-                      doc.fileUrl.includes("fileDown.do") ||
-                      doc.fileUrl.includes("FileDown.do") ||
-                      doc.fileUrl.includes("afile/fileDownload") ||
-                      doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip)$/i)
-                        ? `/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
-                            doc.fileName
-                          )}`
-                        : doc.fileUrl
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                    download={doc.fileName}
-                    className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors flex items-center space-x-1 font-bold shadow-2xs cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>다운로드</span>
-                  </a>
+                  {doc.fileType === "NOTICE_ONLY" ? (
+                    <a
+                      href={doc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center space-x-1 font-bold shadow-xs cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>원문 웹페이지 바로가기</span>
+                    </a>
+                  ) : (
+                    <a
+                      href={
+                        doc.fileUrl.includes("fileDown.do") ||
+                        doc.fileUrl.includes("FileDown.do") ||
+                        doc.fileUrl.includes("afile/fileDownload") ||
+                        doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip)$/i)
+                          ? `/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
+                              doc.fileName
+                            )}`
+                          : doc.fileUrl
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      download={doc.fileName}
+                      className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors flex items-center space-x-1 font-bold shadow-2xs cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>다운로드</span>
+                    </a>
+                  )}
                 </div>
               </div>
             );

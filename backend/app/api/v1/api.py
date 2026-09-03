@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import health, crawler, parser, psst, users, companies, plans, bookmarks, auth
+from app.api.v1 import health, crawler, parser, psst, users, companies, plans, bookmarks, auth, admin
 
 api_router = APIRouter()
 
@@ -9,6 +9,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["Authentication & O
 api_router.include_router(crawler.router, prefix="/crawler", tags=["Crawler Pipeline"])
 api_router.include_router(parser.router, prefix="/parser", tags=["Document Parser (HWP/PDF)"])
 api_router.include_router(psst.router, prefix="/psst", tags=["PSST AI Generator"])
+api_router.include_router(admin.router, prefix="/admin", tags=["Admin & Deduplication"])
 
 # User Profile & Member Data CRUD
 api_router.include_router(users.router, prefix="/users", tags=["User Profile"])

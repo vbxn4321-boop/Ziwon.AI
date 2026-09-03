@@ -11,6 +11,7 @@ import {
 import { DEFAULT_INITIAL_MESSAGE, DEFAULT_SUGGESTIONS } from "../constants";
 import { savePlanToBackend, fetchMyCompany } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
+import { convertPsstToHwpHtml, copyToHwpClipboard } from "@/lib/export/hwp-clipboard-exporter";
 
 export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any, initialProgramAnalysis?: ProgramAnalysisContext) {
   // Mode: "chat" (AI Chatbot Interview) vs "form" (Quick Form Input)
@@ -411,76 +412,21 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     }
   };
 
-  // 5. Copy Full Markdown Text
-  const handleCopyFullText = () => {
+  // 5. Copy Full HWP Text & HTML
+  const handleCopyFullText = async () => {
     if (!generatedResult) return;
-    const r = generatedResult;
-    const fullText = `
-# [사업계획서] ${r.overview.title}
-- 명칭: ${r.overview.companyName}
-- 범주: ${r.overview.industry}
-- 아이템 개요: ${r.overview.itemSummary}
-
-## ${r.problem.title}
-### 배경 및 필요성
-${r.problem.developmentNecessity}
-
-### 1-1. 시장 및 고객의 문제점
-${r.problem.marketPainPoint}
-
-### 1-2. 타겟 고객의 핵심 불편사항
-${r.problem.targetCustomerProblem}
-
-## ${r.solution.title}
-### 2-1. 핵심 기술 및 해결 방안
-${r.solution.coreTechnologyAndFeatures}
-
-### 2-2. 경쟁사 대비 차별화 요소
-${r.solution.competitorDifferentiation}
-
-### 2-3. 개발 및 사업화 로드맵
-${r.solution.implementationPlan}
-
-## ${r.scaleUp.title}
-### 3-1. 비즈니스 모델 및 수익 구조
-${r.scaleUp.businessModelAndRevenue}
-
-### 3-2. 초기 시장 진입 및 마케팅 전략
-${r.scaleUp.marketEntryAndMarketing}
-
-### 3-3. 자금 조달 및 예산 집행 계획
-${r.scaleUp.fundingAndBudgetPlan}
-
-## ${r.team.title}
-### 4-1. 대표자 및 팀원 보유 역량
-${r.team.founderAndTeamCompetency}
-
-### 4-2. 역할 분장 및 조직 구성
-${r.team.rolesAndResponsibilities}
-
-### 4-3. 외부 협력 네트워크
-${r.team.collaborationNetwork}
-
-## [심사위원 모의 평가 리포트]
-- 종합 점수: ${r.evaluationReport.score}점 (${r.evaluationReport.grade})
-- 총평: ${r.evaluationReport.gradeDescription}
-- 핵심 강점:
-${r.evaluationReport.strengths.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}
-- 감점 방지 보완점:
-${r.evaluationReport.weaknesses.map((w, i) => `  ${i + 1}. ${w}`).join("\n")}
-- 심사위원 면접 예상 Q&A:
-${r.evaluationReport.expectedQuestions
-  .map(
-    (q, i) =>
-      `  Q${i + 1}. ${q.question}\n  (의도: ${q.evaluationIntent})\n  ➔ 추천 방어: ${q.recommendedDefense}`
-  )
-  .join("\n\n")}
-`.trim();
-
-    navigator.clipboard.writeText(fullText);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    try {
+      const hwpHtml = convertPsstToHwpHtml(generatedResult, initialProgramTitle);
+      const success = await copyToHwpClipboard(hwpHtml);
+      if (success) {
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2500);
+      }
+    } catch (err) {
+      console.error("Failed to copy full HWP text:", err);
+    }
   };
+
 
   // 6. Save Plan to Backend Database
   const handleSavePlan = async () => {
