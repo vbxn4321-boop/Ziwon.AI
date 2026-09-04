@@ -21,7 +21,10 @@ async function verifyPassword(storedHash: string | null | undefined, input: stri
 
 // 30분 단기 Access Token 발급
 function generateAccessToken(userId: string, email: string, name?: string | null, role: string = "USER"): string {
-  const jwtSecret = process.env.JWT_SECRET || "ziwon_secret_key_2026";
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("보안을 위해 JWT_SECRET 환경변수가 반드시 설정되어야 합니다.");
+  }
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const payload = Buffer.from(
     JSON.stringify({

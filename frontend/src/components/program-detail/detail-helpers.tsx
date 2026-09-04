@@ -80,3 +80,54 @@ export function renderConditionChips(
     </div>
   );
 }
+
+export type DocCategory = "pdf" | "image" | "hwp" | "docx" | "notice_only" | "etc";
+
+export function getDocCategory(doc?: { fileType?: string | null; fileName?: string | null; fileUrl?: string | null } | null): DocCategory {
+  if (!doc) return "etc";
+  const fType = (doc.fileType || "").toUpperCase();
+  if (fType === "NOTICE_ONLY") return "notice_only";
+  if (fType === "PDF") return "pdf";
+  if (fType === "IMAGE" || fType === "PNG" || fType === "JPG" || fType === "JPEG") return "image";
+  if (fType === "HWP" || fType === "HWPX") return "hwp";
+  if (fType === "DOCX" || fType === "DOC") return "docx";
+
+  const name = (doc.fileName || doc.fileUrl || "").toLowerCase();
+  if (name.endsWith(".pdf")) return "pdf";
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name)) return "image";
+  if (/\.(hwp|hwpx)$/i.test(name)) return "hwp";
+  if (/\.(docx|doc)$/i.test(name)) return "docx";
+  return "etc";
+}
+
+export function getDocBadgeText(category: DocCategory): string {
+  switch (category) {
+    case "pdf":
+      return "PDF 공고문";
+    case "image":
+      return "포스터/이미지";
+    case "hwp":
+      return "HWP 서식";
+    case "docx":
+      return "DOCX 서식";
+    case "notice_only":
+      return "웹 접수 링크";
+    default:
+      return "첨부 서류";
+  }
+}
+
+export function getDocDownloadText(category: DocCategory): string {
+  switch (category) {
+    case "pdf":
+      return "PDF 원본 다운로드";
+    case "image":
+      return "이미지 원본 다운로드";
+    case "hwp":
+      return "한글(HWP) 서식 다운로드";
+    case "docx":
+      return "DOCX 서식 다운로드";
+    default:
+      return "첨부파일 다운로드";
+  }
+}

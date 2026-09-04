@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/ingest",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/admin/pre-scrape",
+      "schedule": "30 18 * * *"
     }
   ]
 }

@@ -96,7 +96,12 @@ function ConsultantContent() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-blue-600 selection:text-white font-sans antialiased">
-      <Header />
+      <Header
+        onSelectPlan={(plan) => {
+          setSelectedPlanToLoad(plan);
+          setIsFullStudioOpen(true);
+        }}
+      />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 space-y-12">
         {/* 1. Top Hero Title & AI Plan Studio Launch Banner */}

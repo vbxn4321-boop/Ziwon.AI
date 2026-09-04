@@ -55,22 +55,11 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
 
   // Initialize or update HTML content when a new AI plan arrives
   useEffect(() => {
-    if (plan && plan.overview?.title) {
-      const planKey = `${plan.overview.title}-${plan.overview.companyName}`;
-      if (planKey !== lastPlanSnapshot) {
-        setLastPlanSnapshot(planKey);
-        const generatedPages = convertPsstToHwpPages(plan, programTitle);
-        setPages(generatedPages);
-        setTimeout(() => {
-          generatedPages.forEach((p, idx) => {
-            if (pageRefs.current[idx]) {
-              pageRefs.current[idx]!.innerHTML = p.html;
-            }
-          });
-        }, 0);
-      }
+    if (plan) {
+      const generatedPages = convertPsstToHwpPages(plan, programTitle);
+      setPages(generatedPages);
     }
-  }, [plan, programTitle, lastPlanSnapshot]);
+  }, [plan, programTitle]);
 
   // Execute formatting command safely on currently active selection
   const formatDoc = (cmd: string, val: string = "") => {
@@ -406,9 +395,14 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
               >
                 {/* Editable Document Page Body */}
                 <div
+                  key={`page-content-${idx}`}
                   ref={(el) => {
                     pageRefs.current[idx] = el;
+                    if (el && (!el.innerHTML || !el.innerHTML.trim())) {
+                      el.innerHTML = page.html;
+                    }
                   }}
+                  dangerouslySetInnerHTML={{ __html: page.html }}
                   contentEditable={isDirectEditing}
                   suppressContentEditableWarning={true}
                   className={`outline-none flex-1 text-slate-900 transition-all ${

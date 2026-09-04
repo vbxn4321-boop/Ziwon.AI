@@ -48,14 +48,20 @@ export async function GET(req: NextRequest) {
 
     // Determine contentType
     let contentType = res.headers.get("content-type") || "application/octet-stream";
-    if (fileName.toLowerCase().endsWith(".pdf")) contentType = "application/pdf";
-    if (fileName.toLowerCase().endsWith(".hwp")) contentType = "application/x-hwp";
-    if (fileName.toLowerCase().endsWith(".hwpx")) contentType = "application/hwp+zip";
-    if (fileName.toLowerCase().endsWith(".docx")) contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const lowerName = fileName.toLowerCase();
+    if (lowerName.endsWith(".pdf")) contentType = "application/pdf";
+    else if (lowerName.endsWith(".png")) contentType = "image/png";
+    else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) contentType = "image/jpeg";
+    else if (lowerName.endsWith(".gif")) contentType = "image/gif";
+    else if (lowerName.endsWith(".webp")) contentType = "image/webp";
+    else if (lowerName.endsWith(".hwp")) contentType = "application/x-hwp";
+    else if (lowerName.endsWith(".hwpx")) contentType = "application/hwp+zip";
+    else if (lowerName.endsWith(".docx")) contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-    // Determine Content-Disposition (inline for PDF viewer, attachment for download)
+    // Determine Content-Disposition (inline for PDF & image viewer, attachment for download)
     const isViewMode = searchParams.get("view") === "true" || searchParams.get("inline") === "true";
-    const dispositionType = isViewMode && contentType === "application/pdf" ? "inline" : "attachment";
+    const isInlineSupported = contentType === "application/pdf" || contentType.startsWith("image/");
+    const dispositionType = isViewMode && isInlineSupported ? "inline" : "attachment";
 
     // Encode filename for RFC 5987 standard
     const encodedFileName = encodeURIComponent(fileName);

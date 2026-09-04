@@ -31,6 +31,10 @@ import {
   ArrowRight,
   Lock,
   Bookmark,
+  Image as ImageIcon,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -39,6 +43,13 @@ import { getJwtToken } from "@/lib/supabase-client";
 import { fetchMyCompany, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import { navigateToPsstStudio } from "@/lib/psst-navigator";
+import {
+  getDocCategory,
+  getDocBadgeText,
+  getDocDownloadText,
+  DocCategory,
+} from "./program-detail/detail-helpers";
+import { HwpExtractedTextViewer } from "./program-detail/HwpExtractedTextViewer";
 
 interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
@@ -365,6 +376,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [programDocs, setProgramDocs] = useState<any[]>(selectedProgram.documents || []);
   const [selectedDocIndex, setSelectedDocIndex] = useState<number>(0);
+  const [modalImageZoom, setModalImageZoom] = useState<number>(1);
   const [showHwpText, setShowHwpText] = useState(false);
   const [viewerSearchQuery, setViewerSearchQuery] = useState<string>("");
   const [isCopied, setIsCopied] = useState(false);
@@ -476,25 +488,24 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
     return null;
   };
 
-  // Prioritize PDF documents first so PDF is shown by default in the viewer
+  // Prioritize PDF documents first, then images, then HWP/others in viewer
   const sortedDocs = useMemo(() => {
     return [...programDocs].sort((a, b) => {
-      const aIsPdf = a.fileType?.toUpperCase() === "PDF" || a.fileName?.toLowerCase().endsWith(".pdf");
-      const bIsPdf = b.fileType?.toUpperCase() === "PDF" || b.fileName?.toLowerCase().endsWith(".pdf");
-      if (aIsPdf && !bIsPdf) return -1;
-      if (!aIsPdf && bIsPdf) return 1;
-      return 0;
+      const aCat = getDocCategory(a);
+      const bCat = getDocCategory(b);
+      const rank = (c: DocCategory) => (c === "pdf" ? 1 : c === "image" ? 2 : c === "hwp" ? 3 : 4);
+      return rank(aCat) - rank(bCat);
     });
   }, [programDocs]);
 
   // Current selected document in viewer
   const currentDoc = sortedDocs[selectedDocIndex] || sortedDocs[0] || null;
-  const isCurrentPdf =
-    currentDoc?.fileType?.toUpperCase() === "PDF" || currentDoc?.fileName?.toLowerCase().endsWith(".pdf");
+  const currentCategory = getDocCategory(currentDoc);
+  const isCurrentPdf = currentCategory === "pdf";
 
   // First PDF document index in sortedDocs (which is always 0 if any PDF exists)
   const firstPdfIndex = sortedDocs.findIndex(
-    (d) => d.fileType?.toUpperCase() === "PDF" || d.fileName?.toLowerCase().endsWith(".pdf")
+    (d) => getDocCategory(d) === "pdf"
   );
 
   // Fetch updated direct download links when modal opens
@@ -1352,34 +1363,40 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                 )
               ) : (
                 <>
-                  {/* File Selector Tabs (PDF listed first) */}
+                  {/* File Selector Tabs */}
                   <div className="flex items-center justify-between flex-wrap gap-2 pb-1 flex-shrink-0">
                     <div className="flex items-center space-x-1.5 overflow-x-auto max-w-full pb-1">
                       {sortedDocs.map((doc, idx) => {
                         const isSelected = selectedDocIndex === idx;
-                        const isPdf =
-                          doc.fileType?.toUpperCase() === "PDF" || doc.fileName?.toLowerCase().endsWith(".pdf");
+                        const cat = getDocCategory(doc);
+                        const badgeLabel = getDocBadgeText(cat);
+
+                        const getBadgeStyle = () => {
+                          if (isSelected) {
+                            if (cat === "pdf") return "bg-blue-600 text-white shadow-md shadow-blue-600/30";
+                            if (cat === "image") return "bg-emerald-600 text-white shadow-md shadow-emerald-600/30";
+                            if (cat === "hwp") return "bg-purple-600 text-white shadow-md shadow-purple-600/30";
+                            return "bg-slate-700 text-white shadow-md";
+                          }
+                          return "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800";
+                        };
+
                         return (
                           <button
                             key={doc.id || idx}
                             onClick={() => {
                               setSelectedDocIndex(idx);
+                              setModalImageZoom(1);
                               setShowHwpText(false);
                             }}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 whitespace-nowrap ${
-                              isSelected
-                                ? isPdf
-                                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
-                                  : "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                                : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
-                            }`}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${getBadgeStyle()}`}
                           >
                             <span
                               className={`text-[10px] px-1 py-0.2 rounded font-bold ${
-                                isPdf ? "bg-blue-900/60 text-blue-200" : "bg-purple-900/60 text-purple-200"
+                                isSelected ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"
                               }`}
                             >
-                              {isPdf ? "PDF 공고문" : "HWP 서식"}
+                              {badgeLabel}
                             </span>
                             <span className="truncate max-w-[180px]">{doc.fileName}</span>
                           </button>
@@ -1390,7 +1407,8 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                     {/* Viewer Controls Toolbar */}
                     {currentDoc && (
                       <div className="flex items-center space-x-2 flex-shrink-0">
-                        {isCurrentPdf && (
+                        {/* PDF Tools */}
+                        {currentCategory === "pdf" && (
                           <a
                             href={`/api/download?url=${encodeURIComponent(
                               currentDoc.fileUrl
@@ -1405,15 +1423,67 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                           </a>
                         )}
 
+                        {/* Image Tools */}
+                        {currentCategory === "image" && (
+                          <>
+                            <div className="flex items-center space-x-1 bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                              <button
+                                onClick={() => setModalImageZoom((prev) => Math.max(0.5, prev - 0.25))}
+                                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+                                title="축소"
+                              >
+                                <ZoomOut className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="text-[11px] font-bold text-slate-300 px-1 min-w-[42px] text-center">
+                                {Math.round(modalImageZoom * 100)}%
+                              </span>
+                              <button
+                                onClick={() => setModalImageZoom((prev) => Math.min(3, prev + 0.25))}
+                                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+                                title="확대"
+                              >
+                                <ZoomIn className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setModalImageZoom(1)}
+                                className="p-1 hover:bg-slate-800 rounded text-slate-500 hover:text-slate-300 cursor-pointer"
+                                title="원본 크기 초기화"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            <a
+                              href={`/api/download?url=${encodeURIComponent(
+                                currentDoc.fileUrl
+                              )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors flex items-center space-x-1 text-xs"
+                              title="이미지 새 창 열기"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="text-[11px] hidden sm:inline">새 창 열기</span>
+                            </a>
+                          </>
+                        )}
+
+                        {/* Universal Download Action */}
                         <a
                           href={`/api/download?url=${encodeURIComponent(currentDoc.fileUrl)}&filename=${encodeURIComponent(
                             currentDoc.fileName
                           )}`}
                           download={currentDoc.fileName}
-                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors flex items-center space-x-1.5 shadow-md shadow-blue-600/20"
+                          className={`px-3 py-1.5 rounded-lg text-white font-bold text-xs transition-colors flex items-center space-x-1.5 shadow-md cursor-pointer ${
+                            currentCategory === "image"
+                              ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20"
+                              : currentCategory === "hwp"
+                              ? "bg-purple-600 hover:bg-purple-500 shadow-purple-600/20"
+                              : "bg-blue-600 hover:bg-blue-500 shadow-blue-600/20"
+                          }`}
                         >
                           <Download className="w-3.5 h-3.5" />
-                          <span className="text-[11px]">다운로드</span>
+                          <span className="text-[11px]">{getDocDownloadText(currentCategory)}</span>
                         </a>
                       </div>
                     )}
@@ -1421,9 +1491,9 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
 
                   {/* Viewer Content Area */}
                   {currentDoc && (
-                    <div className="flex-1 bg-slate-950/70 rounded-2xl border border-slate-800 overflow-hidden flex flex-col min-h-[480px]">
-                      {isCurrentPdf ? (
-                        /* 1. PDF Documents: Full Viewport PDF Viewer */
+                    <div className="flex-1 min-h-0 bg-slate-950/70 rounded-2xl border border-slate-800 overflow-hidden flex flex-col min-h-[480px]">
+                      {/* 1. PDF Documents */}
+                      {currentCategory === "pdf" && (
                         <div className="w-full h-full flex-1 flex flex-col min-h-[750px]">
                           <iframe
                             src={`/api/download?url=${encodeURIComponent(
@@ -1433,108 +1503,72 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                             title={currentDoc.fileName}
                           />
                         </div>
-                      ) : (
-                        /* 2. HWP / HWPX / Other Forms: A4 Paper-Style Web Viewer (Reference Preview + Download) */
-                        <div className="flex-1 flex flex-col min-h-[520px] bg-slate-950/80 overflow-hidden">
-                          {/* Top Action & Reference Banner */}
-                          <div className="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
-                            <div className="flex items-center space-x-2">
-                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 font-bold text-xs border border-amber-500/20 flex items-center space-x-1">
-                                <span>💡 서식 열람용 미리보기 (참고용)</span>
-                              </span>
-                              {currentDoc.extractedText && (
-                                <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                                  총 {currentDoc.extractedText.length.toLocaleString()}자 파싱됨
-                                </span>
-                              )}
-                            </div>
+                      )}
 
-                            <div className="flex items-center space-x-2">
-                              {currentDoc.extractedText && (
-                                <button
-                                  onClick={() => handleCopyText(currentDoc.extractedText)}
-                                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors flex items-center space-x-1.5 cursor-pointer"
-                                >
-                                  {isCopied ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                      <span className="text-emerald-400">복사 완료!</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-3.5 h-3.5 text-blue-400" />
-                                      <span>서식 텍스트 복사</span>
-                                    </>
-                                  )}
-                                </button>
-                              )}
-
-                              <a
-                                href={`/api/download?url=${encodeURIComponent(
+                      {/* 2. Image Poster Documents */}
+                      {currentCategory === "image" && (
+                        <div className="flex-1 flex flex-col min-h-[520px] bg-slate-950/90 overflow-hidden">
+                          <div className="flex-1 overflow-auto p-4 sm:p-8 flex items-center justify-center custom-scrollbar">
+                            <div
+                              className="transition-transform duration-150 ease-out flex items-center justify-center max-w-full"
+                              style={{ transform: `scale(${modalImageZoom})`, transformOrigin: "top center" }}
+                            >
+                              <img
+                                src={`/api/download?url=${encodeURIComponent(
                                   currentDoc.fileUrl
-                                )}&filename=${encodeURIComponent(currentDoc.fileName)}`}
-                                download={currentDoc.fileName}
-                                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-purple-600/30 flex items-center space-x-1.5 cursor-pointer"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>📥 원본 HWP 다운로드 (작성·제출용)</span>
-                              </a>
+                                )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                                alt={currentDoc.fileName}
+                                className="max-w-full h-auto rounded-xl shadow-2xl border border-slate-800 object-contain select-none"
+                                loading="eager"
+                              />
                             </div>
-                          </div>
-
-                          {/* A4 Paper Canvas Document Container */}
-                          <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-[#0b0f19]">
-                            {currentDoc.extractedText && currentDoc.extractedText.length > 30 ? (
-                              <div className="max-w-3xl mx-auto rounded-2xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6 text-slate-200 font-sans">
-                                {/* Document Title Header */}
-                                <div className="border-b border-slate-800 pb-4 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="px-2 py-0.5 rounded text-[11px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                      {currentDoc.fileType || "HWP"} 공식 신청 서식
-                                    </span>
-                                    <span className="text-[11px] text-slate-400">Python 바이너리 엔진 파싱</span>
-                                  </div>
-                                  <h2 className="text-base sm:text-lg font-bold text-slate-100 break-all leading-snug">
-                                    {currentDoc.fileName}
-                                  </h2>
-                                  <p className="text-[11px] text-amber-400/90 bg-amber-950/20 border border-amber-500/20 p-2 rounded-lg">
-                                    📌 본 내용은 원본 한글(HWP) 파일의 본문 서식을 화면에서 편리하게 확인하기 위한 <b>[참고용 미리보기]</b>입니다. 실제 지원 접수 시에는 상단의 <b>[📥 원본 HWP 다운로드]</b> 버튼을 눌러 한컴오피스에서 작성하세요.
-                                  </p>
-                                </div>
-
-                                {/* Form Body Text */}
-                                <div className="space-y-4 text-xs leading-relaxed font-mono whitespace-pre-wrap select-text text-slate-300">
-                                  {currentDoc.extractedText}
-                                </div>
-                              </div>
-                            ) : (
-                              /* Empty or Pending Parsing State */
-                              <div className="max-w-md mx-auto my-auto p-8 rounded-3xl bg-slate-900/80 border border-slate-800 text-center space-y-4 shadow-xl">
-                                <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center mx-auto shadow-lg shadow-purple-500/10">
-                                  <FileCode className="w-7 h-7" />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <h3 className="text-sm font-bold text-slate-100">{currentDoc.fileName}</h3>
-                                  <p className="text-xs text-slate-400 leading-relaxed">
-                                    한글(HWP/HWPX) 공식 신청 서식입니다.
-                                  </p>
-                                </div>
-                                <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-center">
-                                  <a
-                                    href={`/api/download?url=${encodeURIComponent(
-                                      currentDoc.fileUrl
-                                    )}&filename=${encodeURIComponent(currentDoc.fileName)}`}
-                                    download={currentDoc.fileName}
-                                    className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-purple-600/30 flex items-center justify-center space-x-1.5"
-                                  >
-                                    <Download className="w-3.5 h-3.5" />
-                                    <span>원본 HWP 서식 다운로드</span>
-                                  </a>
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
+                      )}
+
+                      {/* 3. HWP / HWPX / Other Forms */}
+                      {currentCategory !== "pdf" && currentCategory !== "image" && (
+                        currentDoc.extractedText ? (
+                          <HwpExtractedTextViewer
+                            fileName={currentDoc.fileName}
+                            fileUrl={currentDoc.fileUrl}
+                            extractedText={currentDoc.extractedText}
+                            onRefresh={fetchLatestProgramDetails}
+                          />
+                        ) : (
+                          <div className="flex-1 flex flex-col min-h-[520px] bg-slate-950/80 overflow-hidden items-center justify-center p-8">
+                            <div className="max-w-md mx-auto p-8 rounded-3xl bg-slate-900/80 border border-slate-800 text-center space-y-4 shadow-xl">
+                              <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center mx-auto shadow-lg shadow-purple-500/10">
+                                <FileCode className="w-7 h-7" />
+                              </div>
+                              <div className="space-y-1.5">
+                                <h3 className="text-sm font-bold text-slate-100">{currentDoc.fileName}</h3>
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                  한글(HWP/HWPX) 공식 신청 서식입니다.
+                                </p>
+                              </div>
+                              <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-center">
+                                <button
+                                  onClick={fetchLatestProgramDetails}
+                                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+                                  <span>서식 실시간 재파싱</span>
+                                </button>
+                                <a
+                                  href={`/api/download?url=${encodeURIComponent(
+                                    currentDoc.fileUrl
+                                  )}&filename=${encodeURIComponent(currentDoc.fileName)}`}
+                                  download={currentDoc.fileName}
+                                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-purple-600/30 flex items-center justify-center space-x-1.5 cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>원본 HWP 서식 다운로드</span>
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        )
                       )}
                     </div>
                   )}

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   fetchMyPlans,
+  fetchPlanDetail,
   deletePlanFromBackend,
   fetchMyBookmarks,
   toggleBookmarkOnBackend,
@@ -115,18 +116,39 @@ export default function SavedPlansModal({
     }
   };
 
-  const handleOpenPlan = (plan: any) => {
-    if (onSelectPlan) {
-      try {
-        const planJson =
-          typeof plan.planJson === "string" ? JSON.parse(plan.planJson) : plan.planJson;
-        onSelectPlan({ ...plan, planJson });
-        onClose();
-      } catch {
-        alert("사업계획서 데이터를 불러오는 중 오류가 발생했습니다.");
+  const handleOpenPlan = async (plan: any) => {
+    try {
+      const token = await getJwtToken();
+      let targetPlan = plan;
+      // If planJson is not present (e.g. from list view), fetch full detail
+      if (!targetPlan.planJson && token) {
+        try {
+          const detailed = await fetchPlanDetail(plan.id, token);
+          if (detailed) {
+            targetPlan = detailed;
+          }
+        } catch (fetchErr) {
+          console.warn("Failed to fetch full plan detail, falling back:", fetchErr);
+        }
       }
-    } else {
-      router.push(`/consultant?planId=${plan.id}`);
+
+      const rawJson = targetPlan.planJson || targetPlan;
+      const planJson = typeof rawJson === "string" ? JSON.parse(rawJson) : rawJson;
+
+      if (onSelectPlan) {
+        onSelectPlan({ ...targetPlan, planJson });
+        onClose();
+      } else {
+        router.push(`/consultant?planId=${plan.id}`);
+        onClose();
+      }
+    } catch (err: any) {
+      console.error("Error opening plan:", err);
+      if (onSelectPlan) {
+        onSelectPlan(plan);
+      } else {
+        router.push(`/consultant?planId=${plan.id}`);
+      }
       onClose();
     }
   };

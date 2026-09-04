@@ -17,7 +17,8 @@ export type AdminAuthResult =
  * JWT 토큰 디코딩 및 서명 검증 헬퍼
  */
 function verifyJwtToken(token: string): { valid: boolean; payload?: any } {
-  const jwtSecret = process.env.JWT_SECRET || "ziwon_secret_key_2026";
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) return { valid: false };
   const parts = token.split(".");
   if (parts.length !== 3) return { valid: false };
 
@@ -57,6 +58,51 @@ function verifyJwtToken(token: string): { valid: boolean; payload?: any } {
  */
 export async function verifyAdminRequest(req: NextRequest): Promise<AdminAuthResult> {
   try {
+    // 0-1. 백엔드 내부 크론 스케줄러(APScheduler) 머신 간 통신 인증 (보안: fallback 문자열 제거 및 타이밍 세이프 검증)
+    const internalCronSecret = process.env.INTERNAL_CRON_SECRET;
+    const cronKeyHeader = req.headers.get("x-internal-cron-key");
+
+    if (
+      internalCronSecret &&
+      cronKeyHeader &&
+      internalCronSecret.length >= 32 &&
+      cronKeyHeader.length === internalCronSecret.length
+    ) {
+      const headerBuf = Buffer.from(cronKeyHeader);
+      const secretBuf = Buffer.from(internalCronSecret);
+      if (crypto.timingSafeEqual(headerBuf, secretBuf)) {
+        return {
+          authorized: true,
+          user: {
+            id: "system-cron-worker",
+            email: "cron@ziwon.ai",
+            role: "ADMIN",
+            name: "시스템 백그라운드 워커",
+          },
+        };
+      }
+    }
+
+    // 0-2. Vercel 플랫폼 공식 Cron 트리거 검증 (vercel.json / Authorization: Bearer <CRON_SECRET>)
+    const vercelCronSecret = process.env.CRON_SECRET;
+    const authHeaderRaw = req.headers.get("authorization");
+    if (
+      vercelCronSecret &&
+      authHeaderRaw &&
+      vercelCronSecret.length >= 16 &&
+      authHeaderRaw === `Bearer ${vercelCronSecret}`
+    ) {
+      return {
+        authorized: true,
+        user: {
+          id: "vercel-cron-worker",
+          email: "cron@ziwon.ai",
+          role: "ADMIN",
+          name: "Vercel 플랫폼 공식 크론",
+        },
+      };
+    }
+
     // 1. Authorization 헤더 또는 HttpOnly 쿠키에서 토큰 추출
     const authHeader = req.headers.get("authorization");
     let token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7).trim() : null;
