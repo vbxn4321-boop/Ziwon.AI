@@ -23,18 +23,31 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
   // Loaded Company Profile State from DB
   const [userCompany, setUserCompany] = useState<any>(null);
 
-  // Initial parsed plan
-  const parsedInitialPlan =
-    initialPlanData && (initialPlanData.planJson || initialPlanData.overview)
-      ? typeof initialPlanData.planJson === "string"
-        ? JSON.parse(initialPlanData.planJson)
-        : initialPlanData.planJson || initialPlanData
-      : null;
+  // Robust helper to extract valid PsstBusinessPlanResult from any container or JSON string
+  const parsePlan = (data: any): PsstBusinessPlanResult | null => {
+    if (!data) return null;
+    let p = data.planJson || data;
+    if (typeof p === "string") {
+      try {
+        p = JSON.parse(p);
+      } catch {
+        return null;
+      }
+    }
+    if (p && p.planJson) {
+      if (typeof p.planJson === "string") {
+        try {
+          p = JSON.parse(p.planJson);
+        } catch {}
+      } else {
+        p = p.planJson;
+      }
+    }
+    return p && p.overview && p.overview.title ? p : null;
+  };
 
-  const validInitialPlan =
-    parsedInitialPlan && parsedInitialPlan.overview && parsedInitialPlan.overview.title
-      ? parsedInitialPlan
-      : null;
+  // Initial parsed plan
+  const validInitialPlan = parsePlan(initialPlanData);
 
   // Form Data
   const [formData, setFormData] = useState<PsstFormData>({
@@ -52,6 +65,52 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     // Attach linked program analysis context if provided
     programAnalysis: initialProgramAnalysis || undefined,
   });
+
+  // Business Plan Result State
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedResult, setGeneratedResult] = useState<PsstBusinessPlanResult | null>(
+    validInitialPlan
+  );
+
+  // Synchronize when initialPlanData or initialProgramTitle changes
+  useEffect(() => {
+    if (initialPlanData) {
+      const plan = parsePlan(initialPlanData);
+      if (plan) {
+        setGeneratedResult(plan);
+        setFormData((prev) => ({
+          ...prev,
+          companyName: plan.overview?.companyName || prev.companyName,
+          itemName: plan.overview?.title || prev.itemName,
+          industry: plan.overview?.industry || prev.industry,
+          targetCustomer: plan.overview?.summaryTable?.targetUsers || prev.targetCustomer,
+          itemDescription: plan.overview?.itemSummary || prev.itemDescription,
+          coreStrengths: plan.solution?.competitorDifferentiation || prev.coreStrengths,
+          targetProgramTitle:
+            initialPlanData.targetProgramTitle ||
+            initialProgramTitle ||
+            prev.targetProgramTitle,
+          budget: plan.overview?.summaryTable?.targetBudget || prev.budget,
+        }));
+        setInterviewProgress({
+          itemTarget: true,
+          problem: true,
+          solution: true,
+          scaleUp: true,
+          team: true,
+          currentStep: 5,
+          completedCount: 5,
+        });
+      }
+    }
+  }, [initialPlanData, initialProgramTitle]);
+
+  // Synchronize when initialProgramAnalysis changes
+  useEffect(() => {
+    if (initialProgramAnalysis) {
+      setFormData((prev) => ({ ...prev, programAnalysis: initialProgramAnalysis }));
+    }
+  }, [initialProgramAnalysis]);
 
   // Auto-fetch user company profile on mount and pre-fill form if empty
   useEffect(() => {
@@ -118,11 +177,7 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     completedCount: validInitialPlan ? 5 : 0,
   });
 
-  // Business Plan Result State
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedResult, setGeneratedResult] = useState<PsstBusinessPlanResult | null>(
-    validInitialPlan
-  );
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isDirectEditing, setIsDirectEditing] = useState(false);
@@ -538,5 +593,32 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     handleCopyFullText,
     handleSavePlan,
     handleDownloadPdf,
+    handleLoadPlan: (planData: any) => {
+      const plan = parsePlan(planData);
+      if (plan) {
+        setGeneratedResult(plan);
+        setFormData((prev) => ({
+          ...prev,
+          companyName: plan.overview?.companyName || prev.companyName,
+          itemName: plan.overview?.title || prev.itemName,
+          industry: plan.overview?.industry || prev.industry,
+          targetCustomer: plan.overview?.summaryTable?.targetUsers || prev.targetCustomer,
+          itemDescription: plan.overview?.itemSummary || prev.itemDescription,
+          coreStrengths: plan.solution?.competitorDifferentiation || prev.coreStrengths,
+          targetProgramTitle:
+            planData.targetProgramTitle || prev.targetProgramTitle,
+          budget: plan.overview?.summaryTable?.targetBudget || prev.budget,
+        }));
+        setInterviewProgress({
+          itemTarget: true,
+          problem: true,
+          solution: true,
+          scaleUp: true,
+          team: true,
+          currentStep: 5,
+          completedCount: 5,
+        });
+      }
+    },
   };
 }

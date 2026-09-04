@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { PsstPlanGeneratorProps } from "./psst/types";
 import { usePsstPlan } from "./psst/hooks/usePsstPlan";
 import { PsstSidebar } from "./psst/components/PsstSidebar";
@@ -8,6 +8,7 @@ import { PsstHeader } from "./psst/components/PsstHeader";
 import { PsstChatPanel } from "./psst/components/PsstChatPanel";
 import { PsstFormPanel } from "./psst/components/PsstFormPanel";
 import { PsstDocumentViewer } from "./psst/components/PsstDocumentViewer";
+import SavedPlansModal from "@/components/auth/SavedPlansModal";
 
 export { TARGET_PROGRAM_FORMATS } from "./psst/constants";
 
@@ -53,7 +54,10 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     handleCopyFullText,
     handleSavePlan,
     handleDownloadPdf,
+    handleLoadPlan,
   } = usePsstPlan(initialProgramTitle, initialPlanData, initialProgramAnalysis);
+
+  const [showVaultModal, setShowVaultModal] = useState(false);
 
   // Derive 3-step workflow progress for header
   const hasValidPlan = !!(generatedResult && generatedResult.overview && generatedResult.overview.title);
@@ -87,6 +91,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           onDownloadPdf={handleDownloadPdf}
           targetProgramTitle={formData.targetProgramTitle}
           currentStep={currentStep}
+          onOpenVault={() => setShowVaultModal(true)}
         />
 
         {/* 2-Column Split Workspace */}
@@ -152,6 +157,16 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           </div>
         </footer>
       </div>
+
+      {/* Vault Modal for AI Studio */}
+      <SavedPlansModal
+        isOpen={showVaultModal}
+        onClose={() => setShowVaultModal(false)}
+        onSelectPlan={(plan: any) => {
+          handleLoadPlan(plan);
+          setShowVaultModal(false);
+        }}
+      />
     </div>
   );
 };

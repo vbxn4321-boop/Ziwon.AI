@@ -35,6 +35,7 @@ interface PsstHeaderProps {
   onDownloadPdf?: () => void;
   targetProgramTitle?: string;
   currentStep?: number;
+  onOpenVault?: () => void;
 }
 
 export const PsstHeader: React.FC<PsstHeaderProps> = ({
@@ -53,6 +54,7 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
   onDownloadPdf,
   targetProgramTitle,
   currentStep = 1,
+  onOpenVault,
 }) => {
   // Derive display step from state
   const step = hasResult ? 3 : currentStep;
@@ -142,6 +144,19 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
               <Sun className="w-3.5 h-3.5 text-amber-400" />
             )}
           </button>
+
+          {/* Open Vault Button */}
+          {onOpenVault && (
+            <button
+              type="button"
+              onClick={onOpenVault}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all border border-slate-700 flex items-center space-x-1.5 cursor-pointer shadow-xs"
+              title="저장된 사업계획서 보관함 열기"
+            >
+              <FolderHeart className="w-3.5 h-3.5 text-rose-400" />
+              <span>내 보관함</span>
+            </button>
+          )}
 
           {/* Save Button */}
           {hasResult && onSavePlan && (

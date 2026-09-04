@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { FileText, Download, Eye, X, Copy, Check, ExternalLink } from "lucide-react";
+import { FileText, Download, Eye, X, Copy, Check, ExternalLink, Image as ImageIcon } from "lucide-react";
+import { getDocCategory, getDocBadgeText } from "./detail-helpers";
 
 interface DocumentsTabProps {
   sortedDocs: any[];
@@ -31,20 +32,28 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ sortedDocs }) => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {sortedDocs.map((doc, idx) => {
+            const cat = getDocCategory(doc);
+            const badgeText = getDocBadgeText(cat);
             const hasText = !!(doc.extractedText && doc.extractedText.trim().length > 0);
+            const isImage = cat === "image";
+
             return (
               <div
                 key={doc.id || idx}
                 className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between text-xs space-y-3"
               >
                 <div className="flex items-start space-x-2.5 min-w-0">
-                  <FileText className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  {isImage ? (
+                    <ImageIcon className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <FileText className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <span className="font-bold text-slate-900 block truncate" title={doc.fileName}>
                       {doc.fileName}
                     </span>
                     <span className="text-[11px] text-slate-500 block">
-                      {doc.fileType?.toUpperCase() || "DOC"} {hasText ? `• 텍스트 추출 완료 (${doc.extractedText.length.toLocaleString()}자)` : "• 첨부 파일"}
+                      {badgeText} {hasText ? `• 텍스트 추출 (${doc.extractedText.length.toLocaleString()}자)` : ""}
                     </span>
                   </div>
                 </div>
@@ -58,6 +67,20 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ sortedDocs }) => {
                       <Eye className="w-3.5 h-3.5" />
                       <span>텍스트 미리보기</span>
                     </button>
+                  )}
+
+                  {isImage && (
+                    <a
+                      href={`/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
+                        doc.fileName
+                      )}&view=true`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors flex items-center space-x-1 font-bold shadow-2xs cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>이미지 보기</span>
+                    </a>
                   )}
 
                   {doc.fileType === "NOTICE_ONLY" ? (
@@ -76,7 +99,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ sortedDocs }) => {
                         doc.fileUrl.includes("fileDown.do") ||
                         doc.fileUrl.includes("FileDown.do") ||
                         doc.fileUrl.includes("afile/fileDownload") ||
-                        doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip)$/i)
+                        doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip|png|jpe?g|gif|webp)$/i)
                           ? `/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
                               doc.fileName
                             )}`

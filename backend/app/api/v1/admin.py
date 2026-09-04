@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from app.services.dedup_service import dedup_service
 from app.services.crawler_service import crawler_service
 
+from app.services.scraper_service import scraper_service
+
 router = APIRouter()
 
 @router.get("/dedup/candidates")
@@ -41,5 +43,14 @@ async def trigger_crawler_pipeline():
             "message": f"크롤러 실행 완료: {new_count}건의 신규 공고 수집/적재 완료",
             "newCount": new_count,
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/scraper/run")
+async def trigger_scraper_batch(limit: int = 15):
+    """파이썬 네이티브 미적재 첨부파일 일괄 사전 스크래핑 수동 실행"""
+    try:
+        result = await scraper_service.run_pre_scraping_batch(limit=limit)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
