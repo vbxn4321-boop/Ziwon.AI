@@ -25,6 +25,14 @@ dist/
 **/.env
 **/.env.local
 **/.env.*
+# 단, 실제 값이 없는 템플릿은 저장소에 포함합니다.
+# 이게 빠져 있어서 CRON_SECRET 같은 필수 변수가 문서화되지 않은 채로 배포되었습니다.
+!**/.env.example
+!.env.example
+
+# 마이그레이션/백필 스크립트가 남기는 롤백 스냅샷
+ready-status-rollback.json
+**/ready-status-rollback.json
 
 # Databases & local sqlite
 *.db

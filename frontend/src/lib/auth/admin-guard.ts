@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { verifyAccessToken, extractBearerToken } from "@/lib/auth/verify-token";
 import crypto from "crypto";
 
 export interface AdminUser {
@@ -14,42 +15,16 @@ export type AdminAuthResult =
   | { authorized: false; response: NextResponse };
 
 /**
- * JWT 토큰 디코딩 및 서명 검증 헬퍼
+ * 관리자로 인정할 이메일 목록.
+ * 소스코드에 이메일을 박아두면 저장소를 읽을 수 있는 누구나 표적을 알게 되므로
+ * 환경변수로 뺍니다. 평소에는 비워두고 DB 의 role 컬럼만 쓰는 것이 정상 운영입니다.
+ * (비상시 role 이 유실됐을 때만 쓰는 탈출구)
  */
-function verifyJwtToken(token: string): { valid: boolean; payload?: any } {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret) return { valid: false };
-  const parts = token.split(".");
-  if (parts.length !== 3) return { valid: false };
-
-  const [header, payload, signature] = parts;
-  const expectedSig = crypto
-    .createHmac("sha256", jwtSecret)
-    .update(`${header}.${payload}`)
-    .digest("base64url");
-
-  // If secret signature matches
-  if (expectedSig === signature) {
-    try {
-      const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
-      if (data.exp && data.exp < Math.floor(Date.now() / 1000)) {
-        return { valid: false }; // Expired
-      }
-      return { valid: true, payload: data };
-    } catch {
-      return { valid: false };
-    }
-  }
-
-  // Fallback: Check if it's a Supabase JWT (Base64 payload decoding)
-  try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
-    if (data.sub && (data.iss?.includes("supabase") || data.aud === "authenticated")) {
-      return { valid: true, payload: data };
-    }
-  } catch {}
-
-  return { valid: false };
+function getAdminEmailAllowlist(): string[] {
+  return (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 /**
@@ -103,16 +78,12 @@ export async function verifyAdminRequest(req: NextRequest): Promise<AdminAuthRes
       };
     }
 
-    // 1. Authorization 헤더 또는 HttpOnly 쿠키에서 토큰 추출
-    const authHeader = req.headers.get("authorization");
-    let token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7).trim() : null;
-
-    if (!token) {
-      token = req.cookies.get("ziwon_access_token")?.value || null;
-    }
-    if (!token) {
-      token = req.cookies.get("ziwon_refresh_token")?.value || null;
-    }
+    // 1. Authorization 헤더에서 Access Token 추출
+    //    - ziwon_access_token 쿠키는 어디서도 설정하지 않는 죽은 경로여서 제거했습니다.
+    //    - ziwon_refresh_token 을 대신 읽던 경로도 제거했습니다. 30일짜리 리프레시
+    //      토큰을 API 접근에 그대로 쓰는 것은 Access Token 을 30분으로 짧게 유지하는
+    //      설계 자체를 무의미하게 만듭니다.
+    const token = extractBearerToken(req);
 
     if (!token) {
       return {
@@ -124,26 +95,22 @@ export async function verifyAdminRequest(req: NextRequest): Promise<AdminAuthRes
       };
     }
 
-    // 2. JWT 검증 및 Payload 추출
-    const { valid, payload } = verifyJwtToken(token);
-    if (!valid || !payload?.sub) {
+    // 2. JWT 검증 (서명 + 만료 + 토큰 종류). 검증 실패 시 폴백 없이 거부합니다.
+    const verified = verifyAccessToken(token);
+    if (!verified.valid) {
       return {
         authorized: false,
         response: NextResponse.json(
-          { success: false, error: "유효하지 않거나 만료된 인증 토큰입니다." },
+          { success: false, error: `유효하지 않은 인증 토큰입니다. (${verified.reason})` },
           { status: 401 }
         ),
       };
     }
 
     // 3. DB에서 사용자 정보 및 권한(Role) 확인
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id: payload.sub },
-          { email: payload.email || undefined },
-        ],
-      },
+    //    토큰의 email 로도 조회하던 OR 절을 제거했습니다. 신원은 sub 하나로 정합니다.
+    const user = await prisma.user.findUnique({
+      where: { id: verified.payload.sub },
       select: {
         id: true,
         email: true,
@@ -162,8 +129,10 @@ export async function verifyAdminRequest(req: NextRequest): Promise<AdminAuthRes
       };
     }
 
-    // 4. ADMIN 권한 확인 (qjawls2617@naver.com 또는 role === 'ADMIN')
-    const isAdmin = user.role === "ADMIN" || user.email === "qjawls2617@naver.com";
+    // 4. ADMIN 권한 확인 (DB role 우선, ADMIN_EMAILS 는 비상용 탈출구)
+    const isAdmin =
+      user.role === "ADMIN" ||
+      getAdminEmailAllowlist().includes(user.email.toLowerCase());
     if (!isAdmin) {
       return {
         authorized: false,
