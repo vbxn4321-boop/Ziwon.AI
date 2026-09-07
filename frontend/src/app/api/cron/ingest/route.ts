@@ -6,13 +6,20 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization");
-    if (
-      process.env.NODE_ENV === "production" &&
-      process.env.CRON_SECRET &&
-      authHeader !== `Bearer ${process.env.CRON_SECRET}`
-    ) {
-      return NextResponse.json({ error: "Unauthorized Cron Trigger" }, { status: 401 });
+    // CRON_SECRET 이 설정되지 않으면 조건문 전체가 건너뛰어져 라우트가 무인증으로
+    // 열리던 구조였습니다. 프로덕션에서는 시크릿 부재 자체를 실패로 처리합니다.
+    if (process.env.NODE_ENV === "production") {
+      const cronSecret = process.env.CRON_SECRET;
+      if (!cronSecret) {
+        console.error("[Cron] CRON_SECRET 이 설정되지 않아 인제스트 트리거를 거부합니다.");
+        return NextResponse.json(
+          { error: "Cron trigger is not configured" },
+          { status: 503 }
+        );
+      }
+      if (req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: "Unauthorized Cron Trigger" }, { status: 401 });
+      }
     }
 
     console.log("⏰ [Ingestion] Triggering Ingestion Pipeline via Python Backend...");

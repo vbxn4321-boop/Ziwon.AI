@@ -227,6 +227,14 @@ class ScraperService:
 
                     # Save to database
                     doc_id = str(uuid.uuid4())
+
+                    # status 는 스키마가 정의한 PENDING / PARSED / FAILED 만 사용해야 합니다.
+                    # 예전에 'READY' 를 쓰던 탓에, 파이썬이 수집한 문서가
+                    # 후속 파이프라인(where status = 'PENDING')에 영영 잡히지 않았습니다.
+                    # 본문 추출에 성공했으면 PARSED, 아니면 PENDING 으로 두어 재처리되게 합니다.
+                    # (Next.js attachment-scraper 와 동일한 기준)
+                    doc_status = "PARSED" if clean_text and len(clean_text) > 50 else "PENDING"
+
                     db = SessionLocal()
                     try:
                         db.execute(
@@ -237,7 +245,7 @@ class ScraperService:
                             )
                             VALUES (
                                 :id, :prog_id, :fileName, :fileUrl, :fileType,
-                                :extractedText, 'READY', NOW(), NOW()
+                                :extractedText, :status, NOW(), NOW()
                             )
                             """),
                             {
@@ -247,6 +255,7 @@ class ScraperService:
                                 "fileUrl": entry["url"],
                                 "fileType": file_type,
                                 "extractedText": clean_text,
+                                "status": doc_status,
                             }
                         )
                         db.commit()
@@ -256,7 +265,7 @@ class ScraperService:
                             "fileType": file_type,
                             "textLength": len(clean_text)
                         })
-                        print(f"[Python Scraper] ✅ Saved '{clean_filename}' ({file_type}, {len(clean_text)} chars)")
+                        print(f"[Python Scraper] ✅ Saved '{clean_filename}' ({file_type}, {len(clean_text)} chars, status={doc_status})")
                     finally:
                         db.close()
 

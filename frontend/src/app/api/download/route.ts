@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { safeFetch, BlockedUrlError } from "@/lib/security/safe-fetch";
 
 export const maxDuration = 30;
+// dns 모듈을 사용하므로 Node 런타임이 필요합니다(Edge 불가).
+export const runtime = "nodejs";
+
+// 공고 첨부문서 기준 널널한 상한. 응답 전체를 메모리에 올리므로 상한이 필요합니다.
+const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,13 +14,14 @@ export async function GET(req: NextRequest) {
     const fileUrl = searchParams.get("url");
     const customFileName = searchParams.get("filename") || "공고첨부파일";
 
-    if (!fileUrl || !fileUrl.startsWith("http")) {
+    if (!fileUrl) {
       return NextResponse.json({ error: "Invalid or missing file URL" }, { status: 400 });
     }
 
     console.log(`📥 [File Download Proxy] Requesting file from: ${fileUrl}`);
 
-    const res = await fetch(fileUrl, {
+    // safeFetch 가 프로토콜·목적지 IP를 검증하고, 리다이렉트를 홈마다 재검증합니다.
+    const res = await safeFetch(fileUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -29,8 +36,24 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const declaredLength = Number(res.headers.get("content-length") || 0);
+    if (declaredLength > MAX_DOWNLOAD_BYTES) {
+      return NextResponse.json(
+        { error: "파일이 너무 큽니다. 원문 사이트에서 직접 내려받아 주세요." },
+        { status: 413 }
+      );
+    }
+
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+
+    // Content-Length 를 안 주는 서버가 많아 실제 크기로 한 번 더 확인
+    if (buffer.length > MAX_DOWNLOAD_BYTES) {
+      return NextResponse.json(
+        { error: "파일이 너무 큽니다. 원문 사이트에서 직접 내려받아 주세요." },
+        { status: 413 }
+      );
+    }
 
     // Extract filename from remote header if available
     let fileName = customFileName;
@@ -75,6 +98,10 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
+    if (error instanceof BlockedUrlError) {
+      console.warn("[File Download Proxy] Blocked URL:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     console.error("File download proxy error:", error);
     return NextResponse.json({ error: error.message || "Download failed" }, { status: 500 });
   }

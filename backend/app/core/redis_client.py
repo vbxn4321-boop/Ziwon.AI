@@ -55,6 +55,18 @@ class RedisManager:
                 return False
         return False
 
+    def _memory_fallback_allowed(self) -> bool:
+        """
+        인메모리 폴백은 로컬 개발 전용입니다.
+
+        프로덕션에서 Redis 연결이 없을 때(_client is None) 조용히 인메모리로 넘어가면
+        - 토큰 블랙리스트(로그아웃)가 무력화되고
+        - 리프레시 토큰 회전(RTR)이 인스턴스마다 따로 놀아
+        보안 기능이 "동작하는 것처럼 보이면서" 실제로는 꺼집니다.
+        따라서 프로덕션에서는 폴백을 막고 각 호출부가 명시적으로 실패하도록 합니다.
+        """
+        return settings.ENVIRONMENT != "production"
+
     # -------------------------------------------------------------
     # 1. OTP Management (with 60s Rate-Limit & 3-min TTL)
     # -------------------------------------------------------------
@@ -152,8 +164,13 @@ class RedisManager:
         if self._client:
             try:
                 return bool(self._client.exists(verified_key))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"[Redis OTP] verified 조회 실패: {e}")
+
+        if not self._memory_fallback_allowed():
+            # 프로덕션: 인증 완료 상태를 확인할 수 없으면 미인증으로 간주(fail-closed)
+            logger.error("[Redis CRITICAL] OTP 인증 상태를 확인할 수 없어 미인증 처리합니다.")
+            return False
 
         # Dev Fallback
         stored = self._memory_store.get(verified_key)
@@ -194,6 +211,11 @@ class RedisManager:
                 if settings.ENVIRONMENT == "production":
                     return False
 
+        if not self._memory_fallback_allowed():
+            # 프로덕션: 블랙리스트 등록 실패를 성공으로 보고하지 않습니다.
+            logger.error("[Redis CRITICAL] 토큰 블랙리스트 등록 불가 - 로그아웃이 즉시 반영되지 않습니다.")
+            return False
+
         # Dev Fallback
         self._memory_store[key] = {"expires_at": time.time() + remaining_ttl}
         return True
@@ -207,8 +229,16 @@ class RedisManager:
         if self._client:
             try:
                 return bool(self._client.exists(key))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"[Redis Blacklist] 조회 실패: {e}")
+
+        if not self._memory_fallback_allowed():
+            # 의도된 fail-open. 여기서 True 를 돌려주면 Redis 장애 시 모든 요청이 401 이 되어
+            # 서비스 전체가 멈춥니다. Access Token 수명이 30분이라 노출 구간이 제한되고,
+            # validate_refresh_token 은 fail-closed 라 세션 연장도 막히므로 피해가 한정됩니다.
+            # 대신 반드시 경보로 감지되어야 합니다.
+            logger.error("[Redis CRITICAL] 블랙리스트 조회 불가 - 폐기된 토큰이 최대 30분간 통과할 수 있습니다.")
+            return False
 
         # Dev Fallback
         stored = self._memory_store.get(key)
@@ -234,6 +264,10 @@ class RedisManager:
                 if settings.ENVIRONMENT == "production":
                     return False
 
+        if not self._memory_fallback_allowed():
+            logger.error("[Redis CRITICAL] 리프레시 토큰 저장 불가 - 로그인/세션 발급을 중단합니다.")
+            return False
+
         # Dev Fallback
         self._memory_store[key] = {
             "token": refresh_token,
@@ -251,9 +285,15 @@ class RedisManager:
             try:
                 stored = self._client.get(key)
                 return stored == input_refresh_token
-            except Exception:
+            except Exception as e:
+                logger.error(f"[Redis Refresh] 검증 실패: {e}")
                 if settings.ENVIRONMENT == "production":
                     return False
+
+        if not self._memory_fallback_allowed():
+            # fail-closed: 회전 상태를 확인할 수 없으면 재로그인을 요구합니다.
+            logger.error("[Redis CRITICAL] 리프레시 토큰 검증 불가 - 세션 연장을 거부합니다.")
+            return False
 
         # Dev Fallback
         stored_item = self._memory_store.get(key)

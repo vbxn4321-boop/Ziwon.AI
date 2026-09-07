@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAiRoute, LIGHT_LIMITS } from "@/lib/security/ai-route-guard";
 import { GoogleGenAI } from "@google/genai";
 import { generatePsstBusinessPlan, PsstBusinessPlanResult, PsstGeneratorInput } from "@/lib/ai/psst-generator";
 import { getCandidateModels } from "@/lib/ai/models";
 
 export async function POST(req: NextRequest) {
   try {
+    // 비인가 대량 호출로 Gemini 비용이 새는 것을 막습니다.
+    const blocked = guardAiRoute(req, "ai/psst-chat", LIGHT_LIMITS);
+    if (blocked) return blocked;
+
     const apiKey = process.env.GEMINI_API_KEY || "";
     if (!apiKey) {
       return NextResponse.json(

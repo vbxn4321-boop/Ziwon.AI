@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { guardAiRoute, HEAVY_LIMITS } from "@/lib/security/ai-route-guard";
 import { generatePsstWithBackend } from "@/lib/backend-client";
 import { generatePsstBusinessPlan, PsstGeneratorInput } from "@/lib/ai/psst-generator";
 import { analyzeProgramForPsst } from "@/lib/parser/outline-extractor";
@@ -8,6 +9,10 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
+    // 비인가 대량 호출로 Gemini 비용이 새는 것을 막습니다.
+    const blocked = guardAiRoute(req, "ai/psst-plan", HEAVY_LIMITS);
+    if (blocked) return blocked;
+
     const body: PsstGeneratorInput = await req.json();
 
     if (!body.itemName || !body.itemDescription) {
