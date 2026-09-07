@@ -22,6 +22,10 @@ import {
   FileDown,
   Edit3,
   Info,
+  Plus,
+  Trash2,
+  FileCode,
+  Download,
 } from "lucide-react";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import {
@@ -29,6 +33,7 @@ import {
   copyToHwpClipboard,
   PsstPageData,
 } from "@/lib/export/hwp-clipboard-exporter";
+import { downloadHwpxDocument } from "@/lib/export/hwpx-generator";
 import { CanvasTheme } from "../types";
 
 interface A4DocumentEditorProps {
@@ -49,6 +54,7 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
   const [pages, setPages] = useState<PsstPageData[]>([]);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [isCopied, setIsCopied] = useState(false);
+  const [isHwpxDownloading, setIsHwpxDownloading] = useState(false);
   const [selectedFont, setSelectedFont] = useState("'맑은 고딕', 'Malgun Gothic', sans-serif");
   const [selectedFontSize, setSelectedFontSize] = useState("10pt");
   const [lastPlanSnapshot, setLastPlanSnapshot] = useState<string>("");
@@ -107,6 +113,60 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
       </table><p><br/></p>
     `;
     formatDoc("insertHTML", tableHtml);
+  };
+
+  // Add Table Row below currently selected cell
+  const handleAddTableRow = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    let node: Node | null = selection.anchorNode;
+    while (node && node.nodeName !== "TR" && node.nodeName !== "TABLE" && node.nodeName !== "BODY") {
+      node = node.parentNode;
+    }
+    if (node && node.nodeName === "TR") {
+      const tr = node as HTMLTableRowElement;
+      const colCount = tr.cells.length || 2;
+      const newTr = document.createElement("tr");
+      for (let i = 0; i < colCount; i++) {
+        const td = document.createElement("td");
+        td.style.border = "1px solid #000";
+        td.style.padding = "7px 8px";
+        td.innerHTML = i === 0 ? "새 항목" : "내용을 입력하세요";
+        if (i === 0) {
+          td.style.backgroundColor = "#f8fafc";
+          td.style.fontWeight = "bold";
+          td.style.textAlign = "center";
+        }
+        newTr.appendChild(td);
+      }
+      tr.parentNode?.insertBefore(newTr, tr.nextSibling);
+    }
+  };
+
+  // Delete Current Table Row
+  const handleDeleteTableRow = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    let node: Node | null = selection.anchorNode;
+    while (node && node.nodeName !== "TR" && node.nodeName !== "TABLE" && node.nodeName !== "BODY") {
+      node = node.parentNode;
+    }
+    if (node && node.nodeName === "TR") {
+      const tr = node as HTMLTableRowElement;
+      tr.parentNode?.removeChild(tr);
+    }
+  };
+
+  // Native .hwpx Download Export
+  const handleExportHwpx = async () => {
+    if (!plan) return;
+    try {
+      setIsHwpxDownloading(true);
+      const fileName = `${plan.overview?.title || "PSST_사업계획서"}_ZiwonAI`;
+      await downloadHwpxDocument(plan, programTitle, fileName);
+    } finally {
+      setIsHwpxDownloading(false);
+    }
   };
 
   // One-click Copy for HWP across all pages
@@ -259,7 +319,7 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
 
           <div className="h-5 w-px bg-slate-300 dark:bg-slate-700 mx-1" />
 
-          {/* Lists & Table */}
+          {/* Lists & Table Tools */}
           <button
             type="button"
             onClick={() => formatDoc("insertUnorderedList")}
@@ -276,15 +336,36 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
           >
             <ListOrdered className="w-4 h-4" />
           </button>
-          <button
-            type="button"
-            onClick={handleInsertTable}
-            title="표(Table) 삽입"
-            className="px-2.5 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 text-xs font-bold flex items-center space-x-1 cursor-pointer"
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-            <span>표 삽입</span>
-          </button>
+          
+          <div className="flex items-center gap-1 bg-blue-50/60 dark:bg-blue-950/40 p-0.5 rounded-lg border border-blue-200 dark:border-blue-900/60">
+            <button
+              type="button"
+              onClick={handleInsertTable}
+              title="새 표 삽입"
+              className="px-2 h-7 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold flex items-center space-x-1 cursor-pointer shadow-2xs"
+            >
+              <TableIcon className="w-3 h-3" />
+              <span>표 삽입</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleAddTableRow}
+              title="선택한 위치 아래에 행 추가"
+              className="px-1.5 h-7 rounded hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 text-[11px] font-semibold flex items-center space-x-0.5 cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span className="hidden xl:inline">행 추가</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteTableRow}
+              title="선택한 행 삭제"
+              className="px-1.5 h-7 rounded hover:bg-red-100 dark:hover:bg-red-950 text-red-600 dark:text-red-400 text-[11px] font-semibold flex items-center space-x-0.5 cursor-pointer"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span className="hidden xl:inline">행 삭제</span>
+            </button>
+          </div>
         </div>
 
         {/* Right Action Group */}
@@ -322,6 +403,18 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
           >
             <Printer className="w-3.5 h-3.5" />
             <span>인쇄/PDF</span>
+          </button>
+
+          {/* Native .hwpx Download */}
+          <button
+            type="button"
+            onClick={handleExportHwpx}
+            disabled={isHwpxDownloading || !plan}
+            title="한컴오피스 한글 표준 .hwpx 파일로 다운로드"
+            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center space-x-1.5 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{isHwpxDownloading ? "생성 중..." : ".hwpx 다운로드"}</span>
           </button>
 
           {/* Primary Action: One-Click HWP Copy */}
