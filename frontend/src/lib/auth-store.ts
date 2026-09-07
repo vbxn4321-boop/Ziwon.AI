@@ -16,6 +16,7 @@ export interface AuthUser {
 let inMemoryAccessToken: string | null = null;
 let inMemoryUser: AuthUser | null = null;
 let refreshPromise: Promise<string | null> | null = null;
+let lastRefreshFailedAt = 0; // Cooldown for failed refresh attempts (5 seconds)
 let isInitialized = false;
 
 // 레거시 localStorage 토큰 잔재 안전 정리 (최초 1회 실행)
@@ -31,6 +32,11 @@ function cleanupLegacyLocalStorage() {
  * Access Token 및 사용자 정보를 메모리에 저장 (Remember Me에 따라 캐시 위치 분기)
  */
 export function setInMemoryAuth(accessToken: string | null, user: AuthUser | null, rememberMe: boolean = true) {
+  const prevToken = inMemoryAccessToken;
+  const prevUserId = inMemoryUser?.id || inMemoryUser?.email || null;
+  const newUserId = user?.id || user?.email || null;
+  const hasChanged = prevToken !== accessToken || prevUserId !== newUserId;
+
   inMemoryAccessToken = accessToken;
   inMemoryUser = user;
   cleanupLegacyLocalStorage();
@@ -52,7 +58,11 @@ export function setInMemoryAuth(accessToken: string | null, user: AuthUser | nul
         sessionStorage.removeItem("ziwon_auth_user");
       } catch {}
     }
-    window.dispatchEvent(new CustomEvent("ziwon_auth_change", { detail: { user } }));
+
+    // 유저/토큰 상태가 실제로 바뀌었을 때만 이벤트를 쏴서 무한 재호출 방지
+    if (hasChanged) {
+      window.dispatchEvent(new CustomEvent("ziwon_auth_change", { detail: { user } }));
+    }
   }
 }
 
@@ -95,9 +105,15 @@ export function clearInMemoryAuth() {
 /**
  * HttpOnly 쿠키를 이용한 Silent Refresh (무음 토큰 재발급)
  * - Promise Deduplication: 진행 중인 갱신 요청이 있으면 동일 Promise를 반환하여 중복 요청 방지
+ * - Failure Cooldown: 실패 시 5초간 재호출을 막아 401 네트워크 폭풍 방지
  */
 export async function performSilentRefresh(): Promise<string | null> {
   if (typeof window === "undefined") return null;
+
+  // 토큰 갱신 실패 시 5초 동안은 서버로 다시 POST /api/auth를 쏘지 않고 즉시 반환하여 401 네트워크 폭풍 방지
+  if (Date.now() - lastRefreshFailedAt < 5000) {
+    return null;
+  }
 
   if (refreshPromise) {
     return refreshPromise;
@@ -113,6 +129,7 @@ export async function performSilentRefresh(): Promise<string | null> {
       });
 
       if (!res.ok) {
+        lastRefreshFailedAt = Date.now();
         // Refresh token 만료 또는 부재 -> 메모리 및 UI 상태 초기화
         clearInMemoryAuth();
         return null;
@@ -120,14 +137,17 @@ export async function performSilentRefresh(): Promise<string | null> {
 
       const data = await res.json();
       if (data.accessToken) {
+        lastRefreshFailedAt = 0;
         const updatedUser = data.user || inMemoryUser;
         setInMemoryAuth(data.accessToken, updatedUser);
         return data.accessToken;
       }
 
+      lastRefreshFailedAt = Date.now();
       clearInMemoryAuth();
       return null;
     } catch (err) {
+      lastRefreshFailedAt = Date.now();
       console.warn("[AuthStore] Silent Refresh 실패:", err);
       return null;
     } finally {

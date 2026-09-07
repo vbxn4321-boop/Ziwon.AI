@@ -192,23 +192,73 @@ class ScraperService:
 
                     # Determine file type & extension
                     file_type = "FILE"
-                    ext_match = re.search(r"\.(pdf|hwpx|hwp|docx)", f"{final_filename} {entry['url']}", re.IGNORECASE)
+                    ext_match = re.search(r"\.(pdf|hwpx|hwp|docx|zip)", f"{final_filename} {entry['url']}", re.IGNORECASE)
                     if ext_match:
                         file_type = ext_match.group(1).upper()
                     elif buf[:4] == b"%PDF":
                         file_type = "PDF"
                         final_filename += ".pdf"
-                    elif buf[:2] == b"PK":
-                        file_type = "HWPX"
-                        final_filename += ".hwpx"
                     elif buf[:4] == b"\xd0\xcf\x11\xe0":
                         file_type = "HWP"
                         final_filename += ".hwp"
+                    elif buf[:2] == b"PK":
+                        if parser_service.is_regular_zip(buf):
+                            file_type = "ZIP"
+                            final_filename += ".zip"
+                        else:
+                            file_type = "HWPX"
+                            final_filename += ".hwpx"
 
                     if "." not in final_filename:
                         final_filename = f"{final_filename}.{file_type.lower()}"
 
-                    # Extract text using parser_service
+                    # Handle ZIP archive: Extract and store all internal documents individually
+                    if file_type == "ZIP" or parser_service.is_regular_zip(buf):
+                        zip_docs = parser_service.extract_and_parse_zip(buf)
+                        if zip_docs:
+                            db = SessionLocal()
+                            try:
+                                for zdoc in zip_docs:
+                                    sub_doc_id = str(uuid.uuid4())
+                                    sub_filename = sanitize_utf8(zdoc["fileName"])
+                                    sub_text = sanitize_utf8(zdoc.get("extractedText", ""))
+                                    sub_type = zdoc.get("fileType", "FILE")
+                                    sub_status = "PARSED" if sub_text and len(sub_text) > 50 else "PENDING"
+
+                                    db.execute(
+                                        text("""
+                                        INSERT INTO "SupportDocument" (
+                                            "id", "supportProgramId", "fileName", "fileUrl", "fileType",
+                                            "extractedText", "status", "createdAt", "updatedAt"
+                                        )
+                                        VALUES (
+                                            :id, :prog_id, :fileName, :fileUrl, :fileType,
+                                            :extractedText, :status, NOW(), NOW()
+                                        )
+                                        """),
+                                        {
+                                            "id": sub_doc_id,
+                                            "prog_id": support_program_id,
+                                            "fileName": sub_filename,
+                                            "fileUrl": entry["url"],
+                                            "fileType": sub_type,
+                                            "extractedText": sub_text,
+                                            "status": sub_status,
+                                        }
+                                    )
+                                    scraped_docs.append({
+                                        "id": sub_doc_id,
+                                        "fileName": sub_filename,
+                                        "fileType": sub_type,
+                                        "textLength": len(sub_text)
+                                    })
+                                    print(f"[Python Scraper] 📦 [ZIP Extract] ✅ Saved '{sub_filename}' ({sub_type}, {len(sub_text)} chars, status={sub_status})")
+                                db.commit()
+                            finally:
+                                db.close()
+                            continue  # Handled all zip contents
+
+                    # Extract text for single document using parser_service
                     extracted_text = ""
                     try:
                         if file_type == "PDF":
@@ -229,10 +279,7 @@ class ScraperService:
                     doc_id = str(uuid.uuid4())
 
                     # status 는 스키마가 정의한 PENDING / PARSED / FAILED 만 사용해야 합니다.
-                    # 예전에 'READY' 를 쓰던 탓에, 파이썬이 수집한 문서가
-                    # 후속 파이프라인(where status = 'PENDING')에 영영 잡히지 않았습니다.
                     # 본문 추출에 성공했으면 PARSED, 아니면 PENDING 으로 두어 재처리되게 합니다.
-                    # (Next.js attachment-scraper 와 동일한 기준)
                     doc_status = "PARSED" if clean_text and len(clean_text) > 50 else "PENDING"
 
                     db = SessionLocal()

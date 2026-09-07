@@ -487,7 +487,7 @@ export default function ProgramDetailPage() {
           />
         )}
 
-        {activeTab === "docs" && <DocumentsTab sortedDocs={sortedDocs} />}
+        {activeTab === "docs" && <DocumentsTab sortedDocs={sortedDocs} programTitle={program.title} />}
 
         {activeTab === "sources" && <RawSourceTab sources={program.sources} />}
       </main>

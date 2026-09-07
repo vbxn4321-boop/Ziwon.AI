@@ -23,6 +23,7 @@ import {
   DocCategory,
 } from "./detail-helpers";
 import { HwpExtractedTextViewer } from "./HwpExtractedTextViewer";
+import { RhwpPageViewer } from "@/components/viewer/RhwpPageViewer";
 
 interface NoticeOriginalTabProps {
   sortedDocs: any[];
@@ -285,39 +286,14 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
               </div>
             )}
 
-            {/* 3. HWP / DOCX / Text Form Viewer */}
+            {/* 3. HWP / HWPX / DOCX RHWP Vector Viewer */}
             {currentCategory !== "pdf" && currentCategory !== "image" && (
-              currentDoc.extractedText ? (
-                <HwpExtractedTextViewer
-                  fileName={currentDoc.fileName}
-                  fileUrl={currentDoc.fileUrl}
-                  extractedText={currentDoc.extractedText}
-                  onRefresh={onRefresh}
-                />
-              ) : (
-                <div className="flex-1 p-6 text-slate-800 space-y-4 max-h-[850px] overflow-y-auto custom-scrollbar bg-slate-50">
-                  <div className="p-12 text-center bg-white rounded-xl border border-slate-200 space-y-4">
-                    <FileCode className="w-12 h-12 text-indigo-400 mx-auto" />
-                    <div className="space-y-1">
-                      <p className="font-bold text-slate-800 text-sm">
-                        서식 텍스트가 아직 파싱되지 않았거나 바이너리 서식 파일입니다.
-                      </p>
-                      <p className="text-xs text-slate-500 max-w-md mx-auto">
-                        아래 버튼을 눌러 공고문 문서를 실시간으로 재동기화하거나 상단의 다운로드 버튼으로 한컴오피스에서 바로 확인하세요.
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 pt-2">
-                      <button
-                        onClick={onRefresh}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center space-x-1.5 shadow-xs cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>서식 실시간 재파싱</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
+              <RhwpPageViewer
+                fileName={currentDoc.fileName}
+                fileUrl={currentDoc.fileUrl}
+                extractedText={currentDoc.extractedText}
+                onRefresh={onRefresh}
+              />
             )}
           </div>
         </div>

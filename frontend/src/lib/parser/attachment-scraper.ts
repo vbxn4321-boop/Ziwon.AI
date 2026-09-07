@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { extractTextFromBuffer, sanitizeUtf8 } from "@/lib/parser/document-parser";
+import { extractTextFromBuffer, sanitizeUtf8, extractDocumentsFromZip, isRegularZip } from "@/lib/parser/document-parser";
 import { randomUUID } from "crypto";
 
 export interface ScrapedAttachment {
@@ -221,41 +221,65 @@ export async function scrapeMissingAttachments(
 
         // Determine file type
         let fileType = "FILE";
-        const extMatch = (finalFileName + " " + entry.url).match(/\.(pdf|hwpx|hwp|docx)/i);
+        const extMatch = (finalFileName + " " + entry.url).match(/\.(pdf|hwpx|hwp|docx|zip)/i);
         if (extMatch) {
           fileType = extMatch[1].toUpperCase();
         } else if (buf.slice(0, 4).toString("hex") === "25504446") {
           fileType = "PDF";
           finalFileName += ".pdf";
-        } else if (buf.slice(0, 2).toString("utf-8") === "PK") {
-          fileType = "HWPX";
-          finalFileName += ".hwpx";
         } else if (buf.slice(0, 4).toString("hex") === "d0cf11e0") {
           fileType = "HWP";
           finalFileName += ".hwp";
+        } else if (buf.slice(0, 2).toString("utf-8") === "PK") {
+          if (isRegularZip(buf)) {
+            fileType = "ZIP";
+            finalFileName += ".zip";
+          } else {
+            fileType = "HWPX";
+            finalFileName += ".hwpx";
+          }
         }
 
         if (!finalFileName.includes(".")) {
           finalFileName = `${finalFileName}.${fileType.toLowerCase()}`;
         }
 
+        // Handle ZIP archive unpacking into individual documents
+        if (fileType === "ZIP" || isRegularZip(buf)) {
+          const zipDocs = await extractDocumentsFromZip(buf);
+          if (zipDocs.length > 0) {
+            console.log(`📦 [Dynamic Scraper] Unpacked ${zipDocs.length} documents from ZIP: ${finalFileName}`);
+            return zipDocs.map((zd) => ({
+              fileName: sanitizeUtf8(zd.fileName),
+              fileUrl: entry.url,
+              fileType: zd.fileType,
+              extractedText: sanitizeUtf8(zd.extractedText),
+            })) as ScrapedAttachment[];
+          }
+        }
+
         // Extract text
         const extractedText = await extractTextFromBuffer(buf, fileType);
 
-        return {
-          fileName: sanitizeUtf8(finalFileName),
-          fileUrl: entry.url,
-          fileType,
-          extractedText: sanitizeUtf8(extractedText),
-        } as ScrapedAttachment;
+        return [
+          {
+            fileName: sanitizeUtf8(finalFileName),
+            fileUrl: entry.url,
+            fileType,
+            extractedText: sanitizeUtf8(extractedText),
+          } as ScrapedAttachment,
+        ];
       } catch (err: any) {
         console.warn(`[Dynamic Scraper] Failed to process ${entry.url}:`, err.message);
         return null;
       }
     });
 
-    const results = await Promise.all(downloadPromises);
-    const attachments = results.filter((att): att is ScrapedAttachment => att !== null);
+    const nestedResults = await Promise.all(downloadPromises);
+    const attachments: ScrapedAttachment[] = nestedResults
+      .filter((res): res is ScrapedAttachment[] => res !== null)
+      .flat();
+
 
     if (attachments.length > 0) {
       console.log(`✅ [Dynamic Scraper] Successfully extracted ${attachments.length} attachment files! Saving to DB...`);

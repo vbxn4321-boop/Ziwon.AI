@@ -190,6 +190,95 @@ export function extractTextFromHWP(buffer: Buffer): string {
 }
 
 /**
+ * HWPX/DOCX가 아닌 순수 일반 ZIP 압축 파일인지 확인
+ */
+export function isRegularZip(buffer: Buffer): boolean {
+  if (!buffer || buffer.length < 4) return false;
+  if (buffer.slice(0, 2).toString("utf-8") !== "PK") return false;
+  try {
+    const zip = new AdmZip(buffer);
+    const entries = zip.getEntries();
+    const names = entries.map((e) => e.entryName.toLowerCase());
+    if (names.some((n) => n.includes("contents/section") || n === "version.xml")) return false;
+    if (names.some((n) => n.includes("word/document") || n === "[content_types].xml")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export interface ExtractedSubDocument {
+  fileName: string;
+  fileType: string;
+  buffer: Buffer;
+  extractedText: string;
+}
+
+/**
+ * ZIP 아카이브 내부의 개별 문서(PDF, HWP, HWPX, DOCX 등)를 인메모리에서 추출하여 파싱
+ */
+export async function extractDocumentsFromZip(buffer: Buffer): Promise<ExtractedSubDocument[]> {
+  const extractedDocs: ExtractedSubDocument[] = [];
+  try {
+    const zip = new AdmZip(buffer);
+    const entries = zip.getEntries();
+
+    for (const entry of entries) {
+      if (entry.isDirectory) continue;
+
+      let entryName = entry.entryName;
+      if (entryName.includes("__MACOSX") || entryName.startsWith(".")) continue;
+
+      // 한글 파일명 인코딩 디코딩 (EUC-KR / CP949 지원)
+      try {
+        const rawBuf = (entry as any).rawEntryName;
+        if (rawBuf && Buffer.isBuffer(rawBuf)) {
+          const eucKr = new TextDecoder("euc-kr").decode(rawBuf);
+          if (eucKr && !eucKr.includes("\uFFFD") && eucKr.length > 2) {
+            entryName = eucKr;
+          }
+        }
+      } catch {}
+
+      const cleanFileName = path.basename(entryName).trim();
+      if (!cleanFileName) continue;
+
+      const lowerName = cleanFileName.toLowerCase();
+      if (lowerName.endsWith(".exe") || lowerName.endsWith(".dll") || lowerName.endsWith(".zip") || lowerName.endsWith(".mp4")) {
+        continue;
+      }
+
+      const fileData = entry.getData();
+      let fileType = "FILE";
+
+      if (lowerName.endsWith(".pdf") || fileData.slice(0, 4).toString("hex") === "25504446") {
+        fileType = "PDF";
+      } else if (lowerName.endsWith(".hwpx")) {
+        fileType = "HWPX";
+      } else if (lowerName.endsWith(".hwp") || fileData.slice(0, 4).toString("hex") === "d0cf11e0") {
+        fileType = "HWP";
+      } else if (lowerName.endsWith(".docx")) {
+        fileType = "DOCX";
+      } else if (lowerName.endsWith(".txt")) {
+        fileType = "TXT";
+      }
+
+      const extractedText = await extractTextFromBuffer(fileData, fileType);
+
+      extractedDocs.push({
+        fileName: cleanFileName,
+        fileType,
+        buffer: fileData,
+        extractedText: sanitizeUtf8(extractedText),
+      });
+    }
+  } catch (err: any) {
+    console.warn("[ZIP Extractor Error]:", err.message);
+  }
+  return extractedDocs;
+}
+
+/**
  * Universal Document Text Extractor
  * Supports PDF, DOCX, HWP, HWPX, TXT, HTML
  */
@@ -197,6 +286,17 @@ export async function extractTextFromBuffer(buffer: Buffer, fileTypeOrName: stri
   const ext = fileTypeOrName.toLowerCase();
 
   try {
+    if (ext.endsWith(".zip") || ext === "zip" || isRegularZip(buffer)) {
+      const subDocs = await extractDocumentsFromZip(buffer);
+      if (subDocs.length > 0) {
+        return subDocs
+          .filter((d) => d.extractedText && d.extractedText.length > 10)
+          .map((d) => `=== [첨부파일: ${d.fileName}] ===\n${d.extractedText}`)
+          .join("\n\n");
+      }
+      return "";
+    }
+
     if (ext.endsWith(".pdf") || ext === "pdf") {
       try {
         const { PDFParse } = require("pdf-parse");
