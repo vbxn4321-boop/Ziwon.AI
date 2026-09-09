@@ -297,7 +297,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
 
                   {/* High-Fidelity SVG Paper Sheet */}
                   <div
-                    className="bg-white text-slate-900 rounded-xs shadow-2xl overflow-hidden border border-slate-300 box-border select-text"
+                    className="bg-white text-slate-900 rounded-xs shadow-2xl overflow-visible border border-slate-300 box-border select-text [&_svg]:!overflow-visible [&_svg]:max-w-full [&_svg]:h-auto"
                     style={{
                       width: "794px",
                       minHeight: "1123px",

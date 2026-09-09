@@ -104,6 +104,10 @@ model SupportProgram {
   recommendations   Recommendation[]
   savedPlans        SavedPsstPlan[]
   bookmarks         BookmarkedProgram[]
+
+  @@index([endDate])
+  @@index([createdAt])
+  @@index([region, category])
 }
 
 model SupportSource {

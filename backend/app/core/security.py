@@ -31,15 +31,13 @@ def get_current_user(request: Request) -> AuthenticatedUser:
     try:
         # 1. JWT Payload Decode & Basic Format Check
         # Attempt signature verification with secret if signed locally, or decode claims
-        payload = None
-        if settings.JWT_SECRET:
-            try:
-                payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-            except jwt.InvalidSignatureError:
-                # Handle Supabase OAuth or external tokens gracefully
-                payload = jwt.decode(token, options={"verify_signature": False})
-        else:
-            payload = jwt.decode(token, options={"verify_signature": False})
+        if not settings.JWT_SECRET:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="서버 설정 오류: JWT_SECRET이 구성되지 않았습니다.",
+            )
+            
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
 
         user_id = payload.get("sub")
         email = payload.get("email", "")
