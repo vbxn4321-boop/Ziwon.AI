@@ -133,9 +133,14 @@ export async function GET(req: NextRequest) {
       prisma.supportProgram.findMany({
         where: whereClause,
         include: {
-          sources: true,
-          documents: true,
+          sources: {
+            select: { id: true, sourceType: true, externalId: true, sourceUrl: true, rawTitle: true, createdAt: true }
+          },
+          documents: {
+            select: { id: true, fileName: true, fileUrl: true, fileType: true, status: true, createdAt: true }
+          },
           analyses: {
+            select: { id: true, model: true, status: true, createdAt: true },
             take: 1,
             orderBy: { createdAt: "desc" },
           },

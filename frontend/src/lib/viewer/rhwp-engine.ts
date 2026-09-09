@@ -25,16 +25,31 @@ export async function initRhwpEngine(): Promise<any> {
           measureCanvasCtx = canvas.getContext("2d");
         }
         if (measureCanvasCtx) {
-          if (font !== lastFontCache) {
-            measureCanvasCtx.font = font || "10pt 'Malgun Gothic', '맑은 고딕', sans-serif";
-            lastFontCache = font;
+          // 글꼴 문자열 안정화 (예: 10.0pt -> 10pt) 및 기본 폴백 폰트 적용
+          let safeFont = font || "";
+          safeFont = safeFont.replace(/(\d+\.\d+)pt/g, (m, p1) => `${Math.round(parseFloat(p1))}pt`);
+          
+          if (safeFont !== lastFontCache) {
+            measureCanvasCtx.font = safeFont || "10pt 'Malgun Gothic', sans-serif";
+            // 브라우저가 유효하지 않은 폰트 규격으로 거부할 경우를 대비한 안전망
+            if (measureCanvasCtx.font === "10px sans-serif" && safeFont !== "10px sans-serif") {
+                measureCanvasCtx.font = "10pt 'Malgun Gothic', sans-serif";
+            }
+            lastFontCache = safeFont;
           }
-          return measureCanvasCtx.measureText(text || "").width;
+          
+          let width = measureCanvasCtx.measureText(text || "").width;
+          // 측정 실패로 0이 반환될 경우 텍스트 길이에 비례한 기본값(글자당 약 13px) 부여하여 레이아웃 붕괴(표 너비 팽창/텍스트 밀림) 방지
+          if (width === 0 && text.length > 0) {
+            width = text.length * 13;
+          }
+          return width;
         }
-      } catch {
-        // Fallback approximate width
+      } catch (err) {
+        console.warn("[RHWP Measure Error]", err);
       }
-      return (text || "").length * 8;
+      // 최후의 폴백
+      return (text || "").length * 13;
     };
 
     const rhwp = await import("@rhwp/core");
@@ -71,7 +86,9 @@ export async function renderHwpBufferToSvgs(buffer: ArrayBuffer | Uint8Array): P
 
     const pages: string[] = [];
     for (let i = 0; i < count; i++) {
-      const svg = viewer.renderPageSvg(i);
+      let svg = viewer.renderPageSvg(i);
+      // WASM 엔진이 생성한 내부 clip-path가 CSS overflow-visible을 무시하고 강제로 자르는 것을 방지
+      svg = svg.replace(/clip-path="[^"]+"/g, "");
       pages.push(svg);
     }
 
