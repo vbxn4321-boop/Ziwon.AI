@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Layers,
@@ -89,11 +89,21 @@ export default function AdminDashboardPage() {
   const [isCrawling, setIsCrawling] = useState(false);
   const [crawlerResult, setCrawlerResult] = useState<any>(null);
 
+  // 손상된 ZIP 재적재 상태 (.zip.hwpx 레거시 행 + 압축 미해제 방치 행)
+  const [isReprocessingZips, setIsReprocessingZips] = useState(false);
+  const [reprocessZipResult, setReprocessZipResult] = useState<any>(null);
+  const [brokenZipCount, setBrokenZipCount] = useState<{ brokenDocCount: number; programCount: number } | null>(null);
+  // 0 = 남은 전체를 끝까지 처리
+  const [reprocessZipTarget, setReprocessZipTarget] = useState(20);
+  const [reprocessProgress, setReprocessProgress] = useState<{ done: number; target: number } | null>(null);
+  // 서버리스 타임아웃 때문에 한 번에 다 못 돌므로 라운드를 나눠 도는데, 그 중단 신호
+  const reprocessAbortRef = useRef(false);
+
   // Safety Confirmation Modal state (위험 작업 이중 확인 장치)
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
     description: string;
-    actionType: "crawler" | "dedup" | "preScrape";
+    actionType: "crawler" | "dedup" | "preScrape" | "reprocessZip";
     confirmButtonText: string;
     isDestructive?: boolean;
   } | null>(null);
@@ -123,12 +133,25 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const fetchBrokenZipCount = async () => {
+    try {
+      const res = await authFetch("/api/admin/reprocess-broken-zips");
+      const json = await res.json();
+      if (json.success) {
+        setBrokenZipCount({ brokenDocCount: json.data.brokenDocCount, programCount: json.data.programCount });
+      }
+    } catch (err) {
+      console.error("Failed to load broken ZIP queue:", err);
+    }
+  };
+
   useEffect(() => {
     initAuthStore().then((user) => {
       setCurrentUser(user);
       setAuthChecked(true);
       if (user?.role === "ADMIN" || user?.email === "qjawls2617@naver.com") {
         fetchStats();
+        fetchBrokenZipCount();
       }
     });
   }, []);
@@ -181,6 +204,88 @@ export default function AdminDashboardPage() {
     }
   };
 
+  /**
+   * 손상된 ZIP 재적재.
+   *
+   * Vercel 서버리스 함수는 2분에서 잘리므로 한 번의 요청으로 수십 건을 다 돌 수 없다.
+   * 서버가 시간 예산에 닿으면 남은 건수를 알려주며 멈추고, 여기서 이어서 다음 라운드를
+   * 요청한다. 실패한 공고는 손상 상태가 그대로 남아 다시 조회되므로, 이미 시도한 ID 를
+   * 모아 보내 같은 공고를 무한히 반복하지 않게 한다.
+   */
+  const executeReprocessBrokenZips = async () => {
+    const target = reprocessZipTarget || brokenZipCount?.programCount || 0;
+    reprocessAbortRef.current = false;
+    setIsReprocessingZips(true);
+    setReprocessZipResult(null);
+    setReprocessProgress({ done: 0, target });
+
+    const attemptedIds: string[] = [];
+    const allResults: any[] = [];
+    let lastData: any = null;
+
+    try {
+      // 라운드가 진행되지 않는 상황(전부 실패 등)에서도 반드시 빠져나오도록 상한을 둔다
+      for (let round = 0; round < 50; round++) {
+        if (reprocessAbortRef.current) break;
+
+        const remainingTarget = target - attemptedIds.length;
+        if (remainingTarget <= 0) break;
+
+        const res = await authFetch("/api/admin/reprocess-broken-zips", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            limit: Math.min(remainingTarget, 100),
+            excludeProgramIds: attemptedIds,
+          }),
+        });
+        const data = await res.json();
+        lastData = data;
+
+        if (!data.success) {
+          setReprocessZipResult(data);
+          return;
+        }
+
+        const roundResults = data.data?.results || [];
+        allResults.push(...roundResults);
+        attemptedIds.push(...(data.data?.processedProgramIds || []));
+        setReprocessProgress({ done: attemptedIds.length, target });
+        // 중간 경과를 계속 보여준다
+        setReprocessZipResult({
+          success: true,
+          message: `${attemptedIds.length}건 처리 중... (남은 공고 ${data.data?.remaining ?? 0}건)`,
+          data: { ...data.data, results: allResults },
+        });
+
+        // 서버가 더 줄 게 없으면 종료
+        if (roundResults.length === 0 || (data.data?.remaining ?? 0) <= 0) break;
+      }
+
+      const successCount = allResults.filter((r: any) => r.status === "SUCCESS").length;
+      const failedCount = allResults.filter((r: any) => r.status === "FAILED" || r.status === "SKIPPED").length;
+      const noDocCount = allResults.filter((r: any) => r.status === "NO_ATTACHMENTS_FOUND").length;
+
+      setReprocessZipResult({
+        success: true,
+        message:
+          `총 ${allResults.length}건 재적재 ➔ ${successCount}건 성공` +
+          (noDocCount > 0 ? ` (원문 파일 없음: ${noDocCount}건)` : "") +
+          (failedCount > 0 ? ` (오류: ${failedCount}건)` : "") +
+          (reprocessAbortRef.current ? " · 사용자 중단" : "") +
+          (lastData?.data?.remaining > 0 ? ` · 남은 공고 ${lastData.data.remaining}건` : ""),
+        data: { results: allResults },
+      });
+    } catch (err: any) {
+      setReprocessZipResult({ success: false, error: err.message });
+    } finally {
+      setIsReprocessingZips(false);
+      setReprocessProgress(null);
+      fetchStats();
+      fetchBrokenZipCount();
+    }
+  };
+
   const executeCrawler = async () => {
     try {
       setIsCrawling(true);
@@ -222,6 +327,21 @@ export default function AdminDashboardPage() {
     });
   };
 
+  const handleReprocessBrokenZipsClick = () => {
+    const totalBroken = brokenZipCount?.programCount ?? 0;
+    const targetCount = reprocessZipTarget || totalBroken;
+    const targetLabel = reprocessZipTarget === 0 ? `전체 ${totalBroken}` : String(targetCount);
+    // 공고당 스크래핑 3~5초 + 텀 1.5초를 대략 6초로 잡은 눈대중
+    const estMinutes = Math.max(1, Math.ceil((targetCount * 6) / 60));
+    setConfirmModal({
+      title: "손상된 ZIP 첨부파일 재적재",
+      description: `한글 파일명 인코딩 문제로 .hwpx 로 잘못 저장되었거나, 압축이 풀리지 않은 채 방치된 ZIP 첨부파일을 원문 사이트에서 최신 파서로 다시 스크래핑합니다. 대상 ${targetLabel}건을 공고당 1.5초 텀으로 순차 처리하며, 서버 제한 때문에 자동으로 여러 라운드에 나눠 실행됩니다. (예상 소요 약 ${estMinutes}분) 계속하시겠습니까?`,
+      actionType: "reprocessZip",
+      confirmButtonText: "재적재 시작",
+      isDestructive: false,
+    });
+  };
+
   const handleCrawlerClick = () => {
     setConfirmModal({
       title: "정부 OpenAPI 실시간 수집 가동",
@@ -239,6 +359,7 @@ export default function AdminDashboardPage() {
     if (type === "crawler") executeCrawler();
     else if (type === "dedup") executeDedup();
     else if (type === "preScrape") executePreScrape();
+    else if (type === "reprocessZip") executeReprocessBrokenZips();
   };
 
   // 1. 관리자 권한 확인 중 로딩 화면 (화면 깜빡임 및 데이터 유출 100% 방지)
@@ -468,7 +589,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 pt-2">
             {/* Action 1: Pre-Scraping Batch */}
             <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-3">
               <div className="flex items-center justify-between">
@@ -565,6 +686,82 @@ export default function AdminDashboardPage() {
                 )}
               </button>
             </div>
+
+            {/* Action 4: Reprocess Broken ZIP Attachments */}
+            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-300 flex items-center space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>손상된 ZIP 재적재</span>
+                </span>
+                <select
+                  value={reprocessZipTarget}
+                  onChange={(e) => setReprocessZipTarget(Number(e.target.value))}
+                  disabled={isReprocessingZips}
+                  className="bg-slate-900 border border-slate-700 text-slate-300 text-[11px] rounded-lg px-2 py-1"
+                >
+                  <option value={10}>10건 처리</option>
+                  <option value={20}>20건 처리</option>
+                  <option value={50}>50건 처리</option>
+                  <option value={100}>100건 처리</option>
+                  <option value={0}>전체 처리</option>
+                </select>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                .zip.hwpx 로 잘못 저장되었거나 압축이 풀리지 않은 채 방치된 첨부파일을 최신 파서로 다시 스크래핑합니다.
+                {brokenZipCount && (
+                  <span className="block mt-1 font-bold text-amber-400">
+                    {brokenZipCount.programCount}개 공고 · {brokenZipCount.brokenDocCount}개 파일 대상
+                  </span>
+                )}
+              </p>
+
+              {reprocessProgress && (
+                <div className="space-y-1">
+                  <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full bg-amber-500 transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, Math.round((reprocessProgress.done / Math.max(1, reprocessProgress.target)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-slate-400 text-right font-mono">
+                    {reprocessProgress.done} / {reprocessProgress.target} 공고
+                  </div>
+                </div>
+              )}
+
+              {isReprocessingZips ? (
+                <button
+                  onClick={() => {
+                    reprocessAbortRef.current = true;
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold shadow-md flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>재적재 중... (클릭 시 중단)</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleReprocessBrokenZipsClick}
+                  disabled={!brokenZipCount?.programCount}
+                  className="w-full py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 text-white text-xs font-bold shadow-md flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
+                >
+                  {!brokenZipCount?.programCount ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>손상된 파일 없음</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5" />
+                      <span>재적재 가동</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Action Feedback Notifications */}
@@ -605,6 +802,54 @@ export default function AdminDashboardPage() {
                             title="원문 웹페이지에 서식 파일이 없고 URL 링크만 있는 공고"
                           >
                             ⚠ 원문 파일 미제공 (URL접수형)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">
+                            ✕ 실패
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {reprocessZipResult && (
+            <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/40 text-xs text-slate-200 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span className="font-bold">{reprocessZipResult.message || JSON.stringify(reprocessZipResult)}</span>
+                </div>
+                <button
+                  onClick={() => setReprocessZipResult(null)}
+                  className="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800 cursor-pointer"
+                >
+                  닫기
+                </button>
+              </div>
+
+              {reprocessZipResult.data?.results && reprocessZipResult.data.results.length > 0 && (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {reprocessZipResult.data.results.map((r: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between text-[11px]"
+                    >
+                      <div className="truncate pr-3 max-w-[70%] text-slate-300">
+                        <span className="text-slate-500 font-mono mr-1.5">{idx + 1}.</span>
+                        {r.title}
+                      </div>
+                      <div>
+                        {r.status === "SUCCESS" ? (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                            ✓ 첨부 {r.docCount}개 재적재 완료
+                          </span>
+                        ) : r.status === "NO_ATTACHMENTS_FOUND" ? (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
+                            ⚠ 원문 파일 없음
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">

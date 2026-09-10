@@ -65,7 +65,7 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
 
       // 2. Direct binary download & extraction if not yet extracted
       if (!extractedText || extractedText.length < 50) {
-        extractedText = await extractTextFromUrl(doc.fileUrl, doc.fileType);
+        extractedText = await extractTextFromUrl(doc.fileUrl, doc.fileType, doc.entryPath);
       }
 
       // 3. Fallback to program summary only if text extraction completely failed

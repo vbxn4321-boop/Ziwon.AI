@@ -13,6 +13,8 @@ export interface HwpDocumentItem {
   id: string;
   fileName: string;
   fileUrl: string;
+  /** ZIP 첨부파일 내부 문서일 때의 내부 경로 */
+  entryPath?: string | null;
   fileType: string;
   extractedText?: string | null;
 }
@@ -121,6 +123,7 @@ export const HwpViewerModal: React.FC<HwpViewerModalProps> = ({
             key={currentDoc.id || currentDoc.fileUrl || activeIdx}
             fileName={currentDoc.fileName}
             fileUrl={currentDoc.fileUrl}
+            entryPath={currentDoc.entryPath}
             extractedText={currentDoc.extractedText}
           />
         </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeFetch, BlockedUrlError } from "@/lib/security/safe-fetch";
+import { extractZipEntry } from "@/lib/parser/document-parser";
 
 export const maxDuration = 30;
 // dns 모듈을 사용하므로 Node 런타임이 필요합니다(Edge 불가).
@@ -12,7 +13,9 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const fileUrl = searchParams.get("url");
-    const customFileName = searchParams.get("filename") || "공고첨부파일";
+    const customFileName = searchParams.get("filename");
+    // ZIP 첨부파일 내부의 개별 문서를 지목하는 경로 (예: "붙임서식.zip/신청서.hwp")
+    const entryPath = searchParams.get("entry");
 
     if (!fileUrl) {
       return NextResponse.json({ error: "Invalid or missing file URL" }, { status: 400 });
@@ -45,7 +48,7 @@ export async function GET(req: NextRequest) {
     }
 
     const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    let buffer = Buffer.from(arrayBuffer);
 
     // Content-Length 를 안 주는 서버가 많아 실제 크기로 한 번 더 확인
     if (buffer.length > MAX_DOWNLOAD_BYTES) {
@@ -55,22 +58,39 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Extract filename from remote header if available
-    let fileName = customFileName;
-    const contentDisp = res.headers.get("content-disposition");
-    if (contentDisp) {
-      const match = contentDisp.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
-      if (match) {
-        try {
-          fileName = decodeURIComponent(match[1].replace(/["']/g, "")).replace(/\+/g, " ");
-        } catch {
-          fileName = match[1].replace(/["']/g, "");
+    let fileName = customFileName || "공고첨부파일";
+
+    if (entryPath) {
+      // ZIP 첨부파일 안의 개별 문서 요청. 압축을 풀어 해당 파일만 내려준다.
+      const entryData = extractZipEntry(buffer, entryPath);
+      if (!entryData) {
+        console.warn(`[File Download Proxy] ZIP 내부 문서를 찾지 못했습니다: ${entryPath}`);
+        return NextResponse.json(
+          { error: "압축 파일에서 해당 문서를 찾지 못했습니다. 원본 압축파일을 내려받아 주세요." },
+          { status: 404 }
+        );
+      }
+      // adm-zip 이 돌려주는 Buffer 도 항상 ArrayBuffer 기반이라 타입만 좁힌다
+      buffer = entryData as Buffer<ArrayBuffer>;
+      if (!customFileName) fileName = entryPath.split("/").pop() || fileName;
+    } else {
+      // Extract filename from remote header if available
+      const contentDisp = res.headers.get("content-disposition");
+      if (contentDisp) {
+        const match = contentDisp.match(/filename\*?=(?:UTF-8'')?([^;]+)/i);
+        if (match) {
+          try {
+            fileName = decodeURIComponent(match[1].replace(/["']/g, "")).replace(/\+/g, " ");
+          } catch {
+            fileName = match[1].replace(/["']/g, "");
+          }
         }
       }
     }
 
-    // Determine contentType
-    let contentType = res.headers.get("content-type") || "application/octet-stream";
+    // Determine contentType.
+    // ZIP 에서 꺼낸 파일은 원격 헤더(application/zip)를 쓰면 안 되므로 확장자로만 판단한다.
+    let contentType = (!entryPath && res.headers.get("content-type")) || "application/octet-stream";
     const lowerName = fileName.toLowerCase();
     if (lowerName.endsWith(".pdf")) contentType = "application/pdf";
     else if (lowerName.endsWith(".png")) contentType = "image/png";

@@ -22,11 +22,14 @@ import {
   FileCode,
 } from "lucide-react";
 import { fetchAndRenderHwp, RhwpRenderResult } from "@/lib/viewer/rhwp-engine";
+import { buildDownloadUrl } from "@/components/program-detail/detail-helpers";
 import { HwpExtractedTextViewer } from "@/components/program-detail/HwpExtractedTextViewer";
 
 interface RhwpPageViewerProps {
   fileName: string;
   fileUrl: string;
+  /** ZIP 첨부파일 내부 문서일 때의 내부 경로 */
+  entryPath?: string | null;
   extractedText?: string | null;
   onRefresh?: () => void;
 }
@@ -34,6 +37,7 @@ interface RhwpPageViewerProps {
 export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
   fileName,
   fileUrl,
+  entryPath,
   extractedText,
   onRefresh,
 }) => {
@@ -55,7 +59,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
       if (!fileUrl) return;
       setLoading(true);
       try {
-        const result = await fetchAndRenderHwp(fileUrl, fileName);
+        const result = await fetchAndRenderHwp(fileUrl, fileName, entryPath);
         if (isMounted) {
           setRenderResult(result);
           if (!result.success && extractedText) {
@@ -235,7 +239,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
 
           {/* Download Original File */}
           <a
-            href={`/api/download?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(fileName)}`}
+            href={buildDownloadUrl({ fileUrl, fileName, entryPath })}
             download={fileName}
             className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 rounded-lg transition flex items-center space-x-1.5 cursor-pointer"
           >
@@ -251,6 +255,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
           <HwpExtractedTextViewer
             fileName={fileName}
             fileUrl={fileUrl}
+            entryPath={entryPath}
             extractedText={extractedText}
             onRefresh={onRefresh}
           />
@@ -334,7 +339,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
               ) : (
                 <div className="flex items-center justify-center gap-2 pt-2">
                   <a
-                    href={`/api/download?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(fileName)}`}
+                    href={buildDownloadUrl({ fileUrl, fileName, entryPath })}
                     download={fileName}
                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center space-x-1.5 shadow-md cursor-pointer"
                   >

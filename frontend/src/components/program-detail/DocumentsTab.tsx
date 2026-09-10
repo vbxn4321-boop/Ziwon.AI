@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { FileText, Download, Eye, X, Copy, Check, ExternalLink, Image as ImageIcon, Layers, FileCode } from "lucide-react";
-import { getDocCategory, getDocBadgeText } from "./detail-helpers";
+import { getDocCategory, getDocBadgeText, buildDownloadUrl, shouldProxyDownload } from "./detail-helpers";
 import { HwpViewerModal } from "@/components/viewer/HwpViewerModal";
 
 interface DocumentsTabProps {
@@ -106,9 +106,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ sortedDocs, programT
 
                   {isImage && (
                     <a
-                      href={`/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
-                        doc.fileName
-                      )}&view=true`}
+                      href={buildDownloadUrl(doc, { view: true })}
                       target="_blank"
                       rel="noreferrer"
                       className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors flex items-center space-x-1 font-bold shadow-2xs cursor-pointer"
@@ -130,16 +128,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ sortedDocs, programT
                     </a>
                   ) : (
                     <a
-                      href={
-                        doc.fileUrl.includes("fileDown.do") ||
-                        doc.fileUrl.includes("FileDown.do") ||
-                        doc.fileUrl.includes("afile/fileDownload") ||
-                        doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip|png|jpe?g|gif|webp)$/i)
-                          ? `/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
-                              doc.fileName
-                            )}`
-                          : doc.fileUrl
-                      }
+                      href={shouldProxyDownload(doc) ? buildDownloadUrl(doc) : doc.fileUrl}
                       target="_blank"
                       rel="noreferrer"
                       download={doc.fileName}

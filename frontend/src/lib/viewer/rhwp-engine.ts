@@ -1,5 +1,7 @@
 "use client";
 
+import { buildDownloadUrl } from "@/components/program-detail/detail-helpers";
+
 let wasmInitPromise: Promise<any> | null = null;
 let measureCanvasCtx: CanvasRenderingContext2D | null = null;
 let lastFontCache = "";
@@ -111,11 +113,16 @@ export async function renderHwpBufferToSvgs(buffer: ArrayBuffer | Uint8Array): P
 /**
  * Downloads HWP file from URL and renders it directly in browser via RHWP WASM
  */
-export async function fetchAndRenderHwp(fileUrl: string, fileName?: string): Promise<RhwpRenderResult> {
+export async function fetchAndRenderHwp(
+  fileUrl: string,
+  fileName?: string,
+  entryPath?: string | null
+): Promise<RhwpRenderResult> {
   try {
-    const proxyUrl = `/api/download?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(
-      fileName || "document.hwp"
-    )}&view=true`;
+    const proxyUrl = buildDownloadUrl(
+      { fileUrl, entryPath },
+      { view: true, fileName: fileName || "document.hwp" }
+    );
 
     const res = await fetch(proxyUrl);
     if (!res.ok) {
