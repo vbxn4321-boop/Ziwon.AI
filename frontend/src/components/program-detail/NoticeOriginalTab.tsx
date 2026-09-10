@@ -21,6 +21,7 @@ import {
   getDocBadgeText,
   getDocDownloadText,
   DocCategory,
+  buildDownloadUrl,
 } from "./detail-helpers";
 import { HwpExtractedTextViewer } from "./HwpExtractedTextViewer";
 import { RhwpPageViewer } from "@/components/viewer/RhwpPageViewer";
@@ -153,9 +154,7 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
                   </button>
 
                   <a
-                    href={`/api/download?url=${encodeURIComponent(
-                      currentDoc.fileUrl
-                    )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true#view=FitH`}
+                    href={`${buildDownloadUrl(currentDoc, { view: true })}#view=FitH`}
                     target="_blank"
                     rel="noreferrer"
                     className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors flex items-center space-x-1 font-semibold shadow-2xs"
@@ -198,9 +197,7 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
                   </div>
 
                   <a
-                    href={`/api/download?url=${encodeURIComponent(
-                      currentDoc.fileUrl
-                    )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                    href={buildDownloadUrl(currentDoc, { view: true })}
                     target="_blank"
                     rel="noreferrer"
                     className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors flex items-center space-x-1 font-semibold shadow-2xs"
@@ -235,9 +232,7 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
 
               {/* Universal Download Action */}
               <a
-                href={`/api/download?url=${encodeURIComponent(
-                  currentDoc.fileUrl
-                )}&filename=${encodeURIComponent(currentDoc.fileName)}`}
+                href={buildDownloadUrl(currentDoc)}
                 download={currentDoc.fileName}
                 className={`px-3.5 py-1.5 rounded-lg font-bold transition-colors flex items-center space-x-1.5 shadow-sm text-white cursor-pointer ${
                   currentCategory === "image"
@@ -258,9 +253,7 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
             {/* 1. PDF Viewer */}
             {currentCategory === "pdf" && (
               <iframe
-                src={`/api/download?url=${encodeURIComponent(
-                  currentDoc.fileUrl
-                )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true#view=FitH&toolbar=1&navpanes=0`}
+                src={`${buildDownloadUrl(currentDoc, { view: true })}#view=FitH&toolbar=1&navpanes=0`}
                 className="w-full flex-1 h-full border-0 bg-white"
                 style={{ minHeight: isExpanded ? "1100px" : "800px" }}
                 title={currentDoc.fileName}
@@ -275,9 +268,7 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
                   style={{ transform: `scale(${imageZoom})`, transformOrigin: "top center" }}
                 >
                   <img
-                    src={`/api/download?url=${encodeURIComponent(
-                      currentDoc.fileUrl
-                    )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                    src={buildDownloadUrl(currentDoc, { view: true })}
                     alt={currentDoc.fileName}
                     className="max-w-full h-auto rounded-xl shadow-2xl border border-slate-800 object-contain select-none"
                     loading="eager"
@@ -291,6 +282,7 @@ export const NoticeOriginalTab: React.FC<NoticeOriginalTabProps> = ({
               <RhwpPageViewer
                 fileName={currentDoc.fileName}
                 fileUrl={currentDoc.fileUrl}
+                entryPath={currentDoc.entryPath}
                 extractedText={currentDoc.extractedText}
                 onRefresh={onRefresh}
               />

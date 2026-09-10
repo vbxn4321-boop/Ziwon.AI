@@ -6,6 +6,8 @@ export interface ScrapedAttachment {
   fileName: string;
   fileUrl: string;
   fileType: string;
+  /** ZIP 내부에서 꺼낸 문서일 때 그 내부 경로. fileUrl 은 부모 ZIP 을 가리킨다. */
+  entryPath?: string;
   extractedText?: string;
 }
 
@@ -222,22 +224,33 @@ export async function scrapeMissingAttachments(
         // Determine file type
         let fileType = "FILE";
         const extMatch = (finalFileName + " " + entry.url).match(/\.(pdf|hwpx|hwp|docx|zip)/i);
-        if (extMatch) {
-          fileType = extMatch[1].toUpperCase();
-        } else if (buf.slice(0, 4).toString("hex") === "25504446") {
+        const parsedExt = extMatch ? extMatch[1].toUpperCase() : null;
+
+        if (buf.slice(0, 4).toString("hex") === "25504446") {
           fileType = "PDF";
-          finalFileName += ".pdf";
+          if (!finalFileName.toLowerCase().endsWith(".pdf")) finalFileName += ".pdf";
         } else if (buf.slice(0, 4).toString("hex") === "d0cf11e0") {
           fileType = "HWP";
-          finalFileName += ".hwp";
+          if (!finalFileName.toLowerCase().endsWith(".hwp")) finalFileName += ".hwp";
         } else if (buf.slice(0, 2).toString("utf-8") === "PK") {
-          if (isRegularZip(buf)) {
+          if (parsedExt === "ZIP") {
             fileType = "ZIP";
-            finalFileName += ".zip";
-          } else {
+          } else if (parsedExt === "HWPX") {
             fileType = "HWPX";
-            finalFileName += ".hwpx";
+          } else if (parsedExt === "DOCX") {
+            fileType = "DOCX";
+          } else {
+            if (isRegularZip(buf)) {
+              fileType = "ZIP";
+              finalFileName += ".zip";
+            } else {
+              fileType = "HWPX";
+              // Replace .zip with .hwpx if it erroneously ended with .zip
+              finalFileName = finalFileName.replace(/\.zip$/i, "") + ".hwpx";
+            }
           }
+        } else if (parsedExt) {
+          fileType = parsedExt;
         }
 
         if (!finalFileName.includes(".")) {
@@ -249,13 +262,18 @@ export async function scrapeMissingAttachments(
           const zipDocs = await extractDocumentsFromZip(buf);
           if (zipDocs.length > 0) {
             console.log(`📦 [Dynamic Scraper] Unpacked ${zipDocs.length} documents from ZIP: ${finalFileName}`);
+            // fileUrl 은 부모 ZIP 을 가리키고, entryPath 로 내부 파일을 지목한다.
+            // 다운로드 프록시가 이 조합으로 개별 파일만 꺼내 내려준다.
             return zipDocs.map((zd) => ({
               fileName: sanitizeUtf8(zd.fileName),
               fileUrl: entry.url,
+              entryPath: zd.entryPath,
               fileType: zd.fileType,
               extractedText: sanitizeUtf8(zd.extractedText),
             })) as ScrapedAttachment[];
           }
+          // 해제에 실패하면 ZIP 자체를 그대로 첨부파일로 남겨 직접 내려받게 한다
+          console.warn(`[Dynamic Scraper] ZIP 내부 문서를 추출하지 못했습니다. 원본 유지: ${finalFileName}`);
         }
 
         // Extract text
@@ -289,6 +307,7 @@ export async function scrapeMissingAttachments(
         supportProgramId,
         fileName: att.fileName,
         fileUrl: att.fileUrl,
+        entryPath: att.entryPath ?? null,
         fileType: att.fileType,
         status: att.extractedText && att.extractedText.length > 50 ? "PARSED" : "PENDING",
         extractedText: att.extractedText && att.extractedText.length > 50 ? att.extractedText : null,

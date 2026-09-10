@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from "react";
+import { buildDownloadUrl } from "./detail-helpers";
 import {
   FileText,
   Download,
@@ -16,6 +17,8 @@ import {
 interface HwpExtractedTextViewerProps {
   fileName: string;
   fileUrl: string;
+  /** ZIP 첨부파일 내부 문서일 때의 내부 경로 */
+  entryPath?: string | null;
   extractedText: string;
   onRefresh?: () => void;
 }
@@ -115,6 +118,7 @@ interface ParsedBlock {
 export const HwpExtractedTextViewer: React.FC<HwpExtractedTextViewerProps> = ({
   fileName,
   fileUrl,
+  entryPath,
   extractedText,
 }) => {
   const [viewMode, setViewMode] = useState<"smart" | "raw">("smart");
@@ -389,7 +393,7 @@ export const HwpExtractedTextViewer: React.FC<HwpExtractedTextViewerProps> = ({
             </button>
 
             <a
-              href={`/api/download?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(fileName)}`}
+              href={buildDownloadUrl({ fileUrl, fileName, entryPath })}
               download={fileName}
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-blue-600/30 transition-all flex items-center space-x-1.5 cursor-pointer"
             >

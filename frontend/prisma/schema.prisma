@@ -129,6 +129,7 @@ model SupportDocument {
   supportProgramId String
   fileName         String          // 첨부파일명
   fileUrl          String          // 첨부파일 다운로드 URL
+  entryPath        String?         // ZIP 첨부파일 내부 경로 (압축 내 개별 문서일 때만)
   fileType         String          // HWP, PDF, HTML, DOCX
   fileHash         String?         // 문서 변경 검증용 SHA256 해시
   status           String          @default("PENDING") // PENDING, PARSED, FAILED

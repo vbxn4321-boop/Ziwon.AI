@@ -48,6 +48,8 @@ import {
   getDocBadgeText,
   getDocDownloadText,
   DocCategory,
+  buildDownloadUrl,
+  shouldProxyDownload,
 } from "./program-detail/detail-helpers";
 import { HwpExtractedTextViewer } from "./program-detail/HwpExtractedTextViewer";
 
@@ -1410,9 +1412,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                         {/* PDF Tools */}
                         {currentCategory === "pdf" && (
                           <a
-                            href={`/api/download?url=${encodeURIComponent(
-                              currentDoc.fileUrl
-                            )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                            href={buildDownloadUrl(currentDoc, { view: true })}
                             target="_blank"
                             rel="noreferrer"
                             className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors flex items-center space-x-1 text-xs"
@@ -1454,9 +1454,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                             </div>
 
                             <a
-                              href={`/api/download?url=${encodeURIComponent(
-                                currentDoc.fileUrl
-                              )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                              href={buildDownloadUrl(currentDoc, { view: true })}
                               target="_blank"
                               rel="noreferrer"
                               className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors flex items-center space-x-1 text-xs"
@@ -1470,9 +1468,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
 
                         {/* Universal Download Action */}
                         <a
-                          href={`/api/download?url=${encodeURIComponent(currentDoc.fileUrl)}&filename=${encodeURIComponent(
-                            currentDoc.fileName
-                          )}`}
+                          href={buildDownloadUrl(currentDoc)}
                           download={currentDoc.fileName}
                           className={`px-3 py-1.5 rounded-lg text-white font-bold text-xs transition-colors flex items-center space-x-1.5 shadow-md cursor-pointer ${
                             currentCategory === "image"
@@ -1496,9 +1492,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       {currentCategory === "pdf" && (
                         <div className="w-full h-full flex-1 flex flex-col min-h-[750px]">
                           <iframe
-                            src={`/api/download?url=${encodeURIComponent(
-                              currentDoc.fileUrl
-                            )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true#view=FitH&toolbar=1&navpanes=0`}
+                            src={`${buildDownloadUrl(currentDoc, { view: true })}#view=FitH&toolbar=1&navpanes=0`}
                             className="w-full h-full flex-1 border-0 rounded-2xl bg-white min-h-[750px]"
                             title={currentDoc.fileName}
                           />
@@ -1514,9 +1508,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                               style={{ transform: `scale(${modalImageZoom})`, transformOrigin: "top center" }}
                             >
                               <img
-                                src={`/api/download?url=${encodeURIComponent(
-                                  currentDoc.fileUrl
-                                )}&filename=${encodeURIComponent(currentDoc.fileName)}&view=true`}
+                                src={buildDownloadUrl(currentDoc, { view: true })}
                                 alt={currentDoc.fileName}
                                 className="max-w-full h-auto rounded-xl shadow-2xl border border-slate-800 object-contain select-none"
                                 loading="eager"
@@ -1532,6 +1524,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                           <HwpExtractedTextViewer
                             fileName={currentDoc.fileName}
                             fileUrl={currentDoc.fileUrl}
+                            entryPath={currentDoc.entryPath}
                             extractedText={currentDoc.extractedText}
                             onRefresh={fetchLatestProgramDetails}
                           />
@@ -1556,9 +1549,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                                   <span>서식 실시간 재파싱</span>
                                 </button>
                                 <a
-                                  href={`/api/download?url=${encodeURIComponent(
-                                    currentDoc.fileUrl
-                                  )}&filename=${encodeURIComponent(currentDoc.fileName)}`}
+                                  href={buildDownloadUrl(currentDoc)}
                                   download={currentDoc.fileName}
                                   className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-purple-600/30 flex items-center justify-center space-x-1.5 cursor-pointer"
                                 >
@@ -1619,18 +1610,8 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                 )
               ) : (
                 sortedDocs.map((doc, idx) => {
-                  const isDirectDownload =
-                    doc.fileUrl &&
-                    (doc.fileUrl.includes("fileDown.do") ||
-                      doc.fileUrl.includes("FileDown.do") ||
-                      doc.fileUrl.includes("afile/fileDownload") ||
-                      doc.fileUrl.match(/\.(pdf|hwp|hwpx|docx|zip)$/i));
-
-                  const downloadHref = isDirectDownload
-                    ? `/api/download?url=${encodeURIComponent(doc.fileUrl)}&filename=${encodeURIComponent(
-                        doc.fileName
-                      )}`
-                    : doc.fileUrl;
+                  const isDirectDownload = !!doc.fileUrl && shouldProxyDownload(doc);
+                  const downloadHref = isDirectDownload ? buildDownloadUrl(doc) : doc.fileUrl;
 
                   const isPdf =
                     doc.fileType?.toUpperCase() === "PDF" || doc.fileName?.toLowerCase().endsWith(".pdf");
