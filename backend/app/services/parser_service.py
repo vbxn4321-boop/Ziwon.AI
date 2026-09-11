@@ -143,7 +143,7 @@ class DocumentParserService:
                     try:
                         sub_bytes = z.read(info)
                     except Exception as read_err:
-                        print(f"[ZIP Parser] Error reading {clean_name}: {read_err}")
+                        print(f"[ZIP Parser] {clean_name} 읽기 오류: {read_err}")
                         continue
                     if not sub_bytes:
                         continue
@@ -177,7 +177,7 @@ class DocumentParserService:
                             file_type = "TXT"
                             sub_text = sub_bytes.decode("utf-8", errors="ignore")
                     except Exception as parse_err:
-                        print(f"[ZIP Parser] Parse warning for {clean_name}: {parse_err}")
+                        print(f"[ZIP Parser] {clean_name} 파싱 경고: {parse_err}")
 
                     extracted_docs.append({
                         "fileName": clean_name,
@@ -186,7 +186,7 @@ class DocumentParserService:
                         "extractedText": sub_text,
                     })
         except Exception as e:
-            print(f"[ZIP Parser Error]: {e}")
+            print(f"[ZIP Parser 오류]: {e}")
 
         return extracted_docs
 

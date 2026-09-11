@@ -39,13 +39,13 @@ class RedisManager:
             )
             # Test ping
             self._client.ping()
-            print(f"[Redis] Successfully connected to Redis ({settings.REDIS_URL.split('@')[-1] if '@' in settings.REDIS_URL else 'localhost'})")
+            print(f"[Redis] Redis 연결 성공 ({settings.REDIS_URL.split('@')[-1] if '@' in settings.REDIS_URL else 'localhost'})")
         except Exception as e:
             self._client = None
             if settings.ENVIRONMENT == "production":
                 logger.error(f"[Redis CRITICAL] Failed to connect to Redis in production: {e}")
             else:
-                print(f"[Redis DEV NOTICE] Redis not reachable ({e}). Using development in-memory fallback.")
+                print(f"[Redis DEV NOTICE] Redis 에 연결할 수 없습니다 ({e}). 개발용 인메모리 폴백을 사용합니다.")
 
     def is_connected(self) -> bool:
         if self._client:

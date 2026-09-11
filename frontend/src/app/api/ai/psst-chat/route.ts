@@ -4,6 +4,59 @@ import { GoogleGenAI } from "@google/genai";
 import { generatePsstBusinessPlan, PsstBusinessPlanResult, PsstGeneratorInput } from "@/lib/ai/psst-generator";
 import { getCandidateModels } from "@/lib/ai/models";
 
+/**
+ * 대화 중에 참고할 공고문 맥락을 준비한다.
+ *
+ * 챗봇이 "이 공고에는 이러이러한 게 필요하니 알려달라" 고 물으려면 공고문 내용을
+ * 알아야 하는데, 기존에는 시스템 프롬프트에 공고 제목만 들어가 있어서 어떤 공고든
+ * 똑같은 일반 질문만 했다. 공고문에서 필요한 섹션만 발췌해 넣는다.
+ */
+async function loadNoticeContext(targetProgramTitle?: string): Promise<{
+  promptBlock: string;
+  hasNotice: boolean;
+}> {
+  if (!targetProgramTitle) return { promptBlock: "", hasNotice: false };
+
+  try {
+    const { prisma } = await import("@/lib/db");
+    const found = await prisma.supportProgram.findFirst({
+      where: { title: { contains: targetProgramTitle.slice(0, 20) } },
+      include: { documents: { select: { fileName: true, extractedText: true } } },
+    });
+    if (!found || found.documents.length === 0) return { promptBlock: "", hasNotice: false };
+
+    const { extractNoticeForPrompt } = await import("@/lib/parser/notice-extractor");
+    // 대화는 매 턴 호출되므로 분석용보다 짧게 자른다
+    const extraction = extractNoticeForPrompt(found.documents, 8000);
+    if (!extraction.promptText.trim()) return { promptBlock: "", hasNotice: false };
+
+    const stageNote =
+      extraction.productStage === "PROTOTYPE"
+        ? "\n※ 이 사업은 시제품·프로토타입 단계를 지원합니다. 양산 전제로 질문하지 마십시오."
+        : extraction.productStage === "MASS_PRODUCTION"
+        ? "\n※ 이 사업은 양산·상용화 단계를 지원합니다. 아이디어 검증 전제로 질문하지 마십시오."
+        : "";
+
+    return {
+      hasNotice: true,
+      promptBlock: `
+[이 공고의 실제 내용 - 아래 근거로만 질문하십시오]
+${extraction.promptText}${stageNote}
+
+[공고 기반 질문 원칙]
+- 위 공고문에 적힌 지원자격·평가항목·제출서류를 근거로, 이 공고에 꼭 필요한 정보를 콕 집어 물어보십시오.
+  (예: 평가항목에 "기술 독창성"이 있으면 그 부분을 구체적으로 되묻기)
+- 추천 답변(SUGGESTIONS)도 이 공고의 분야와 평가 기준에 맞춰 제시하십시오. 무관한 업종 예시를 쓰지 마십시오.
+- 위 공고문에 없는 내용(배점, 금액, 날짜 등)은 아는 척하지 말고 "공고문에 기재되어 있지 않다"고 하십시오.
+- 주관기관의 내부 심사 성향이나 과거 공고와의 비교는 당신이 알 수 없는 정보입니다. 단정하지 말고,
+  일반적인 가이드임을 밝히거나 사용자에게 확인을 요청하십시오.`,
+    };
+  } catch (e: any) {
+    console.warn("[PSST Chat] 공고문 맥락 로딩 실패:", e.message);
+    return { promptBlock: "", hasNotice: false };
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     // 비인가 대량 호출로 Gemini 비용이 새는 것을 막습니다.
@@ -113,13 +166,18 @@ ${JSON.stringify(currentPlan, null, 2)}
       let grantType: any = "CASH_GRANT";
       let extractedOutline: string[] = [];
       let maxBudgetWon: number | undefined = undefined;
+      let programAnalysis: any = undefined;
 
       if (targetProgramTitle) {
         try {
           const { prisma } = await import("@/lib/db");
           const found = await prisma.supportProgram.findFirst({
             where: { title: { contains: targetProgramTitle.slice(0, 20) } },
-            include: { documents: true, sources: true },
+            include: {
+              documents: true,
+              sources: true,
+              analyses: { where: { status: "COMPLETED" }, orderBy: { createdAt: "desc" }, take: 1 },
+            },
           });
           if (found) {
             const { analyzeProgramForPsst } = await import("@/lib/parser/outline-extractor");
@@ -129,6 +187,18 @@ ${JSON.stringify(currentPlan, null, 2)}
             grantType = analysis.grantType;
             extractedOutline = analysis.outlines;
             maxBudgetWon = analysis.maxBudgetWon;
+
+            // 공고 분석 결과(배점표·가점·자격요건)를 생성기에 넘긴다.
+            // psst-generator 에 이걸 프롬프트로 만드는 코드가 이미 있는데
+            // 여태 아무도 채워주지 않아 평가 기준을 모른 채 계획서를 쓰고 있었다.
+            if (found.analyses[0]?.resultJson) {
+              try {
+                programAnalysis = JSON.parse(found.analyses[0].resultJson);
+                console.log(`📊 [PSST Chat] 공고 분석 결과를 생성에 반영합니다: ${found.title.slice(0, 30)}`);
+              } catch {
+                console.warn("[PSST Chat] 공고 분석 JSON 파싱 실패");
+              }
+            }
           }
         } catch (e: any) {
           console.warn("[PSST Chat] Program auto-analysis skipped:", e.message);
@@ -144,6 +214,7 @@ ${JSON.stringify(currentPlan, null, 2)}
         grantType,
         extractedOutline,
         maxBudgetWon,
+        programAnalysis,
       };
 
       const planResult = await generatePsstBusinessPlan(planInput);
@@ -165,8 +236,14 @@ ${JSON.stringify(currentPlan, null, 2)}
     }
 
     // Case 3: Interactive Interview Mode with Quick Suggestions & Step Progress
+
+    // 공고문 발췌를 대화에 실어준다. 이게 없으면 챗봇이 공고 제목만 보고
+    // 어떤 사업이든 똑같은 일반 질문만 하게 된다.
+    const noticeContext = await loadNoticeContext(targetProgramTitle);
+
     const systemInstruction = `당신은 대한민국 중소벤처기업부, 창업진흥원, 기술보증기금 출신의 수석 창업 컨설턴트 AI 'Ziwon-AI'입니다.
 목표 지원사업: [${targetProgramTitle || "2026년 중소벤처기업부 초기창업패키지"}]
+${noticeContext.promptBlock}
 
 사용자와 1:1 심층 인터뷰를 진행하여, 정부 표준 PSST(Problem, Solution, Scale-up, Team) 사업계획서에 필요한 핵심 정보를 **반드시 하나도 빠짐없이 차례대로 되물어서 수집**해야 합니다.
 
@@ -273,8 +350,10 @@ ${JSON.stringify(currentPlan, null, 2)}
       .replace(/```json[\s\S]*?```/gi, "")
       .trim();
 
-    // If no suggestions were generated by tags, generate context-tailored fallback suggestions
-    if (suggestions.length === 0) {
+    // 태그로 추천 답변이 안 나왔을 때의 대비책.
+    // 아래 예시는 스마트팜·IoT 기준이라 공고와 무관할 수 있다. 공고문 맥락을 실어
+    // 보낸 경우에는 AI 가 공고에 맞게 만들어주므로, 엉뚱한 업종 예시를 끼워넣지 않는다.
+    if (suggestions.length === 0 && !noticeContext.hasNotice) {
       if (progress.currentStep === 1) {
         suggestions = ["🌱 스마트팜 비닐하우스 모니터링", "📦 친환경 생분해 완충재 포장", "🩺 AI 헬스케어 비대면 진료"];
       } else if (progress.currentStep === 2) {

@@ -82,10 +82,10 @@ class ScraperService:
         scraped_docs: List[Dict[str, Any]] = []
 
         try:
-            print(f"[Python Scraper] 🔍 Fetching notice webpage: {source_url}")
+            print(f"[Python Scraper] 🔍 공고 웹페이지 요청 중: {source_url}")
             res = await client.get(source_url, headers={"User-Agent": USER_AGENT})
             if res.status_code != 200:
-                print(f"[Python Scraper] ⚠️ Failed to fetch webpage {source_url} (HTTP {res.status_code})")
+                print(f"[Python Scraper] ⚠️ 웹페이지 요청 실패 {source_url} (HTTP {res.status_code})")
                 return []
 
             html = res.text
@@ -104,13 +104,13 @@ class ScraperService:
             js_redirect = re.search(r"var\s+fullUrl\s*=\s*['\"]([^'\"]+)['\"]", html, re.IGNORECASE)
             if js_redirect and js_redirect.group(1):
                 redirect_url = to_abs_url(js_redirect.group(1))
-                print(f"[Python Scraper] ↪️ Following K-Startup JS redirect to: {redirect_url}")
+                print(f"[Python Scraper] ↪️ K-Startup JS 리다이렉트를 따라갑니다: {redirect_url}")
                 try:
                     redir_res = await client.get(redirect_url, headers={"User-Agent": USER_AGENT})
                     if redir_res.status_code == 200:
                         html = redir_res.text
                 except Exception as e:
-                    print(f"[Python Scraper] Warning on redirect: {e}")
+                    print(f"[Python Scraper] 리다이렉트 처리 경고: {e}")
 
             candidate_entries: List[Dict[str, str]] = []
 
@@ -184,7 +184,7 @@ class ScraperService:
             # Download and parse up to 10 attachments
             for entry in candidate_entries[:10]:
                 try:
-                    print(f"[Python Scraper] ⬇️ Downloading attachment: {entry['url']}")
+                    print(f"[Python Scraper] ⬇️ 첨부파일 다운로드 중: {entry['url']}")
                     bin_res = await client.get(
                         entry["url"],
                         headers={
@@ -271,7 +271,7 @@ class ScraperService:
                                         "fileType": sub_type,
                                         "textLength": len(sub_text)
                                     })
-                                    print(f"[Python Scraper] 📦 [ZIP Extract] ✅ Saved '{sub_filename}' ({sub_type}, {len(sub_text)} chars, status={sub_status})")
+                                    print(f"[Python Scraper] 📦 [ZIP 추출] ✅ '{sub_filename}' 저장 완료 ({sub_type}, {len(sub_text)}자, status={sub_status})")
                                 db.commit()
                             finally:
                                 db.close()
@@ -294,7 +294,7 @@ class ScraperService:
                         else:
                             extracted_text = buf.decode("utf-8", errors="ignore")
                     except Exception as parse_err:
-                        print(f"[Python Scraper] Parser warning for {final_filename}: {parse_err}")
+                        print(f"[Python Scraper] {final_filename} 파싱 경고: {parse_err}")
 
                     clean_filename = sanitize_utf8(final_filename)
                     clean_text = sanitize_utf8(extracted_text)
@@ -336,15 +336,15 @@ class ScraperService:
                             "fileType": file_type,
                             "textLength": len(clean_text)
                         })
-                        print(f"[Python Scraper] ✅ Saved '{clean_filename}' ({file_type}, {len(clean_text)} chars, status={doc_status})")
+                        print(f"[Python Scraper] ✅ '{clean_filename}' 저장 완료 ({file_type}, {len(clean_text)}자, status={doc_status})")
                     finally:
                         db.close()
 
                 except Exception as dl_err:
-                    print(f"[Python Scraper] Failed to download {entry['url']}: {dl_err}")
+                    print(f"[Python Scraper] {entry['url']} 다운로드 실패: {dl_err}")
 
         except Exception as e:
-            print(f"[Python Scraper] ❌ Exception scraping {source_url}: {e}")
+            print(f"[Python Scraper] ❌ {source_url} 스크래핑 중 예외 발생: {e}")
         finally:
             if should_close_client:
                 await client.aclose()
@@ -365,44 +365,115 @@ class ScraperService:
         2번이 없으면, 크롤러가 넣은 뼈대 행 때문에 "documents 0개" 조건이 다시는
         참이 되지 않아 새로 수집되는 압축파일은 영원히 이 배치에서 빠지게 된다.
         """
-        print(f"\n[Scraper Batch]: 🌙 Starting Python native pre-scraping background job (Target limit: {limit} programs)...")
+        print(f"\n[Scraper Batch]: 🌙 파이썬 네이티브 사전 스크래핑 백그라운드 작업 시작 (목표 한도: {limit}건)...")
+        try:
+            return await cls._run_pre_scraping_batch_inner(limit)
+        except Exception as e:
+            # 이 배치는 CrawlLog 에 실행 이력을 남기지 않아서, 실제로 도는지 조용히
+            # 실패하는지 지금까지 DB 로는 전혀 확인할 방법이 없었다. 예외가 나도
+            # 반드시 CrawlLog 에 흔적을 남기고, 스케줄러에는 항상 dict 를 돌려준다.
+            print(f"[Scraper Batch] ❌ 배치 전체 실패: {e}")
+            cls._write_crawl_log("PYTHON_PRE_SCRAPE_BATCH", "FAILED", 0, str(e))
+            return {
+                "success": False,
+                "message": f"사전 스크래핑 배치 실행 중 오류: {e}",
+                "processed_count": 0,
+                "results": []
+            }
+
+    @staticmethod
+    def _write_crawl_log(source_type: str, status: str, item_count: int, error_message: Optional[str] = None):
+        """이 배치의 실행 이력을 CrawlLog 에 남긴다. 관리자 페이지/DB 조회로
+        실제 실행 여부와 결과를 나중에도 확인할 수 있게 하기 위함이다."""
         db = SessionLocal()
         try:
-            rows = db.execute(
+            db.execute(
                 text("""
+                INSERT INTO "CrawlLog" ("id", "sourceType", "status", "itemCount", "errorMessage", "executedAt")
+                VALUES (:id, :source_type, :status, :item_count, :error_message, NOW())
+                """),
+                {
+                    "id": str(uuid.uuid4()),
+                    "source_type": source_type,
+                    "status": status,
+                    "item_count": item_count,
+                    "error_message": error_message,
+                },
+            )
+            db.commit()
+        except Exception as log_err:
+            print(f"[Scraper Batch] CrawlLog 기록 실패 (무시하고 계속): {log_err}")
+        finally:
+            db.close()
+
+    @classmethod
+    async def _run_pre_scraping_batch_inner(cls, limit: int) -> Dict[str, Any]:
+        # 항상 "최신순"으로만 뽑으면, 매시간 새로 들어오는(그리고 실제로 첨부파일이
+        # 없는 이벤트성 공고 등도 섞인) 신규 항목이 계속 앞자리를 차지해서 오래된
+        # 진짜 밀린 공고는 순서가 영원히 안 온다. 절반은 오래된 것부터(백로그 소진),
+        # 절반은 최신 것부터(신규 공고 신속 처리) 나눠 뽑는다.
+        where_clause = """
+            (sp."endDate" IS NULL OR sp."endDate" >= CURRENT_DATE)
+            AND ss."sourceUrl" IS NOT NULL
+            AND (
+              NOT EXISTS (
+                SELECT 1 FROM "SupportDocument" sd
+                WHERE sd."supportProgramId" = sp.id
+              )
+              OR EXISTS (
+                SELECT 1 FROM "SupportDocument" sd2
+                WHERE sd2."supportProgramId" = sp.id
+                  AND (
+                    sd2."fileName" ILIKE '%.zip.hwpx'
+                    OR (
+                      sd2."fileName" ILIKE '%.zip'
+                      AND sd2."entryPath" IS NULL
+                      AND (sd2."extractedText" IS NULL OR sd2."extractedText" = '')
+                    )
+                  )
+              )
+            )
+        """
+        oldest_limit = limit // 2
+        newest_limit = limit - oldest_limit
+
+        db = SessionLocal()
+        try:
+            oldest_rows = db.execute(
+                text(f"""
                 SELECT sp.id, sp.title, ss."sourceUrl", ss."sourceType"
                 FROM "SupportProgram" sp
                 JOIN "SupportSource" ss ON sp.id = ss."supportProgramId"
-                WHERE (sp."endDate" IS NULL OR sp."endDate" >= CURRENT_DATE)
-                  AND ss."sourceUrl" IS NOT NULL
-                  AND (
-                    NOT EXISTS (
-                      SELECT 1 FROM "SupportDocument" sd
-                      WHERE sd."supportProgramId" = sp.id
-                    )
-                    OR EXISTS (
-                      SELECT 1 FROM "SupportDocument" sd2
-                      WHERE sd2."supportProgramId" = sp.id
-                        AND (
-                          sd2."fileName" ILIKE '%.zip.hwpx'
-                          OR (
-                            sd2."fileName" ILIKE '%.zip'
-                            AND sd2."entryPath" IS NULL
-                            AND (sd2."extractedText" IS NULL OR sd2."extractedText" = '')
-                          )
-                        )
-                    )
-                  )
+                WHERE {where_clause}
+                ORDER BY sp."createdAt" ASC
+                LIMIT :limit
+                """),
+                {"limit": oldest_limit}
+            ).fetchall()
+
+            already_picked = {r[0] for r in oldest_rows}
+            newest_rows_raw = db.execute(
+                text(f"""
+                SELECT sp.id, sp.title, ss."sourceUrl", ss."sourceType"
+                FROM "SupportProgram" sp
+                JOIN "SupportSource" ss ON sp.id = ss."supportProgramId"
+                WHERE {where_clause}
                 ORDER BY sp."createdAt" DESC
                 LIMIT :limit
                 """),
-                {"limit": limit}
+                {"limit": newest_limit + len(already_picked)}
             ).fetchall()
+            # 백로그 몫과 겹치는 공고는 중복 처리하지 않는다
+            newest_rows = [r for r in newest_rows_raw if r[0] not in already_picked][:newest_limit]
+
+            rows = list(oldest_rows) + newest_rows
+            print(f"[Scraper Batch]: 📋 백로그(오래된 순) {len(oldest_rows)}건 + 신규(최신 순) {len(newest_rows)}건 선정")
         finally:
             db.close()
 
         if not rows:
             print("[Scraper Batch]: ✅ 모든 활성 공고의 첨부파일이 이미 정상 적재되어 있습니다.")
+            cls._write_crawl_log("PYTHON_PRE_SCRAPE_BATCH", "SUCCESS", 0, "처리 대상 없음")
             return {
                 "success": True,
                 "message": "사전 적재/재적재가 필요한 공고가 없습니다. 모든 활성 공고가 이미 처리되었습니다.",
@@ -410,12 +481,12 @@ class ScraperService:
                 "results": []
             }
 
-        print(f"[Scraper Batch]: 🎯 Found {len(rows)} active programs needing attachment pre-scraping/reprocessing.")
+        print(f"[Scraper Batch]: 🎯 사전 스크래핑/재적재가 필요한 활성 공고 {len(rows)}건을 찾았습니다.")
         results = []
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             for idx, (prog_id, title, source_url, source_type) in enumerate(rows):
-                print(f"[Scraper Batch] ({idx + 1}/{len(rows)}) Processing '{title}'...")
+                print(f"[Scraper Batch] ({idx + 1}/{len(rows)}) '{title}' 처리 중...")
                 try:
                     docs = await cls.scrape_missing_attachments(prog_id, source_url, client=client)
                     results.append({
@@ -426,7 +497,7 @@ class ScraperService:
                         "files": [d["fileName"] for d in docs]
                     })
                 except Exception as err:
-                    print(f"[Scraper Batch Error] Failed for {prog_id}: {err}")
+                    print(f"[Scraper Batch 오류] {prog_id} 처리 실패: {err}")
                     results.append({
                         "id": prog_id,
                         "title": title,
@@ -444,7 +515,13 @@ class ScraperService:
         failed_count = sum(1 for r in results if r["status"] == "FAILED")
 
         summary_msg = f"총 {len(rows)}건 처리 ➔ {success_count}건 서식 적재 완료 (첨부없음: {no_doc_count}건, 오류: {failed_count}건)"
-        print(f"[Scraper Batch Completed]: 🚀 {summary_msg}\n")
+        print(f"[Scraper Batch 완료]: 🚀 {summary_msg}\n")
+        cls._write_crawl_log(
+            "PYTHON_PRE_SCRAPE_BATCH",
+            "SUCCESS" if failed_count < len(rows) else "FAILED",
+            success_count,
+            summary_msg,
+        )
 
         return {
             "success": True,

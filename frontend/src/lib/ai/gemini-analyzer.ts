@@ -51,6 +51,10 @@ export interface ProgramAnalysisResult {
 }
 
 import { getCandidateModels } from "./models";
+import {
+  extractNoticeForPrompt,
+  type NoticeDocumentInput,
+} from "@/lib/parser/notice-extractor";
 
 /**
  * Clean JSON output from LLM markdown code blocks
@@ -68,12 +72,47 @@ function cleanJsonString(str: string): string {
 export async function analyzeProgramWithGemini(
   programTitle: string,
   organizer: string,
-  documentText: string
+  documentText: string,
+  /**
+   * 공고에 딸린 첨부문서 전체. 주면 공고문 본문만 골라 발췌해서 넘기므로
+   * 토큰이 크게 줄고, 배점표·일정표가 잘려나가지 않는다.
+   */
+  documents?: NoticeDocumentInput[]
 ): Promise<ProgramAnalysisResult> {
   const apiKey = process.env.GEMINI_API_KEY || "";
   if (!apiKey) {
     throw new Error("AI 분석 API 키(GEMINI_API_KEY)가 설정되지 않았습니다. 환경 변수를 확인해 주세요.");
   }
+
+  // 공고문 선택 발췌. 예전에는 원문을 앞에서부터 60,000자 잘라 넘겼는데,
+  // 실측상 공고 1건당 평균 22만 자라 2/3 가 버려졌고 뒤쪽에 있는 배점표·일정표가
+  // 통째로 날아갔다. 포스터 이미지의 바이너리가 텍스트로 들어오는 경우도 있었다.
+  const extraction = extractNoticeForPrompt(
+    documents && documents.length > 0
+      ? documents
+      : [{ fileName: programTitle, extractedText: documentText }]
+  );
+
+  if (extraction.needsPosterOcr) {
+    console.warn(
+      `[AI 분석] '${programTitle}': 읽을 수 있는 공고문 본문이 없습니다 (포스터 이미지뿐). OCR 없이는 분석 정확도가 떨어집니다.`
+    );
+  }
+  console.log(
+    `[AI 분석] '${programTitle}': 원문 ${extraction.stats.originalChars.toLocaleString()}자 -> ` +
+      `발췌 ${extraction.stats.keptChars.toLocaleString()}자 (${extraction.stats.reductionPercent}% 절감), ` +
+      `섹션 ${extraction.sections.length}개, 단계=${extraction.productStage}`
+  );
+
+  const noticeText = extraction.promptText || documentText.slice(0, 24000);
+
+  // 시제품용 사업에 양산 계획을 쓰면 안 되므로 AI 에 미리 못 박아둔다
+  const productStageNote =
+    extraction.productStage === "PROTOTYPE"
+      ? "\n[중요] 본 공고는 시제품·프로토타입 개발 단계를 지원하는 사업입니다. 양산·대량생산 전제의 서술을 하지 마십시오."
+      : extraction.productStage === "MASS_PRODUCTION"
+      ? "\n[중요] 본 공고는 양산·상용화·판로개척 단계를 지원하는 사업입니다. 아이디어 검증 단계 전제의 서술을 하지 마십시오."
+      : "";
 
   const ai = new GoogleGenAI({ apiKey });
   const candidateModels = getCandidateModels("fast");
@@ -104,10 +143,13 @@ export async function analyzeProgramWithGemini(
 
 [분석 대상 사업 정보]
 - 사업명: ${programTitle}
-- 소관/주관기관: ${organizer}
+- 소관/주관기관: ${organizer}${productStageNote}
 
-[분석할 공고문 및 첨부파일 전문 텍스트]
-${documentText.slice(0, 60000)}
+[분석할 공고문 발췌]
+※ 아래는 공고문 원문에서 사업계획서 작성에 필요한 섹션만 골라낸 것입니다.
+   각 블록의 [ ] 안은 섹션 분류입니다. 여기에 없는 내용은 공고문에 기재되지
+   않은 것으로 간주하고, 절대 추측해서 지어내지 마십시오.
+${noticeText}
 
 [핵심 작성 세부 지침]
 1. [주관/수행기관 성격 분석 (organizerStrategy)]:

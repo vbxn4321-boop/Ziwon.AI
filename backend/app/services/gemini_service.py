@@ -60,7 +60,7 @@ class GeminiService:
         last_error = None
         for model_name in CANDIDATE_MODELS:
             try:
-                print(f"[GeminiService] Attempting latest model: {model_name}...")
+                print(f"[GeminiService] 최신 모델 시도 중: {model_name}...")
                 response = self.client.models.generate_content(
                     model=model_name,
                     contents=user_prompt,
@@ -71,11 +71,11 @@ class GeminiService:
                     ),
                 )
                 if response.text:
-                    print(f"✅ [GeminiService] Succeeded with latest model: {model_name}")
+                    print(f"✅ [GeminiService] 최신 모델로 성공: {model_name}")
                     return json.loads(response.text)
             except Exception as e:
                 last_error = e
-                print(f"[GeminiService] Model {model_name} failed: {e}")
+                print(f"[GeminiService] 모델 {model_name} 실패: {e}")
 
         raise last_error or ValueError("All Gemini models failed.")
 

@@ -108,22 +108,41 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
       }
 
       // 6. Perform Gemini AI Structured Analysis
-      const aiAnalysisResult = await analyzeProgramWithGemini(
-        doc.supportProgram.title,
-        doc.supportProgram.organizer,
-        extractedText
-      );
-
-      // Save Analysis to DB
-      await prisma.supportAnalysis.create({
-        data: {
-          supportProgramId: doc.supportProgramId,
-          model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
-          promptVersion: "v1.0",
-          status: "COMPLETED",
-          resultJson: JSON.stringify(aiAnalysisResult),
-        },
+      // 이 루프는 문서 단위로 돈다. 한 공고에 첨부가 여러 개면 같은 공고를 몇 번이고
+      // 다시 분석하게 되는데, 분석 결과는 공고 단위라 내용이 같다. 실측으로 공고 48건에
+      // 분석 56건(8건 낭비)이 쌓여 있었다. 이미 분석이 있으면 건너뛴다.
+      const existingAnalysis = await prisma.supportAnalysis.findFirst({
+        where: { supportProgramId: doc.supportProgramId, status: "COMPLETED" },
+        select: { id: true },
       });
+
+      if (existingAnalysis) {
+        console.log(`⏭️ [AI 분석] '${doc.supportProgram.title}' 은 이미 분석이 있어 건너뜁니다.`);
+      } else {
+        // 이 공고에 딸린 첨부문서를 모두 넘겨, 공고문 본문만 골라 발췌하게 한다.
+        // (문서 하나의 텍스트만 넘기면 그게 빈 양식이나 포스터일 때 분석이 망가진다)
+        const siblingDocs = await prisma.supportDocument.findMany({
+          where: { supportProgramId: doc.supportProgramId },
+          select: { fileName: true, extractedText: true },
+        });
+
+        const aiAnalysisResult = await analyzeProgramWithGemini(
+          doc.supportProgram.title,
+          doc.supportProgram.organizer,
+          extractedText,
+          siblingDocs
+        );
+
+        await prisma.supportAnalysis.create({
+          data: {
+            supportProgramId: doc.supportProgramId,
+            model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
+            promptVersion: "v2.0-selective",
+            status: "COMPLETED",
+            resultJson: JSON.stringify(aiAnalysisResult),
+          },
+        });
+      }
 
       report.successCount++;
       report.details.push({
