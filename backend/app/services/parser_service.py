@@ -93,11 +93,18 @@ class DocumentParserService:
         except Exception:
             return False
 
+    # ZIP 안에 다시 ZIP 이 들어있을 때 파고들 최대 깊이
+    MAX_ZIP_DEPTH = 3
+
     @classmethod
-    def extract_and_parse_zip(cls, file_bytes: bytes) -> list:
+    def extract_and_parse_zip(cls, file_bytes: bytes, depth: int = 0, parent_path: str = "") -> list:
         """
         ZIP 아카이브 내부의 모든 문서(PDF, HWP, HWPX, DOCX, TXT 등)를 인메모리에서 풀어
         각각 텍스트를 추출한 개별 문서 목록을 반환합니다.
+
+        entryPath 를 함께 반환합니다 (예: "붙임.zip/신청서.hwp"). Next.js 다운로드
+        프록시(extractZipEntry)가 이 경로로 압축 내부 파일을 개별적으로 꺼내 줍니다.
+        엔트리 하나가 실패해도(미지원 압축 방식 등) 나머지는 계속 처리합니다.
         """
         extracted_docs = []
         try:
@@ -111,21 +118,26 @@ class DocumentParserService:
                     if info.file_size > 50 * 1024 * 1024:
                         continue
 
-                    # 한글 파일명 인코딩 안전 디코딩 (CP437 -> CP949/EUC-KR)
+                    # 파일명 인코딩: ZIP 규격의 UTF-8 플래그(General Purpose bit 11)가
+                    # 켜져 있으면 이미 올바른 UTF-8 이므로 그대로 쓰고, 꺼져 있을 때만
+                    # CP437 로 잘못 디코딩된 원바이트를 CP949(EUC-KR)로 다시 해석한다.
                     raw_filename = info.filename
-                    try:
-                        filename = raw_filename.encode("cp437").decode("cp949")
-                    except Exception:
+                    if info.flag_bits & 0x800:
                         filename = raw_filename
+                    else:
+                        try:
+                            filename = raw_filename.encode("cp437").decode("cp949")
+                        except Exception:
+                            filename = raw_filename
 
                     # 경로 제거하고 순수 파일명만 추출
                     clean_name = filename.split("/")[-1].split("\\")[-1].strip()
-                    if not clean_name:
+                    if not clean_name or clean_name.startswith("."):
                         continue
 
                     lower_name = clean_name.lower()
-                    # 지원하지 않는 바이너리 확장자 제외
-                    if lower_name.endswith((".exe", ".dll", ".zip", ".tar", ".gz", ".7z", ".mp4", ".avi", ".jpg", ".png")):
+                    # 지원하지 않는 바이너리 확장자 제외 (.zip 은 재귀 처리하므로 제외 목록에서 뺀다)
+                    if lower_name.endswith((".exe", ".dll", ".tar", ".gz", ".7z", ".mp4", ".avi", ".jpg", ".png")):
                         continue
 
                     try:
@@ -133,27 +145,44 @@ class DocumentParserService:
                     except Exception as read_err:
                         print(f"[ZIP Parser] Error reading {clean_name}: {read_err}")
                         continue
+                    if not sub_bytes:
+                        continue
+
+                    entry_path = f"{parent_path}/{filename}" if parent_path else filename
+
+                    # 중첩 ZIP 은 한 단계 더 풀어서 내부 문서를 끌어올린다 (HWPX/DOCX 는 제외)
+                    if lower_name.endswith(".zip") and sub_bytes[:2] == b"PK" and cls.is_regular_zip(sub_bytes):
+                        if depth >= cls.MAX_ZIP_DEPTH:
+                            print(f"[ZIP Parser] 중첩 깊이 초과로 건너뜁니다: {entry_path}")
+                            continue
+                        extracted_docs.extend(cls.extract_and_parse_zip(sub_bytes, depth + 1, entry_path))
+                        continue
 
                     sub_text = ""
                     file_type = "FILE"
 
-                    if lower_name.endswith(".pdf") or sub_bytes[:4] == b"%PDF":
-                        file_type = "PDF"
-                        sub_text = cls.parse_pdf(sub_bytes)
-                    elif lower_name.endswith(".hwpx"):
-                        file_type = "HWPX"
-                        sub_text = cls.parse_hwpx(sub_bytes)
-                    elif lower_name.endswith(".hwp") or sub_bytes[:4] == b"\xd0\xcf\x11\xe0":
-                        file_type = "HWP"
-                        sub_text = cls.parse_hwp5(sub_bytes)
-                    elif lower_name.endswith(".txt"):
-                        file_type = "TXT"
-                        sub_text = sub_bytes.decode("utf-8", errors="ignore")
+                    try:
+                        if lower_name.endswith(".pdf") or sub_bytes[:4] == b"%PDF":
+                            file_type = "PDF"
+                            sub_text = cls.parse_pdf(sub_bytes)
+                        elif lower_name.endswith(".hwpx"):
+                            file_type = "HWPX"
+                            sub_text = cls.parse_hwpx(sub_bytes)
+                        elif lower_name.endswith(".hwp") or sub_bytes[:4] == b"\xd0\xcf\x11\xe0":
+                            file_type = "HWP"
+                            sub_text = cls.parse_hwp5(sub_bytes)
+                        elif lower_name.endswith(".docx"):
+                            file_type = "DOCX"
+                        elif lower_name.endswith(".txt"):
+                            file_type = "TXT"
+                            sub_text = sub_bytes.decode("utf-8", errors="ignore")
+                    except Exception as parse_err:
+                        print(f"[ZIP Parser] Parse warning for {clean_name}: {parse_err}")
 
                     extracted_docs.append({
                         "fileName": clean_name,
                         "fileType": file_type,
-                        "fileBytes": sub_bytes,
+                        "entryPath": entry_path,
                         "extractedText": sub_text,
                     })
         except Exception as e:

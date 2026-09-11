@@ -166,6 +166,21 @@ class ScraperService:
 
             candidate_entries.sort(key=doc_priority)
 
+            # 이 함수는 공고의 첨부파일 목록을 완전히 새로 채운다. 기존에 남아있던
+            # (특히 손상되어 재시도 대상이 된) SupportDocument 행을 먼저 지워야
+            # 재실행할 때마다 중복이 쌓이지 않는다. DocumentChunk 는 FK CASCADE 로
+            # 함께 삭제된다.
+            if candidate_entries:
+                db = SessionLocal()
+                try:
+                    db.execute(
+                        text('DELETE FROM "SupportDocument" WHERE "supportProgramId" = :prog_id'),
+                        {"prog_id": support_program_id},
+                    )
+                    db.commit()
+                finally:
+                    db.close()
+
             # Download and parse up to 10 attachments
             for entry in candidate_entries[:10]:
                 try:
@@ -223,16 +238,19 @@ class ScraperService:
                                     sub_filename = sanitize_utf8(zdoc["fileName"])
                                     sub_text = sanitize_utf8(zdoc.get("extractedText", ""))
                                     sub_type = zdoc.get("fileType", "FILE")
+                                    # 압축 내부 경로. fileUrl 은 부모 ZIP 을 가리키고, 이 값으로
+                                    # 다운로드 프록시(extractZipEntry)가 개별 파일만 꺼내 준다.
+                                    sub_entry_path = zdoc.get("entryPath")
                                     sub_status = "PARSED" if sub_text and len(sub_text) > 50 else "PENDING"
 
                                     db.execute(
                                         text("""
                                         INSERT INTO "SupportDocument" (
-                                            "id", "supportProgramId", "fileName", "fileUrl", "fileType",
+                                            "id", "supportProgramId", "fileName", "fileUrl", "entryPath", "fileType",
                                             "extractedText", "status", "createdAt", "updatedAt"
                                         )
                                         VALUES (
-                                            :id, :prog_id, :fileName, :fileUrl, :fileType,
+                                            :id, :prog_id, :fileName, :fileUrl, :entryPath, :fileType,
                                             :extractedText, :status, NOW(), NOW()
                                         )
                                         """),
@@ -241,6 +259,7 @@ class ScraperService:
                                             "prog_id": support_program_id,
                                             "fileName": sub_filename,
                                             "fileUrl": entry["url"],
+                                            "entryPath": sub_entry_path,
                                             "fileType": sub_type,
                                             "extractedText": sub_text,
                                             "status": sub_status,
@@ -267,6 +286,11 @@ class ScraperService:
                             extracted_text = parser_service.parse_hwpx(buf)
                         elif file_type == "HWP":
                             extracted_text = parser_service.parse_hwp5(buf)
+                        elif file_type == "ZIP" or buf[:2] == b"PK":
+                            # 위에서 압축 해제가 이미 실패했으므로(zip_docs 가 비어 여기까지 옴)
+                            # 원본 ZIP 바이트를 그대로 utf-8 디코딩하면 의미 없는 쓰레기 텍스트가
+                            # 나온다. 빈 텍스트로 남겨 PENDING 상태로 재시도 대상이 되게 한다.
+                            extracted_text = ""
                         else:
                             extracted_text = buf.decode("utf-8", errors="ignore")
                     except Exception as parse_err:
@@ -331,20 +355,44 @@ class ScraperService:
     async def run_pre_scraping_batch(cls, limit: int = 15) -> Dict[str, Any]:
         """
         Run nightly background batch to scrape missing attachments for active support notices directly from Python.
+
+        두 부류를 함께 대상으로 삼는다:
+        1. 첨부파일 행이 아예 없는 공고 (원래 조건)
+        2. 크롤러가 뼈대 행만 만들어두고, 압축을 못 풀거나 아직 처리되지 않아
+           손상 상태로 남아있는 공고 (.zip 이 entryPath 없이 본문도 비어있거나,
+           과거 버그로 .zip.hwpx 로 잘못 저장된 행)
+
+        2번이 없으면, 크롤러가 넣은 뼈대 행 때문에 "documents 0개" 조건이 다시는
+        참이 되지 않아 새로 수집되는 압축파일은 영원히 이 배치에서 빠지게 된다.
         """
         print(f"\n[Scraper Batch]: 🌙 Starting Python native pre-scraping background job (Target limit: {limit} programs)...")
         db = SessionLocal()
         try:
-            # Query active programs that have sources but no documents yet
             rows = db.execute(
                 text("""
                 SELECT sp.id, sp.title, ss."sourceUrl", ss."sourceType"
                 FROM "SupportProgram" sp
                 JOIN "SupportSource" ss ON sp.id = ss."supportProgramId"
-                LEFT JOIN "SupportDocument" sd ON sp.id = sd."supportProgramId"
                 WHERE (sp."endDate" IS NULL OR sp."endDate" >= CURRENT_DATE)
-                  AND sd.id IS NULL
                   AND ss."sourceUrl" IS NOT NULL
+                  AND (
+                    NOT EXISTS (
+                      SELECT 1 FROM "SupportDocument" sd
+                      WHERE sd."supportProgramId" = sp.id
+                    )
+                    OR EXISTS (
+                      SELECT 1 FROM "SupportDocument" sd2
+                      WHERE sd2."supportProgramId" = sp.id
+                        AND (
+                          sd2."fileName" ILIKE '%.zip.hwpx'
+                          OR (
+                            sd2."fileName" ILIKE '%.zip'
+                            AND sd2."entryPath" IS NULL
+                            AND (sd2."extractedText" IS NULL OR sd2."extractedText" = '')
+                          )
+                        )
+                    )
+                  )
                 ORDER BY sp."createdAt" DESC
                 LIMIT :limit
                 """),
@@ -354,15 +402,15 @@ class ScraperService:
             db.close()
 
         if not rows:
-            print("[Scraper Batch]: ✅ 모든 활성 공고의 첨부파일이 이미 적재되어 있습니다.")
+            print("[Scraper Batch]: ✅ 모든 활성 공고의 첨부파일이 이미 정상 적재되어 있습니다.")
             return {
                 "success": True,
-                "message": "사전 적재가 필요한 공고가 없습니다. 모든 활성 공고가 이미 처리되었습니다.",
+                "message": "사전 적재/재적재가 필요한 공고가 없습니다. 모든 활성 공고가 이미 처리되었습니다.",
                 "processed_count": 0,
                 "results": []
             }
 
-        print(f"[Scraper Batch]: 🎯 Found {len(rows)} active programs needing attachment pre-scraping.")
+        print(f"[Scraper Batch]: 🎯 Found {len(rows)} active programs needing attachment pre-scraping/reprocessing.")
         results = []
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
