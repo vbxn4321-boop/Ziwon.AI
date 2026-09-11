@@ -314,7 +314,7 @@ def refresh_token_endpoint(
         if response:
             set_refresh_cookie(response, new_refresh_token, remember_me=is_remember)
 
-        print(f"[Redis RTR] Token refreshed & rotated successfully for user: {email} (rememberMe={is_remember})")
+        print(f"[Redis RTR] 사용자 {email} 의 토큰을 정상적으로 갱신·재발급했습니다 (rememberMe={is_remember})")
         return {
             "success": True,
             "accessToken": new_access_token,
@@ -396,9 +396,9 @@ def logout(request: Request, response: Response):
                     redis_client.add_to_blacklist(token, exp_timestamp=exp)
                 if user_id:
                     redis_client.delete_refresh_token(user_id)
-                print(f"[Redis Logout] Access token blacklisted & Refresh token destroyed for user: {user_id}")
+                print(f"[Redis Logout] 사용자 {user_id} 의 액세스 토큰을 블랙리스트에 등록하고 리프레시 토큰을 폐기했습니다")
             except Exception as e:
-                print(f"[Redis Logout Warning] Failed to parse token: {e}")
+                print(f"[Redis Logout Warning] 토큰 파싱에 실패했습니다: {e}")
 
     return {"success": True, "message": "성공적으로 로그아웃되었습니다."}
 

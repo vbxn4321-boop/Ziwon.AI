@@ -29,9 +29,21 @@ export async function POST(req: NextRequest) {
       try {
         const found = await prisma.supportProgram.findFirst({
           where: { title: { contains: body.targetProgramTitle.slice(0, 20) } },
-          include: { documents: true, sources: true },
+          include: {
+            documents: true,
+            sources: true,
+            analyses: { where: { status: "COMPLETED" }, orderBy: { createdAt: "desc" }, take: 1 },
+          },
         });
         if (found) {
+          // 배점표·가점·자격요건이 담긴 공고 분석 결과를 생성기에 넘긴다
+          if (!body.programAnalysis && found.analyses[0]?.resultJson) {
+            try {
+              body.programAnalysis = JSON.parse(found.analyses[0].resultJson);
+            } catch {
+              console.warn("[PSST API] 공고 분석 JSON 파싱 실패");
+            }
+          }
           const docTexts = found.documents.map((d) => d.extractedText || "").filter(Boolean);
           const rawData = found.sources[0]?.rawData || "";
           const analysis = analyzeProgramForPsst(

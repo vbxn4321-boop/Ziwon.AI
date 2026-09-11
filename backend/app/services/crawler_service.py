@@ -112,9 +112,9 @@ class CrawlerService:
                             elif "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in text_content:
                                 print(f"[K-Startup API Info]: 키 ({key_attempt[:10]}...) 시도 중 SERVICE_KEY_IS_NOT_REGISTERED_ERROR 반환.")
                         else:
-                            print(f"[K-Startup apis.data.go.kr]: HTTP {res.status_code} - {res.text[:200]}")
+                            print(f"[K-Startup apis.data.go.kr]: HTTP {res.status_code} 오류 - {res.text[:200]}")
                     except Exception as e_xml:
-                        print(f"[K-Startup apis.data.go.kr Error]: {type(e_xml).__name__} - {e_xml}")
+                        print(f"[K-Startup apis.data.go.kr 오류]: {type(e_xml).__name__} - {e_xml}")
 
                 # 2. Fallback to odcloud if no results
                 if not results:
@@ -131,7 +131,7 @@ class CrawlerService:
                             print(f"[K-Startup API]: ✅ odcloud에서 {len(items)}건 공고 수신 성공.")
                             return items
                         except Exception as json_err:
-                            print(f"[K-Startup odcloud JSON Error]: {json_err}")
+                            print(f"[K-Startup odcloud JSON 오류]: {json_err}")
                     else:
                         print(f"[K-Startup odcloud Error]: ❌ HTTP 상태 코드 {res.status_code} (응답 내용: {res.text[:200]})")
         except httpx.TimeoutException as e:
