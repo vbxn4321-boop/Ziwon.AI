@@ -6,7 +6,7 @@
  * sessionStorage를 통해 전달합니다.
  *
  * [사용 예시] (공고 상세 모달 또는 페이지에서)
- * import { navigateToPsstStudio } from "@/lib/psst-navigator";
+ * import { navigateToPsstStudio } from "@/features/psst/navigation";
  * navigateToPsstStudio(router, { programTitle: "2026 예창패", programAnalysis: aiData });
  */
 

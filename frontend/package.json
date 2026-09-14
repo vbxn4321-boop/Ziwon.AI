@@ -10,7 +10,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "tsx scripts/seed.ts",
-    "test:collector": "tsx scripts/test-collector.ts"
+    "test:collector": "tsx scripts/test-collector.ts",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:program-detail": "node --test scripts/tests/program-detail.test.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",

@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { PsstPlanGeneratorProps } from "./psst/types";
-import { usePsstPlan } from "./psst/hooks/usePsstPlan";
-import { PsstSidebar } from "./psst/components/PsstSidebar";
-import { PsstHeader } from "./psst/components/PsstHeader";
-import { PsstChatPanel } from "./psst/components/PsstChatPanel";
-import { PsstFormPanel } from "./psst/components/PsstFormPanel";
-import { PsstDocumentViewer } from "./psst/components/PsstDocumentViewer";
+import { PsstPlanGeneratorProps } from "./types";
+import { usePsstPlan } from "./hooks/usePsstPlan";
+import { PsstSidebar } from "./components/PsstSidebar";
+import { PsstHeader } from "./components/PsstHeader";
+import { PsstChatPanel } from "./components/PsstChatPanel";
+import { PsstFormPanel } from "./components/PsstFormPanel";
+import { PsstDocumentViewer } from "./components/PsstDocumentViewer";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
 
-export { TARGET_PROGRAM_FORMATS } from "./psst/constants";
+export { TARGET_PROGRAM_FORMATS } from "./constants";
 
 export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
   initialProgramTitle,

@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/Header";
 import Footer from "@/components/Footer";
-import { PsstPlanGenerator } from "@/components/PsstPlanGenerator";
+import { PsstPlanGenerator } from "@/features/psst/PsstPlanGenerator";
 import { ConsultantDirectorySection } from "@/components/consultant/ConsultantDirectorySection";
 import { fetchPlanDetail } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";

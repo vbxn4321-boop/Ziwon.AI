@@ -1,5 +1,6 @@
 "use client";
 
+import { buildDownloadUrl } from "@/lib/documents/download";
 import React, { useState } from "react";
 import {
   FileText,
@@ -16,14 +17,8 @@ import {
   Check,
   FileCode,
 } from "lucide-react";
-import {
-  getDocCategory,
-  getDocBadgeText,
-  getDocDownloadText,
-  DocCategory,
-  buildDownloadUrl,
-} from "./detail-helpers";
-import { HwpExtractedTextViewer } from "./HwpExtractedTextViewer";
+import { getDocCategory, getDocBadgeText, getDocDownloadText, DocCategory } from "./detail-helpers";
+import { HwpExtractedTextViewer } from "@/components/viewer/HwpExtractedTextViewer";
 import { RhwpPageViewer } from "@/components/viewer/RhwpPageViewer";
 
 interface NoticeOriginalTabProps {

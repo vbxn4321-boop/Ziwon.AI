@@ -1,7 +1,8 @@
 "use client";
 
+import { buildDownloadUrl } from "@/lib/documents/download";
 import React, { useState, useMemo, useRef } from "react";
-import { buildDownloadUrl } from "./detail-helpers";
+
 import {
   FileText,
   Download,

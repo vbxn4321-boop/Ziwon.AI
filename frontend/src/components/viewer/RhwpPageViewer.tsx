@@ -1,5 +1,6 @@
 "use client";
 
+import { buildDownloadUrl } from "@/lib/documents/download";
 import React, { useState, useEffect, useRef } from "react";
 import {
   FileText,
@@ -22,8 +23,8 @@ import {
   FileCode,
 } from "lucide-react";
 import { fetchAndRenderHwp, RhwpRenderResult } from "@/lib/viewer/rhwp-engine";
-import { buildDownloadUrl } from "@/components/program-detail/detail-helpers";
-import { HwpExtractedTextViewer } from "@/components/program-detail/HwpExtractedTextViewer";
+
+import { HwpExtractedTextViewer } from "@/components/viewer/HwpExtractedTextViewer";
 
 interface RhwpPageViewerProps {
   fileName: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import { buildDownloadUrl, shouldProxyDownload } from "@/lib/documents/download";
 import React, { useState, useEffect, useMemo } from "react";
 import {
   X,
@@ -38,20 +39,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SupportProgram } from "./ProgramCard";
+import { SupportProgram } from "@/components/ProgramCard";
 import { getJwtToken } from "@/lib/supabase-client";
 import { fetchMyCompany, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
-import { navigateToPsstStudio } from "@/lib/psst-navigator";
-import {
-  getDocCategory,
-  getDocBadgeText,
-  getDocDownloadText,
-  DocCategory,
-  buildDownloadUrl,
-  shouldProxyDownload,
-} from "./program-detail/detail-helpers";
-import { HwpExtractedTextViewer } from "./program-detail/HwpExtractedTextViewer";
+import { navigateToPsstStudio } from "@/features/psst/navigation";
+import { getDocCategory, getDocBadgeText, getDocDownloadText, DocCategory } from "./components/detail-helpers";
+import { HwpExtractedTextViewer } from "@/components/viewer/HwpExtractedTextViewer";
 
 interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
@@ -515,10 +509,10 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
     fetchLatestProgramDetails();
   }, [selectedProgram.id]);
 
-  const fetchLatestProgramDetails = async () => {
+  const fetchLatestProgramDetails = async (synchronize = false) => {
     try {
       setIsLoadingDocs(true);
-      const res = await fetch(`/api/support-programs/${selectedProgram.id}`);
+      const res = await fetch(`/api/support-programs/${selectedProgram.id}`, { method: synchronize ? "POST" : "GET" });
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -1355,7 +1349,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       <p className="text-xs text-slate-500">본 공고의 첨부파일 링크를 동기화해 보세요.</p>
                     </div>
                     <button
-                      onClick={fetchLatestProgramDetails}
+                      onClick={() => void fetchLatestProgramDetails(true)}
                       className="px-3.5 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-colors inline-flex items-center space-x-1.5"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -1526,7 +1520,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                             fileUrl={currentDoc.fileUrl}
                             entryPath={currentDoc.entryPath}
                             extractedText={currentDoc.extractedText}
-                            onRefresh={fetchLatestProgramDetails}
+                            onRefresh={() => void fetchLatestProgramDetails(true)}
                           />
                         ) : (
                           <div className="flex-1 flex flex-col min-h-[520px] bg-slate-950/80 overflow-hidden items-center justify-center p-8">
@@ -1542,7 +1536,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                               </div>
                               <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-center">
                                 <button
-                                  onClick={fetchLatestProgramDetails}
+                                  onClick={() => void fetchLatestProgramDetails(true)}
                                   className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
                                 >
                                   <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
@@ -1600,7 +1594,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 text-center space-y-2">
                     <p className="text-xs text-slate-400">등록된 첨부 문서 파일이 아직 없습니다.</p>
                     <button
-                      onClick={fetchLatestProgramDetails}
+                      onClick={() => void fetchLatestProgramDetails(true)}
                       className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors inline-flex items-center space-x-1"
                     >
                       <RefreshCw className="w-3 h-3" />
