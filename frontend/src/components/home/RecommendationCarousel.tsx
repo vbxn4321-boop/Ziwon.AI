@@ -176,7 +176,7 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
               <div
                 ref={carouselRef}
                 onScroll={checkScrollability}
-                className="flex space-x-4 overflow-x-auto scrollbar-none py-1 scroll-smooth"
+                className="flex space-x-4 overflow-x-auto no-scrollbar py-1 scroll-smooth"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 {recommendedPrograms.map((prog) => (

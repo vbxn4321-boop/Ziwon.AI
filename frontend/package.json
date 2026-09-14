@@ -12,7 +12,9 @@
     "db:seed": "tsx scripts/seed.ts",
     "test:collector": "tsx scripts/test-collector.ts",
     "typecheck": "tsc --noEmit --incremental false",
-    "test:program-detail": "node --test scripts/tests/program-detail.test.cjs"
+    "test": "node --test scripts/tests/*.test.cjs",
+    "test:program-detail": "node --test scripts/tests/program-detail.test.cjs",
+    "test:psst-schema": "node --test scripts/tests/psst-chat-schema.test.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",

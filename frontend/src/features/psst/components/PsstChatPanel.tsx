@@ -88,15 +88,15 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
         </button>
       </div>
 
-      {/* PSST 5-Step Interactive Interview Progress Bar & Checklist */}
+      {/* Dynamic Form-Field Step Progress Bar & Checklist */}
       <div className="px-3 py-2 bg-slate-950/95 border-b border-slate-800/80 space-y-1.5 flex-shrink-0">
         <div className="flex items-center justify-between text-[10px]">
           <span className="font-bold text-slate-300 flex items-center space-x-1">
             <Sparkles className="w-3 h-3 text-indigo-400" />
-            <span>PSST 필수 인터뷰 수집도</span>
+            <span>서식 칸별 인터뷰 진행도</span>
           </span>
           <span className="text-indigo-400 font-extrabold">
-            {interviewProgress.completedCount} / 5단계 완료 ({Math.round((interviewProgress.completedCount / 5) * 100)}%)
+            {interviewProgress.completedCount} / {interviewProgress.totalFields || 5}개 항목 완료 ({Math.round((interviewProgress.completedCount / Math.max(1, interviewProgress.totalFields || 5)) * 100)}%)
           </span>
         </div>
 
@@ -104,34 +104,70 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
         <div className="w-full bg-slate-900 rounded-full h-1 overflow-hidden">
           <div
             className="bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-400 h-full rounded-full transition-all duration-300"
-            style={{ width: `${Math.max(10, (interviewProgress.completedCount / 5) * 100)}%` }}
+            style={{ width: `${Math.max(8, (interviewProgress.completedCount / Math.max(1, interviewProgress.totalFields || 5)) * 100)}%` }}
           />
         </div>
 
-        {/* 5-Step Badges */}
-        <div className="flex items-center justify-between text-[10px] overflow-x-auto gap-1 pt-0.5">
-          {[
-            { step: 1, label: "1.아이템/타겟", done: interviewProgress.itemTarget, current: interviewProgress.currentStep === 1 },
-            { step: 2, label: "2.문제인식(P)", done: interviewProgress.problem, current: interviewProgress.currentStep === 2 },
-            { step: 3, label: "3.실현기술(S)", done: interviewProgress.solution, current: interviewProgress.currentStep === 3 },
-            { step: 4, label: "4.BM(Scale-up)", done: interviewProgress.scaleUp, current: interviewProgress.currentStep === 4 },
-            { step: 5, label: "5.팀역량(Team)", done: interviewProgress.team, current: interviewProgress.currentStep === 5 },
-          ].map((s) => (
-            <div
-              key={s.step}
-              className={`px-1.5 py-0.5 rounded-md font-bold transition-all whitespace-nowrap flex items-center space-x-1 ${
-                s.done
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                  : s.current
-                  ? "bg-indigo-600/30 text-indigo-200 border border-indigo-500/50 shadow-sm"
-                  : "bg-slate-900 text-slate-500 border border-slate-800"
-              }`}
-            >
-              <span>{s.done ? "✓" : s.current ? "⏳" : "○"}</span>
-              <span>{s.label}</span>
-            </div>
-          ))}
-        </div>
+        {/* Dynamic Form Field Chips (Horizontal scrollable) */}
+        {interviewProgress.fieldProgress && interviewProgress.fieldProgress.length > 0 ? (
+          <div className="flex items-center space-x-1.5 overflow-x-auto py-0.5 no-scrollbar text-[10px]">
+            {interviewProgress.fieldProgress.map((field, idx) => {
+              const isCurrent = field.id === interviewProgress.currentFieldId || (!field.completed && idx === interviewProgress.completedCount);
+              return (
+                <div
+                  key={field.id || idx}
+                  className={`px-2 py-0.5 rounded-md font-bold transition-all whitespace-nowrap flex items-center space-x-1 flex-shrink-0 border ${
+                    field.completed
+                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                      : isCurrent
+                      ? "bg-indigo-600/30 text-indigo-200 border-indigo-500/60 shadow-xs"
+                      : "bg-slate-900 text-slate-500 border-slate-800"
+                  }`}
+                  title={field.guidance ? `※ 작성지침: ${field.guidance}` : field.label}
+                >
+                  <span>{field.completed ? "✓" : isCurrent ? "⏳" : "○"}</span>
+                  <span className="truncate max-w-[130px]">{field.label}</span>
+                  {field.type === "FACT" && (
+                    <span className="text-[9px] px-1 py-px rounded bg-blue-500/20 text-blue-300 font-semibold">자동</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Fallback 5-Step Badges */
+          <div className="flex items-center justify-between text-[10px] overflow-x-auto gap-1 pt-0.5">
+            {[
+              { step: 1, label: "1.아이템/타겟", done: interviewProgress.itemTarget, current: interviewProgress.currentStep === 1 },
+              { step: 2, label: "2.문제인식(P)", done: interviewProgress.problem, current: interviewProgress.currentStep === 2 },
+              { step: 3, label: "3.실현기술(S)", done: interviewProgress.solution, current: interviewProgress.currentStep === 3 },
+              { step: 4, label: "4.BM(Scale-up)", done: interviewProgress.scaleUp, current: interviewProgress.currentStep === 4 },
+              { step: 5, label: "5.팀역량(Team)", done: interviewProgress.team, current: interviewProgress.currentStep === 5 },
+            ].map((s) => (
+              <div
+                key={s.step}
+                className={`px-1.5 py-0.5 rounded-md font-bold transition-all whitespace-nowrap flex items-center space-x-1 ${
+                  s.done
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    : s.current
+                    ? "bg-indigo-600/30 text-indigo-200 border border-indigo-500/50 shadow-sm"
+                    : "bg-slate-900 text-slate-500 border border-slate-800"
+                }`}
+              >
+                <span>{s.done ? "✓" : s.current ? "⏳" : "○"}</span>
+                <span>{s.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Current Active Field Guidance Banner */}
+        {interviewProgress.currentFieldGuidance && (
+          <div className="px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-[10px] text-indigo-300 flex items-center space-x-1.5">
+            <span className="font-bold text-indigo-400 flex-shrink-0">※ 작성지침:</span>
+            <span className="text-slate-300 truncate">{interviewProgress.currentFieldGuidance}</span>
+          </div>
+        )}
       </div>
 
       {/* Scrollable Chat Area */}
