@@ -9,7 +9,7 @@ import {
   Bookmark,
   Sparkles,
 } from "lucide-react";
-import { SupportProgram } from "../ProgramCard";
+import { SupportProgram } from "@/components/ProgramCard";
 
 interface ProgramHeaderProps {
   program: SupportProgram;

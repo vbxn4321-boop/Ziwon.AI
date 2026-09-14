@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ExternalLink, Mail } from "lucide-react";
-import { SupportProgram } from "../ProgramCard";
+import { SupportProgram } from "@/components/ProgramCard";
 import { cleanHtml, formatNoticeDate, renderConditionChips } from "./detail-helpers";
 
 interface ProgramSummaryCardProps {

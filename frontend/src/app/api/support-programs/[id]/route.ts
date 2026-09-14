@@ -1,94 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { scrapeMissingAttachments } from "@/lib/parser/attachment-scraper";
 
-export const maxDuration = 60; // 60s max execution time for scraping and syncing attachments
+export const maxDuration = 60;
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+const summaryInclude = {
+  sources: {
+    select: { id: true, sourceType: true, externalId: true, sourceUrl: true, rawTitle: true, createdAt: true },
+  },
+} as const;
+
+const detailInclude = {
+  sources: true,
+  documents: true,
+  analyses: { orderBy: { createdAt: "desc" }, take: 1 },
+} as const;
+
+export async function GET(req: NextRequest, { params }: RouteContext) {
   try {
     const { id } = await params;
-    let program = await prisma.supportProgram.findUnique({
+    const started = performance.now();
+    const program = await prisma.supportProgram.findUnique({
       where: { id },
-      include: {
-        sources: true,
-        documents: {
-          include: {
-            chunks: true,
-          },
-        },
-        analyses: {
-          orderBy: { createdAt: "desc" },
-        },
+      include: req.nextUrl.searchParams.get("view") === "summary" ? summaryInclude : detailInclude,
+    });
+    if (!program) {
+      return NextResponse.json({ success: false, error: "Support program not found" }, { status: 404 });
+    }
+    // Reads never wait for external sites, downloads, or parsing.
+    return NextResponse.json({ success: true, data: program }, {
+      headers: {
+        "Server-Timing": "db;dur=" + (performance.now() - started).toFixed(1),
+        "Cache-Control": "no-store",
       },
     });
-
-    if (!program) {
-      return NextResponse.json(
-        { success: false, error: "Support program not found" },
-        { status: 404 }
-      );
-    }
-
-    const forceRefresh = req.nextUrl.searchParams.get("refresh") === "true";
-
-    // Check if notice already has documents or has already been checked/enriched
-    const alreadyEnriched = program.sources.some(
-      (s) =>
-        s.rawData &&
-        (s.rawData.includes("신청방법") ||
-          s.rawData.includes("지원내용") ||
-          s.rawData.includes("공고소개") ||
-          s.rawData.includes("문의처"))
-    );
-
-    // Auto-resolve real binary attachment links if missing and never checked, or having legacy corrupted text
-    const needsScraping =
-      forceRefresh ||
-      (program.documents.length === 0 && !alreadyEnriched) ||
-      program.documents.some(
-        (d) =>
-          d.fileType !== "NOTICE_ONLY" &&
-          (d.fileUrl.includes("selectSIIA200Detail") ||
-            d.fileUrl.includes("bizpbanc-ongoing.do") ||
-            (d.extractedText && d.extractedText.includes("html lang style")) ||
-            (d.extractedText && d.extractedText.includes(".basic-btn")))
-      );
-
-    if (needsScraping && program.sources.length > 0) {
-      try {
-        const sourceUrl = program.sources[0].sourceUrl;
-        await scrapeMissingAttachments(program.id, sourceUrl);
-        program = await prisma.supportProgram.findUnique({
-          where: { id },
-          include: {
-            sources: true,
-            documents: {
-              include: {
-                chunks: true,
-              },
-            },
-            analyses: {
-              orderBy: { createdAt: "desc" },
-            },
-          },
-        });
-      } catch (err: any) {
-        console.warn("[Program Details API] Auto-scrape attachments fallback:", err.message);
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: program,
-    });
   } catch (error) {
-    console.error("API /api/support-programs/[id] Error:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch support program details" },
-      { status: 500 }
-    );
+    console.error("Program detail read failed:", error);
+    return NextResponse.json({ success: false, error: "Failed to fetch support program details" }, { status: 500 });
+  }
+}
+
+export async function POST(_req: NextRequest, { params }: RouteContext) {
+  try {
+    const { id } = await params;
+    const program = await prisma.supportProgram.findUnique({
+      where: { id },
+      select: { id: true, sources: { select: { sourceUrl: true }, take: 1 } },
+    });
+    if (!program) {
+      return NextResponse.json({ success: false, error: "Support program not found" }, { status: 404 });
+    }
+    if (program.sources.length === 0) {
+      return NextResponse.json({ success: false, error: "동기화할 원문 주소가 없습니다." }, { status: 422 });
+    }
+    // Parser dependencies are loaded only for an explicit synchronization.
+    const { scrapeMissingAttachments } = await import("@/lib/parser/attachment-scraper");
+    await scrapeMissingAttachments(program.id, program.sources[0].sourceUrl);
+    const updated = await prisma.supportProgram.findUnique({ where: { id }, include: detailInclude });
+    if (!updated) {
+      return NextResponse.json({ success: false, error: "Support program not found" }, { status: 404 });
+    }
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error) {
+    console.error("Program attachment synchronization failed:", error);
+    return NextResponse.json({ success: false, error: "첨부 문서를 동기화하지 못했습니다. 잠시 후 다시 시도해 주세요." }, { status: 500 });
   }
 }

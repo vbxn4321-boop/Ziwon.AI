@@ -1,6 +1,6 @@
 "use client";
 
-import { buildDownloadUrl } from "@/components/program-detail/detail-helpers";
+import { buildDownloadUrl } from "@/lib/documents/download";
 
 let wasmInitPromise: Promise<any> | null = null;
 let measureCanvasCtx: CanvasRenderingContext2D | null = null;

@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import Footer from "@/components/Footer";
-import { ProgramDetailModal } from "@/components/ProgramDetailModal";
+import { ProgramDetailModal } from "@/features/program-detail/ProgramDetailModal";
 import { SupportProgram } from "@/components/ProgramCard";
 import {
   fetchMyProfile,

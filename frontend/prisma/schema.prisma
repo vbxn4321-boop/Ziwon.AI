@@ -122,6 +122,7 @@ model SupportSource {
   supportProgram   SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
 
   @@unique([sourceType, externalId])
+  @@index([supportProgramId])
 }
 
 model SupportDocument {
@@ -138,6 +139,8 @@ model SupportDocument {
   updatedAt        DateTime        @updatedAt
   supportProgram   SupportProgram  @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
   chunks           DocumentChunk[]
+
+  @@index([supportProgramId])
 }
 
 model DocumentChunk {
@@ -151,6 +154,8 @@ model DocumentChunk {
   endOffset    Int?
   createdAt    DateTime        @default(now())
   document     SupportDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
 }
 
 model SupportAnalysis {
@@ -163,6 +168,8 @@ model SupportAnalysis {
   resultJson         String         // Gemini AI 분석 결과 JSON
   createdAt          DateTime       @default(now())
   supportProgram     SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+
+  @@index([supportProgramId, createdAt])
 }
 
 model Recommendation {

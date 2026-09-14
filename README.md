@@ -1,3 +1,5 @@
+[Project structure and development guide](docs/architecture.md)
+
 # 🚀 Ziwon.AI (지윈에이아이)
 
 <div align="center">

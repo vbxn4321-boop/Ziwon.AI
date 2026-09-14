@@ -1,8 +1,9 @@
 "use client";
 
+import { buildDownloadUrl, shouldProxyDownload } from "@/lib/documents/download";
 import React, { useState } from "react";
 import { FileText, Download, Eye, X, Copy, Check, ExternalLink, Image as ImageIcon, Layers, FileCode } from "lucide-react";
-import { getDocCategory, getDocBadgeText, buildDownloadUrl, shouldProxyDownload } from "./detail-helpers";
+import { getDocCategory, getDocBadgeText } from "./detail-helpers";
 import { HwpViewerModal } from "@/components/viewer/HwpViewerModal";
 
 interface DocumentsTabProps {

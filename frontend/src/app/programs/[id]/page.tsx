@@ -13,29 +13,27 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import Footer from "@/components/Footer";
-import { SupportProgram } from "@/components/ProgramCard";
+import { useProgramDetail } from "@/features/program-detail/hooks/useProgramDetail";
 import { getJwtToken } from "@/lib/supabase-client";
 import { fetchMyCompany, fetchMyBookmarks, toggleBookmarkOnBackend } from "@/lib/backend-client";
 import CompanyProfileModal from "@/components/auth/CompanyProfileModal";
 import LoginPromptModal from "@/components/auth/LoginPromptModal";
 
 // Modularized Sub-Components & Helpers
-import { getDDay } from "@/components/program-detail/detail-helpers";
-import { ProgramHeader } from "@/components/program-detail/ProgramHeader";
-import { ProgramSummaryCard } from "@/components/program-detail/ProgramSummaryCard";
-import { NoticeOriginalTab } from "@/components/program-detail/NoticeOriginalTab";
-import { AiStrategyTab } from "@/components/program-detail/AiStrategyTab";
-import { DocumentsTab } from "@/components/program-detail/DocumentsTab";
-import { RawSourceTab } from "@/components/program-detail/RawSourceTab";
+import { getDDay } from "@/features/program-detail/components/detail-helpers";
+import { ProgramHeader } from "@/features/program-detail/components/ProgramHeader";
+import { ProgramSummaryCard } from "@/features/program-detail/components/ProgramSummaryCard";
+import { NoticeOriginalTab } from "@/features/program-detail/components/NoticeOriginalTab";
+import { AiStrategyTab } from "@/features/program-detail/components/AiStrategyTab";
+import { DocumentsTab } from "@/features/program-detail/components/DocumentsTab";
+import { RawSourceTab } from "@/features/program-detail/components/RawSourceTab";
 
 export default function ProgramDetailPage() {
   const params = useParams();
   const router = useRouter();
   const programId = params?.id as string;
 
-  const [program, setProgram] = useState<SupportProgram | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { program, loading, error, detailsLoading, detailsError, loadDetails } = useProgramDetail(programId);
 
   // Active Tab: 'viewer' | 'ai' | 'docs' | 'sources'
   const [activeTab, setActiveTab] = useState<"viewer" | "ai" | "docs" | "sources">("viewer");
@@ -94,35 +92,12 @@ export default function ProgramDetailPage() {
   // Initial Fetch
   useEffect(() => {
     if (programId) {
-      fetchProgramDetail(programId);
+      setLiveAnalysis(null);
+      setSelectedDocIndex(0);
+      setActiveTab("viewer");
       checkBookmarkStatus(programId);
     }
   }, [programId]);
-
-  const fetchProgramDetail = async (id: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch(`/api/support-programs/${id}`);
-      if (!res.ok) {
-        throw new Error("공고 정보를 불러오는데 실패했습니다.");
-      }
-      const json = await res.json();
-      if (json.success && json.data) {
-        setProgram(json.data);
-        if (json.data.analyses && json.data.analyses.length > 0) {
-          setLiveAnalysis(json.data.analyses[0]);
-        }
-      } else {
-        throw new Error(json.error || "공고를 찾을 수 없습니다.");
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "공고를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const checkBookmarkStatus = async (id: string) => {
     try {
@@ -414,7 +389,7 @@ export default function ProgramDetailPage() {
             }`}
           >
             <Eye className="w-4 h-4 text-blue-600" />
-            <span>공고문 원문 뷰어 ({sortedDocs.length})</span>
+            <span>공고문 원문 뷰어 ({detailsLoading ? "…" : sortedDocs.length})</span>
           </button>
 
           <button
@@ -438,7 +413,7 @@ export default function ProgramDetailPage() {
             }`}
           >
             <FileText className="w-4 h-4 text-slate-500" />
-            <span>첨부 서류 다운로드 ({sortedDocs.length})</span>
+            <span>첨부 서류 다운로드 ({detailsLoading ? "…" : sortedDocs.length})</span>
           </button>
 
           <button
@@ -454,17 +429,29 @@ export default function ProgramDetailPage() {
           </button>
         </div>
 
-        {/* 3. Tab Contents */}
-        {activeTab === "viewer" && (
+        {/* Attachment loading never hides the summary above. */}
+        {detailsLoading && (
+          <div role="status" className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
+            <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-3" />
+            첨부 문서와 분석 정보를 불러오는 중입니다.
+          </div>
+        )}
+        {detailsError && (
+          <div role="alert" className="bg-white border border-amber-200 rounded-2xl p-6 text-sm text-slate-600">
+            <p>{detailsError}</p>
+            <button onClick={() => void loadDetails()} className="mt-3 text-blue-600 font-bold">다시 불러오기</button>
+          </div>
+        )}
+        {activeTab === "viewer" && !detailsLoading && !detailsError && (
           <NoticeOriginalTab
             sortedDocs={sortedDocs}
             selectedDocIndex={selectedDocIndex}
             setSelectedDocIndex={setSelectedDocIndex}
-            onRefresh={() => fetchProgramDetail(programId)}
+            onRefresh={() => void loadDetails(true)}
           />
         )}
 
-        {activeTab === "ai" && (
+        {activeTab === "ai" && !detailsLoading && !detailsError && (
           <AiStrategyTab
             aiData={aiData}
             analysisError={analysisError}
@@ -487,9 +474,9 @@ export default function ProgramDetailPage() {
           />
         )}
 
-        {activeTab === "docs" && <DocumentsTab sortedDocs={sortedDocs} programTitle={program.title} />}
+        {activeTab === "docs" && !detailsLoading && !detailsError && <DocumentsTab sortedDocs={sortedDocs} programTitle={program.title} />}
 
-        {activeTab === "sources" && <RawSourceTab sources={program.sources} />}
+        {activeTab === "sources" && !detailsLoading && !detailsError && <RawSourceTab sources={program.sources} />}
       </main>
 
       <Footer />
