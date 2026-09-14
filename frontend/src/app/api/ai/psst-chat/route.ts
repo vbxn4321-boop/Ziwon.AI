@@ -237,35 +237,56 @@ ${JSON.stringify(currentPlan, null, 2)}
 
     // Case 3: Interactive Interview Mode with Quick Suggestions & Step Progress
 
+    const { companyProfile, formSchema: clientFormSchema } = body;
+    const { getStandardFormSchema } = await import("@/features/psst/constants");
+    const activeSchema = clientFormSchema && clientFormSchema.fields?.length > 0
+      ? clientFormSchema
+      : getStandardFormSchema(targetProgramTitle);
+
     // 공고문 발췌를 대화에 실어준다. 이게 없으면 챗봇이 공고 제목만 보고
     // 어떤 사업이든 똑같은 일반 질문만 하게 된다.
     const noticeContext = await loadNoticeContext(targetProgramTitle);
 
+    // 서식 칸 목록 및 작성 지침(※) 블록 생성
+    const schemaFieldsBlock = activeSchema.fields.map((f: any, idx: number) => {
+      const typeNote = f.type === "FACT" ? "[사실정보-자동반영]" : f.type === "ATTACHMENT" ? "[첨부물]" : "[서술형-인터뷰]";
+      const guideNote = f.guidance ? `\n    └ 주관기관 작성지침: ※ ${f.guidance}` : "";
+      return `  ${idx + 1}. (ID: ${f.id}) [${f.sectionTitle || "공통"}] ${f.label} ${typeNote}${guideNote}`;
+    }).join("\n");
+
+    const companyProfileNote = companyProfile && companyProfile.name
+      ? `\n[사용자 기업 등록 정보 (FACT 항목 자동완성)]:
+- 회사명: ${companyProfile.name}
+- 업종/분야: ${companyProfile.industry || "미지정"}
+- 주요 아이템 요약: ${companyProfile.coreItemSummary || "미지정"}
+- 보유 특허/인증: ${[companyProfile.hasPatents ? "특허보유" : "", companyProfile.hasCertifications ? "벤처/이노비즈" : "", companyProfile.isExporting ? "수출기업" : ""].filter(Boolean).join(", ") || "없음"}
+※ 위 FACT(사실정보) 칸은 이미 수집 완료되었으므로, 질문은 첫 번째 서술형(NARRATIVE) 칸부터 집중해서 질문하십시오.`
+      : "";
+
     const systemInstruction = `당신은 대한민국 중소벤처기업부, 창업진흥원, 기술보증기금 출신의 수석 창업 컨설턴트 AI 'Ziwon-AI'입니다.
-목표 지원사업: [${targetProgramTitle || "2026년 중소벤처기업부 초기창업패키지"}]
+목표 지원사업: [${targetProgramTitle || activeSchema.title || "2026년 중소벤처기업부 초기창업패키지"}]
 ${noticeContext.promptBlock}
 
-사용자와 1:1 심층 인터뷰를 진행하여, 정부 표준 PSST(Problem, Solution, Scale-up, Team) 사업계획서에 필요한 핵심 정보를 **반드시 하나도 빠짐없이 차례대로 되물어서 수집**해야 합니다.
+[공식 사업계획서 서식 칸 목록 및 주관기관 작성지침(※)]:
+${schemaFieldsBlock}
+${companyProfileNote}
 
-[🚨 절대 원칙 - 필수 항목 누락 시 되묻기 필수]:
-사용자가 아직 정보를 충분히 주지 않았거나 중간에 "작성해줘", "만들어줘"라고 하더라도, 사업계획서 4대 요소 중 누락된 내용이 있다면 절대로 그냥 넘어가거나 임의로 만들지 말고, 지금까지 파악된 내용과 함께 부족한 필수 항목을 구체적으로 되물어 답을 받아내세요!
-
-[단계별 필수 인터뷰 항목]:
-- **1단계 (아이템 & 타겟)**: 어떤 창업 아이템(서비스/제품)인지와 누구를 위한 타겟 고객인지 확인.
-- **2단계 (문제점/페인포인트 - Problem)**: 타겟 고객이 기존 방식이나 경쟁 제품에서 겪는 가장 큰 고통(비용/시간/고장/불편함)과 왜 지금 이 사업이 시급한지 되물어 확인.
-- **3단계 (해결책 & 차별성 - Solution)**: 우리 제품의 핵심 작동 원리와 기술 사양, 경쟁사가 쉽게 따라할 수 없는 기술적 차별점(해자)을 되물어 확인.
-- **4단계 (수익 모델 & 마케팅 - Scale-up)**: 돈을 어떻게 버는지(과금 방식, 구독료/단가)와 초기 고객을 모을 마케팅/유통 채널을 되물어 확인.
-- **5단계 (팀 구성 및 역량 - Team)**: 대표자 및 팀원의 전공, 실무 개발/영업 경력, 해당 분야 전문성을 되물어 확인.
+[🚨 서식 칸 기반 1:1 인터뷰 원칙]:
+1. 위 서식 칸 목록의 **NARRATIVE(서술형)** 항목을 순서대로 하나씩 짚어가며 심층 질문을 진행하세요.
+2. 각 칸을 질문할 때, 반드시 해당 칸에 달린 **'주관기관 작성지침(※)'을 질문의 핵심 근거**로 인용하여 질문하세요.
+   (예: "현재 서식의 '1-1. 창업아이템 개발 배경' 항목을 작성하기 위해, 주관기관 지침에 따라 기존 시장의 가장 큰 문제점과 고객 페인포인트를 말씀해 주세요.")
+3. 사용자가 아직 정보를 충분히 주지 않았거나 중간에 "작성해줘", "만들어줘"라고 하더라도, 현재 작성 중인 서식 칸에 필요한 핵심 근거가 누락되었다면 친절하게 되물어 명확한 답을 받아내세요.
+4. 사용자가 답한 내용은 서식 칸에 맞게 정돈하고, 자연스럽게 다음 서식 칸으로 넘어가며 질문하세요.
 
 [출력 형식 가이드라인]:
-답변 마지막에 반드시 사용자가 1클릭으로 선택할 수 있는 2~3개의 추천 답변 칩(SUGGESTIONS)과 현재까지의 수집 상태(PROGRESS)를 아래 특수 태그 형식으로 덧붙이세요:
+답변 마지막에 반드시 사용자가 1클릭으로 선택할 수 있는 2~3개의 추천 답변 칩(SUGGESTIONS)과 현재까지의 서식 칸 수집 상태(PROGRESS)를 아래 특수 태그 형식으로 덧붙이세요:
 
 <<<SUGGESTIONS>>>
-- (답변 추천 1: 구체적인 실무 예시)
+- (답변 추천 1: 공고 및 서식 지침에 부합하는 구체적인 실무 예시)
 - (답변 추천 2: 또 다른 실무 예시)
 - (답변 추천 3: 다른 선택지)
 <<<PROGRESS>>>
-{"itemTarget": true, "problem": false, "solution": false, "scaleUp": false, "team": false, "currentStep": 2}`;
+{"totalFields": ${activeSchema.fields.length}, "completedFieldIds": ["f1"], "currentFieldId": "f2", "currentFieldLabel": "${activeSchema.fields[1]?.label || '창업배경'}", "completedCount": 1, "itemTarget": true, "problem": false, "solution": false, "scaleUp": false, "team": false, "currentStep": 2}`;
 
     const chatHistory = (messages || []).map((m: any) => ({
       role: m.role === "user" ? "user" : "model",
@@ -304,14 +325,32 @@ ${noticeContext.promptBlock}
     // Parse suggestions and progress metadata tags from AI reply
     let replyText = rawReply;
     let suggestions: string[] = [];
-    let progress = {
-      itemTarget: substantiveTurnCount >= 1,
-      problem: substantiveTurnCount >= 2,
-      solution: substantiveTurnCount >= 3,
-      scaleUp: substantiveTurnCount >= 4,
-      team: substantiveTurnCount >= 5,
-      currentStep: Math.min(5, substantiveTurnCount + 1),
-      completedCount: Math.min(5, substantiveTurnCount),
+    
+    // Default fallback progress calculation based on active schema
+    const totalFieldsCount = activeSchema.fields.length;
+    const hasCompanyFact = Boolean(companyProfile && companyProfile.name);
+    const initialCompletedCount = hasCompanyFact ? 1 : 0;
+    const estimatedCompletedCount = Math.min(totalFieldsCount, initialCompletedCount + substantiveTurnCount);
+    const currentFieldIndex = Math.min(totalFieldsCount - 1, estimatedCompletedCount);
+    const currentField = activeSchema.fields[currentFieldIndex] || activeSchema.fields[0];
+
+    const completedFieldIds: string[] = activeSchema.fields
+      .slice(0, estimatedCompletedCount)
+      .map((f: any) => f.id);
+
+    let progress: any = {
+      totalFields: totalFieldsCount,
+      completedCount: estimatedCompletedCount,
+      currentFieldId: currentField?.id || "f1",
+      currentFieldLabel: currentField?.label || "1. 창업아이템 개요",
+      currentFieldGuidance: currentField?.guidance || "",
+      completedFieldIds,
+      itemTarget: estimatedCompletedCount >= 1,
+      problem: estimatedCompletedCount >= 2,
+      solution: estimatedCompletedCount >= 3,
+      scaleUp: estimatedCompletedCount >= 4,
+      team: estimatedCompletedCount >= 5,
+      currentStep: Math.min(5, Math.ceil((estimatedCompletedCount / Math.max(1, totalFieldsCount)) * 5) || 1),
     };
 
     // Extract SUGGESTIONS
@@ -327,47 +366,64 @@ ${noticeContext.promptBlock}
     // Extract PROGRESS
     const progMatch =
       rawReply.match(/(?:<<<PROGRESS>>>|PROGRESS:?)\s*(\{[\s\S]*?\})/i) ||
-      rawReply.match(/(\{[\s\S]*?"itemTarget"[\s\S]*?\})/i);
+      rawReply.match(/(\{[\s\S]*?"(?:totalFields|itemTarget|currentFieldId)"[\s\S]*?\})/i);
     if (progMatch) {
       try {
         const parsedProg = JSON.parse(progMatch[1].trim());
-        const completed = Object.values(parsedProg).filter((v) => v === true).length;
+        const completed = typeof parsedProg.completedCount === "number"
+          ? parsedProg.completedCount
+          : Object.values(parsedProg).filter((v) => v === true).length;
+
         progress = {
           ...progress,
           ...parsedProg,
+          totalFields: totalFieldsCount,
           completedCount: completed,
+          currentFieldId: parsedProg.currentFieldId || progress.currentFieldId,
+          currentFieldLabel: parsedProg.currentFieldLabel || progress.currentFieldLabel,
         };
       } catch {}
     }
+
+    // Build fieldProgress list for UI step chips
+    const fieldProgress = activeSchema.fields.map((field: any, idx: number) => {
+      const isCompleted = progress.completedFieldIds?.includes(field.id) || idx < progress.completedCount;
+      return {
+        id: field.id,
+        label: field.label,
+        guidance: field.guidance,
+        type: field.type,
+        sectionTitle: field.sectionTitle,
+        completed: isCompleted,
+      };
+    });
+    progress.fieldProgress = fieldProgress;
 
     // Thoroughly sanitize replyText so NO JSON or metadata tags ever leak to user
     replyText = replyText
       .replace(/<<<SUGGESTIONS>>>[\s\S]*?(?:<<<PROGRESS>>>|$)/gi, "")
       .replace(/<<<PROGRESS>>>[\s\S]*?$/gi, "")
       .replace(/PROGRESS:?\s*\{[\s\S]*?\}/gi, "")
-      .replace(/\{[\s\S]*?"itemTarget"[\s\S]*?\}/gi, "")
-      .replace(/\{[\s\S]*?"currentStep"[\s\S]*?\}/gi, "")
+      .replace(/\{[\s\S]*?"(?:itemTarget|totalFields|currentFieldId)"[\s\S]*?\}/gi, "")
       .replace(/```json[\s\S]*?```/gi, "")
       .trim();
 
-    // 태그로 추천 답변이 안 나왔을 때의 대비책.
-    // 아래 예시는 스마트팜·IoT 기준이라 공고와 무관할 수 있다. 공고문 맥락을 실어
-    // 보낸 경우에는 AI 가 공고에 맞게 만들어주므로, 엉뚱한 업종 예시를 끼워넣지 않는다.
+    // 태그로 추천 답변이 안 나왔을 때의 대비책
     if (suggestions.length === 0 && !noticeContext.hasNotice) {
-      if (progress.currentStep === 1) {
-        suggestions = ["🌱 스마트팜 비닐하우스 모니터링", "📦 친환경 생분해 완충재 포장", "🩺 AI 헬스케어 비대면 진료"];
-      } else if (progress.currentStep === 2) {
+      if (progress.completedCount <= 1) {
+        suggestions = ["🌱 스마트팜 비닐하우스 원격 모니터링", "📦 친환경 생분해 완충재 포장", "🩺 AI 헬스케어 비대면 진료"];
+      } else if (progress.completedCount <= 2) {
         suggestions = ["초기 설치비가 수천만원이라 너무 비싸다", "고장이나 정전 시 즉시 알림이 안 와서 냉해 피해 발생", "사용법이 너무 복잡해서 고령층이 쓰기 어렵다"];
-      } else if (progress.currentStep === 3) {
+      } else if (progress.completedCount <= 3) {
         suggestions = ["자체 LoRa 초저전력 센서 + 3초 이내 카카오 알림톡", "경쟁사 대비 80% 저렴한 단가 및 3-클릭 UI", "독자 딥러닝 이상 탐지 알고리즘 특허 출원"];
-      } else if (progress.currentStep === 4) {
+      } else if (progress.completedCount <= 4) {
         suggestions = ["월 39,000원 정기 구독형 SaaS", "하드웨어 판매(50만원) + 연간 유지보수료", "지자체/농협 협력 B2G 공급 계약"];
       } else {
         suggestions = ["대표자: 해당 분야 5년 실무 경력 + 풀스택 개발팀", "컴퓨터공학 전공 대표 + 산학연 연구소 자문단 보유", "초안 작성해줘! 🚀"];
       }
     }
 
-    // If 4 turns completed, add "초안 작성해줘! 🚀" suggestion
+    // If substantive turns completed, add "초안 작성해줘! 🚀" suggestion
     if (substantiveTurnCount >= 3 && !suggestions.includes("초안 작성해줘! 🚀")) {
       suggestions.push("초안 작성해줘! 🚀");
     }

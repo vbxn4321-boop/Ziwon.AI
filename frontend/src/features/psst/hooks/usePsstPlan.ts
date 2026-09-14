@@ -8,7 +8,7 @@ import {
   InterviewProgress,
   PsstFormData,
 } from "../types";
-import { DEFAULT_INITIAL_MESSAGE, DEFAULT_SUGGESTIONS } from "../constants";
+import { DEFAULT_INITIAL_MESSAGE, DEFAULT_SUGGESTIONS, getStandardFormSchema } from "../constants";
 import { savePlanToBackend, fetchMyCompany } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
 import { convertPsstToHwpHtml, copyToHwpClipboard } from "@/lib/export/hwp-clipboard-exporter";
@@ -49,6 +49,13 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
   // Initial parsed plan
   const validInitialPlan = parsePlan(initialPlanData);
 
+  const initialTargetTitle =
+    initialPlanData?.targetProgramTitle ||
+    initialProgramTitle ||
+    "2026년 중소벤처기업부 예비창업패키지";
+
+  const initialSchema = getStandardFormSchema(initialTargetTitle);
+
   // Form Data
   const [formData, setFormData] = useState<PsstFormData>({
     companyName: validInitialPlan?.overview?.companyName || "",
@@ -57,10 +64,7 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     targetCustomer: validInitialPlan?.overview?.summaryTable?.targetUsers || "",
     itemDescription: validInitialPlan?.overview?.itemSummary || "",
     coreStrengths: validInitialPlan?.solution?.competitorDifferentiation || "",
-    targetProgramTitle:
-      initialPlanData?.targetProgramTitle ||
-      initialProgramTitle ||
-      "2026년 중소벤처기업부 예비창업패키지",
+    targetProgramTitle: initialTargetTitle,
     budget: validInitialPlan?.overview?.summaryTable?.targetBudget || "",
     // Attach linked program analysis context if provided
     programAnalysis: initialProgramAnalysis || undefined,
@@ -72,11 +76,39 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     validInitialPlan
   );
 
+  // Interactive Suggestion Pills and Checklist Progress
+  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
+  
+  const initialFieldProgress = initialSchema.fields.map((f, idx) => ({
+    id: f.id,
+    label: f.label,
+    guidance: f.guidance,
+    type: f.type,
+    sectionTitle: f.sectionTitle,
+    completed: !!validInitialPlan,
+  }));
+
+  const [interviewProgress, setInterviewProgress] = useState<InterviewProgress>({
+    itemTarget: !!validInitialPlan,
+    problem: !!validInitialPlan,
+    solution: !!validInitialPlan,
+    scaleUp: !!validInitialPlan,
+    team: !!validInitialPlan,
+    currentStep: validInitialPlan ? 5 : 1,
+    completedCount: validInitialPlan ? initialSchema.fields.length : 0,
+    totalFields: initialSchema.fields.length,
+    currentFieldId: initialSchema.fields[0]?.id || "f1",
+    currentFieldLabel: initialSchema.fields[0]?.label || "1. 창업아이템 개요",
+    currentFieldGuidance: initialSchema.fields[0]?.guidance || "",
+    fieldProgress: initialFieldProgress,
+  });
+
   // Synchronize when initialPlanData or initialProgramTitle changes
   useEffect(() => {
     if (initialPlanData) {
       const plan = parsePlan(initialPlanData);
       if (plan) {
+        const schema = getStandardFormSchema(initialPlanData.targetProgramTitle || initialProgramTitle);
         setGeneratedResult(plan);
         setFormData((prev) => ({
           ...prev,
@@ -99,7 +131,16 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
           scaleUp: true,
           team: true,
           currentStep: 5,
-          completedCount: 5,
+          completedCount: schema.fields.length,
+          totalFields: schema.fields.length,
+          fieldProgress: schema.fields.map((f) => ({
+            id: f.id,
+            label: f.label,
+            guidance: f.guidance,
+            type: f.type,
+            sectionTitle: f.sectionTitle,
+            completed: true,
+          })),
         });
       }
     }
@@ -122,6 +163,7 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
         const comp = await fetchMyCompany(token);
         if (comp && comp.name) {
           setUserCompany(comp);
+          const activeSchema = getStandardFormSchema(formData.targetProgramTitle);
           setFormData((prev) => ({
             ...prev,
             companyName: prev.companyName || comp.name || "",
@@ -144,6 +186,26 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
                 .join(", "),
             targetProgramTitle: initialProgramTitle || prev.targetProgramTitle,
           }));
+
+          // FACT 필드 자동완성 반영
+          setInterviewProgress((prev) => {
+            const updatedFields = (prev.fieldProgress || activeSchema.fields).map((f) => ({
+              ...f,
+              completed: f.type === "FACT" ? true : ("completed" in f ? Boolean(f.completed) : false),
+            }));
+            const completedCount = updatedFields.filter((f) => f.completed).length;
+            const currentField = updatedFields.find((f) => !f.completed) || updatedFields[0];
+            return {
+              ...prev,
+              completedCount,
+              totalFields: activeSchema.fields.length,
+              currentFieldId: currentField?.id,
+              currentFieldLabel: currentField?.label,
+              currentFieldGuidance: currentField?.guidance,
+              fieldProgress: updatedFields,
+              itemTarget: true,
+            };
+          });
         }
       } catch (err) {
         console.warn("Failed to prefill company profile for PSST:", err);
@@ -164,18 +226,6 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
   ]);
   const [chatInput, setChatInput] = useState("");
   const [isChatSending, setIsChatSending] = useState(false);
-
-  // Interactive Suggestion Pills and Checklist Progress
-  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
-  const [interviewProgress, setInterviewProgress] = useState<InterviewProgress>({
-    itemTarget: !!validInitialPlan,
-    problem: !!validInitialPlan,
-    solution: !!validInitialPlan,
-    scaleUp: !!validInitialPlan,
-    team: !!validInitialPlan,
-    currentStep: validInitialPlan ? 5 : 1,
-    completedCount: validInitialPlan ? 5 : 0,
-  });
 
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -205,14 +255,28 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
 
   // Reset to brand new business plan session
   const handleResetNew = () => {
+    const defaultTitle = initialProgramTitle || "2026년 중소벤처기업부 예비창업패키지";
+    const schema = getStandardFormSchema(defaultTitle);
+    const hasCompany = Boolean(userCompany && userCompany.name);
+    const fieldProgress = schema.fields.map((f) => ({
+      id: f.id,
+      label: f.label,
+      guidance: f.guidance,
+      type: f.type,
+      sectionTitle: f.sectionTitle,
+      completed: f.type === "FACT" && hasCompany,
+    }));
+    const completedCount = fieldProgress.filter((f) => f.completed).length;
+    const currentField = fieldProgress.find((f) => !f.completed) || fieldProgress[0];
+
     setFormData({
-      companyName: "",
+      companyName: userCompany?.name || "",
       itemName: "",
-      industry: "",
+      industry: userCompany?.industry || "",
       targetCustomer: "",
       itemDescription: "",
       coreStrengths: "",
-      targetProgramTitle: initialProgramTitle || "2026년 중소벤처기업부 초기창업패키지",
+      targetProgramTitle: defaultTitle,
       budget: "",
     });
     setChatMessages([
@@ -225,13 +289,18 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     ]);
     setGeneratedResult(null);
     setInterviewProgress({
-      itemTarget: false,
+      itemTarget: hasCompany,
       problem: false,
       solution: false,
       scaleUp: false,
       team: false,
-      currentStep: 1,
-      completedCount: 0,
+      currentStep: hasCompany ? 2 : 1,
+      completedCount,
+      totalFields: schema.fields.length,
+      currentFieldId: currentField?.id || "f1",
+      currentFieldLabel: currentField?.label || "1. 창업아이템 개요",
+      currentFieldGuidance: currentField?.guidance || "",
+      fieldProgress,
     });
     setCurrentSuggestions(DEFAULT_SUGGESTIONS);
     setErrorMessage(null);
@@ -274,6 +343,8 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     setChatMessages(updatedMessages);
     setIsChatSending(true);
 
+    const activeSchema = getStandardFormSchema(formData.targetProgramTitle);
+
     try {
       const res = await fetch("/api/ai/psst-chat", {
         method: "POST",
@@ -282,6 +353,8 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
           messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
           targetProgramTitle: formData.targetProgramTitle,
           currentPlan: generatedResult || undefined,
+          companyProfile: userCompany || undefined,
+          formSchema: activeSchema,
         }),
       });
 
@@ -302,7 +375,10 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
         }
 
         if (json.progress) {
-          setInterviewProgress(json.progress);
+          setInterviewProgress((prev) => ({
+            ...prev,
+            ...json.progress,
+          }));
         }
 
         if (json.plan) {
@@ -357,13 +433,14 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
       .join("\n\n");
 
     const inputData: PsstGeneratorInput = {
-      companyName: "예비창업기업",
-      itemName: "대화 내용 기반 맞춤형 창업 아이템",
-      industry: "대화 기반 신산업",
-      targetCustomer: "대화 속 타겟 고객",
-      itemDescription: `[사용자와의 1:1 심층 인터뷰 대화 전문]\n${conversationSummary}\n\n위 대화에서 사용자가 직접 언급한 실제 창업 아이템, 타겟 고객, 기술적 차별점, 문제점, 사업 모델을 100% 정확하게 추출하여 PSST 사업계획서 전문을 완성해 주세요.`,
-      coreStrengths: "대화 속 핵심 기술 및 차별화 요소",
+      companyName: formData.companyName.trim() || userCompany?.name || "예비창업기업",
+      itemName: formData.itemName.trim() || "대화 내용 기반 맞춤형 창업 아이템",
+      industry: formData.industry.trim() || userCompany?.industry || "대화 기반 신산업",
+      targetCustomer: (formData.targetCustomer || "").trim() || "대화 속 타겟 고객",
+      itemDescription: `[사용자와의 1:1 심층 서식 인터뷰 대화 전문]\n${conversationSummary}\n\n위 대화에서 사용자가 직접 언급한 실제 창업 아이템, 타겟 고객, 기술적 차별점, 문제점, 사업 모델을 100% 정확하게 추출하여 PSST 사업계획서 전문을 완성해 주세요.`,
+      coreStrengths: (formData.coreStrengths || "").trim() || "대화 속 핵심 기술 및 차별화 요소",
       targetProgramTitle: formData.targetProgramTitle || "2026년 초기창업패키지",
+      programAnalysis: formData.programAnalysis,
     };
 
     try {
