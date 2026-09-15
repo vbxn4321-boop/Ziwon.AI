@@ -7,6 +7,7 @@ export type CreationMode = "chat" | "form";
 export type CanvasTheme = "dark" | "light";
 
 export interface PsstPlanGeneratorProps {
+  initialProgramId?: string;
   initialProgramTitle?: string;
   initialPlanData?: any;
   onBackToNotices?: () => void;
@@ -55,6 +56,6 @@ export interface InterviewProgress {
   fieldProgress?: FormFieldProgressItem[];
 }
 
-export type PsstFormData = PsstGeneratorInput & { budget?: string };
+export type PsstFormData = PsstGeneratorInput & { budget?: string; programId?: string };
 export type { ProgramAnalysisContext };
 

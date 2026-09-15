@@ -39,6 +39,7 @@ import { CanvasTheme } from "../types";
 interface A4DocumentEditorProps {
   plan: PsstBusinessPlanResult | null;
   programTitle?: string;
+  programId?: string;
   isDirectEditing: boolean;
   setIsDirectEditing: React.Dispatch<React.SetStateAction<boolean>>;
   canvasTheme: CanvasTheme;
@@ -47,6 +48,7 @@ interface A4DocumentEditorProps {
 export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
   plan,
   programTitle,
+  programId,
   isDirectEditing,
   setIsDirectEditing,
   canvasTheme,
@@ -163,7 +165,7 @@ export const A4DocumentEditor: React.FC<A4DocumentEditorProps> = ({
     try {
       setIsHwpxDownloading(true);
       const fileName = `${plan.overview?.title || "PSST_사업계획서"}_ZiwonAI`;
-      await downloadHwpxDocument(plan, programTitle, fileName);
+      await downloadHwpxDocument(plan, programTitle, fileName, programId);
     } finally {
       setIsHwpxDownloading(false);
     }

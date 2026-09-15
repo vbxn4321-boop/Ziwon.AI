@@ -343,6 +343,45 @@ class ScraperService:
                 except Exception as dl_err:
                     print(f"[Python Scraper] {entry['url']} 다운로드 실패: {dl_err}")
 
+            # 이 페이지에서 첨부파일을 하나도 못 건졌으면(링크 자체가 없었거나,
+            # 링크는 있었지만 전부 다운로드 실패) "확인은 했다" 표시를 남긴다.
+            # TS 쪽 scrapeMissingAttachments 와 동일한 규칙이다. 이게 없으면
+            # 첨부가 원래 없는 공고(온라인 접수형 등)가 문서 0건 조건에 계속
+            # 걸려 매 회차마다 원문 사이트를 다시 긁게 된다.
+            if not scraped_docs:
+                db = SessionLocal()
+                try:
+                    # candidate_entries 가 있었을 때만 위에서 이미 지웠으므로,
+                    # 없었던 경우(옛 손상 행이 남아있을 수 있음)를 대비해 한 번 더 지운다.
+                    db.execute(
+                        text('DELETE FROM "SupportDocument" WHERE "supportProgramId" = :prog_id'),
+                        {"prog_id": support_program_id},
+                    )
+                    notice_only_id = str(uuid.uuid4())
+                    db.execute(
+                        text("""
+                        INSERT INTO "SupportDocument" (
+                            "id", "supportProgramId", "fileName", "fileUrl", "fileType",
+                            "extractedText", "status", "createdAt", "updatedAt"
+                        )
+                        VALUES (
+                            :id, :prog_id, :fileName, :fileUrl, 'NOTICE_ONLY',
+                            :extractedText, 'PARSED', NOW(), NOW()
+                        )
+                        """),
+                        {
+                            "id": notice_only_id,
+                            "prog_id": support_program_id,
+                            "fileName": "[온라인 신청 공고] 별도 서식 파일 없음 (원문 웹페이지 직접 접수)",
+                            "fileUrl": source_url,
+                            "extractedText": "본 공고는 별도의 HWP/PDF 서식 파일이 제공되지 않으며, 원문 웹페이지의 온라인 신청 폼 또는 접수처 링크를 통해 직접 신청하는 지원사업입니다.",
+                        },
+                    )
+                    db.commit()
+                    print(f"[Python Scraper] ℹ️ 첨부파일을 찾지 못했습니다. NOTICE_ONLY 로 기록하여 재시도 대상에서 제외합니다: {source_url}")
+                finally:
+                    db.close()
+
         except Exception as e:
             print(f"[Python Scraper] ❌ {source_url} 스크래핑 중 예외 발생: {e}")
         finally:

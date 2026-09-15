@@ -1280,8 +1280,11 @@ export default function MyPage() {
         <ProgramDetailModal
           selectedProgram={selectedProgramForModal}
           onClose={() => setSelectedProgramForModal(null)}
-          onCreatePsstPlan={(title) => {
-            router.push(`/consultant?targetTitle=${encodeURIComponent(title)}`);
+          onCreatePsstPlan={(title, id) => {
+            const query = id
+              ? `targetTitle=${encodeURIComponent(title)}&programId=${encodeURIComponent(id)}`
+              : `targetTitle=${encodeURIComponent(title)}`;
+            router.push(`/consultant?${query}`);
           }}
         />
       )}

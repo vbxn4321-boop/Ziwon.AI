@@ -25,6 +25,7 @@ function ConsultantContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const [selectedTargetProgramForPlan, setSelectedTargetProgramForPlan] = useState<string>("");
   const [selectedPlanToLoad, setSelectedPlanToLoad] = useState<any>(null);
   const [selectedProgramAnalysis, setSelectedProgramAnalysis] = useState<ProgramAnalysisContext | undefined>(undefined);
@@ -57,9 +58,14 @@ function ConsultantContent() {
       });
     }
 
+    const progId = searchParams.get("programId") || searchParams.get("id");
+    if (progId) {
+      setSelectedProgramId(progId);
+    }
+
     const targetTitle = searchParams.get("targetTitle") || searchParams.get("programTitle");
-    if (targetTitle) {
-      setSelectedTargetProgramForPlan(targetTitle);
+    if (targetTitle || progId) {
+      if (targetTitle) setSelectedTargetProgramForPlan(targetTitle);
       setIsFullStudioOpen(true);
     }
 
@@ -80,12 +86,14 @@ function ConsultantContent() {
     return (
       <main className="w-full h-screen flex flex-col overflow-hidden">
         <PsstPlanGenerator
+          initialProgramId={selectedProgramId || undefined}
           initialProgramTitle={selectedTargetProgramForPlan || undefined}
           initialPlanData={selectedPlanToLoad}
           initialProgramAnalysis={selectedProgramAnalysis}
           onBackToNotices={() => {
             setIsFullStudioOpen(false);
             setSelectedPlanToLoad(null);
+            setSelectedProgramId("");
             setSelectedTargetProgramForPlan("");
             setSelectedProgramAnalysis(undefined);
           }}

@@ -3,32 +3,67 @@ import { guardAiRoute, LIGHT_LIMITS } from "@/lib/security/ai-route-guard";
 import { GoogleGenAI } from "@google/genai";
 import { generatePsstBusinessPlan, PsstBusinessPlanResult, PsstGeneratorInput } from "@/lib/ai/psst-generator";
 import { getCandidateModels } from "@/lib/ai/models";
+import type { FormSchema } from "@/lib/parser/form-schema-parser";
 
 /**
- * 대화 중에 참고할 공고문 맥락을 준비한다.
+ * 대화 중에 참고할 공고문 맥락과, 있다면 실제 첨부 서식의 칸 구조를 함께 준비한다.
  *
  * 챗봇이 "이 공고에는 이러이러한 게 필요하니 알려달라" 고 물으려면 공고문 내용을
  * 알아야 하는데, 기존에는 시스템 프롬프트에 공고 제목만 들어가 있어서 어떤 공고든
  * 똑같은 일반 질문만 했다. 공고문에서 필요한 섹션만 발췌해 넣는다.
+ *
+ * 서식 칸도 마찬가지 문제가 있었다: 클라이언트가 매 턴 `getStandardFormSchema()`
+ * (하드코딩 표준 템플릿)를 만들어 보내고, 서버는 그걸 항상 값이 있다는 이유로
+ * 그대로 썼다. 그래서 실제 첨부 서식(HWPX)의 고유 항목은 한 번도 쓰이지 못했다.
+ * 여기서 공고 문서 조회를 한 번만 하고, 실제 서식이 파싱되면 그걸 우선한다.
  */
-async function loadNoticeContext(targetProgramTitle?: string): Promise<{
+async function loadProgramContext(targetProgramTitle?: string, programId?: string): Promise<{
   promptBlock: string;
   hasNotice: boolean;
+  realFormSchema: FormSchema | null;
 }> {
-  if (!targetProgramTitle) return { promptBlock: "", hasNotice: false };
+  if (!targetProgramTitle && !programId) return { promptBlock: "", hasNotice: false, realFormSchema: null };
 
   try {
     const { prisma } = await import("@/lib/db");
-    const found = await prisma.supportProgram.findFirst({
-      where: { title: { contains: targetProgramTitle.slice(0, 20) } },
-      include: { documents: { select: { fileName: true, extractedText: true } } },
-    });
-    if (!found || found.documents.length === 0) return { promptBlock: "", hasNotice: false };
+    let found = null;
+    if (programId) {
+      found = await prisma.supportProgram.findUnique({
+        where: { id: programId },
+        include: {
+          documents: { select: { id: true, fileName: true, fileUrl: true, entryPath: true, fileType: true, extractedText: true } },
+        },
+      });
+    }
+
+    if (!found && targetProgramTitle) {
+      const cleanTitle = targetProgramTitle.trim();
+      found = await prisma.supportProgram.findFirst({
+        where: { title: cleanTitle },
+        include: {
+          documents: { select: { id: true, fileName: true, fileUrl: true, entryPath: true, fileType: true, extractedText: true } },
+        },
+      });
+
+      if (!found) {
+        found = await prisma.supportProgram.findFirst({
+          where: { title: { contains: cleanTitle } },
+          include: {
+            documents: { select: { id: true, fileName: true, fileUrl: true, entryPath: true, fileType: true, extractedText: true } },
+          },
+        });
+      }
+    }
+
+    if (!found || found.documents.length === 0) return { promptBlock: "", hasNotice: false, realFormSchema: null };
+
+    const { loadRealFormSchema } = await import("@/lib/parser/load-form-schema");
+    const realFormSchema = await loadRealFormSchema(found.id, found.documents);
 
     const { extractNoticeForPrompt } = await import("@/lib/parser/notice-extractor");
     // 대화는 매 턴 호출되므로 분석용보다 짧게 자른다
     const extraction = extractNoticeForPrompt(found.documents, 8000);
-    if (!extraction.promptText.trim()) return { promptBlock: "", hasNotice: false };
+    if (!extraction.promptText.trim()) return { promptBlock: "", hasNotice: false, realFormSchema };
 
     const stageNote =
       extraction.productStage === "PROTOTYPE"
@@ -39,6 +74,7 @@ async function loadNoticeContext(targetProgramTitle?: string): Promise<{
 
     return {
       hasNotice: true,
+      realFormSchema,
       promptBlock: `
 [이 공고의 실제 내용 - 아래 근거로만 질문하십시오]
 ${extraction.promptText}${stageNote}
@@ -53,7 +89,7 @@ ${extraction.promptText}${stageNote}
     };
   } catch (e: any) {
     console.warn("[PSST Chat] 공고문 맥락 로딩 실패:", e.message);
-    return { promptBlock: "", hasNotice: false };
+    return { promptBlock: "", hasNotice: false, realFormSchema: null };
   }
 }
 
@@ -73,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey });
     const body = await req.json();
-    const { messages, generatePlan, targetProgramTitle, currentPlan } = body;
+    const { messages, generatePlan, targetProgramTitle, programId, currentPlan } = body;
 
     const userMessages = (messages || []).filter((m: any) => m.role === "user");
     const lastUserMessage = (userMessages.slice(-1)[0]?.content || "").trim();
@@ -167,34 +203,59 @@ ${JSON.stringify(currentPlan, null, 2)}
       let extractedOutline: string[] = [];
       let maxBudgetWon: number | undefined = undefined;
       let programAnalysis: any = undefined;
+      let targetProgramRecord: any = null;
 
-      if (targetProgramTitle) {
+      if (programId || targetProgramTitle) {
         try {
           const { prisma } = await import("@/lib/db");
-          const found = await prisma.supportProgram.findFirst({
-            where: { title: { contains: targetProgramTitle.slice(0, 20) } },
-            include: {
-              documents: true,
-              sources: true,
-              analyses: { where: { status: "COMPLETED" }, orderBy: { createdAt: "desc" }, take: 1 },
-            },
-          });
-          if (found) {
+          if (programId) {
+            targetProgramRecord = await prisma.supportProgram.findUnique({
+              where: { id: programId },
+              include: {
+                documents: true,
+                sources: true,
+                analyses: { where: { status: "COMPLETED" }, orderBy: { createdAt: "desc" }, take: 1 },
+              },
+            });
+          }
+
+          if (!targetProgramRecord && targetProgramTitle) {
+            const cleanTitle = targetProgramTitle.trim();
+            targetProgramRecord = await prisma.supportProgram.findFirst({
+              where: { title: cleanTitle },
+              include: {
+                documents: true,
+                sources: true,
+                analyses: { where: { status: "COMPLETED" }, orderBy: { createdAt: "desc" }, take: 1 },
+              },
+            });
+
+            if (!targetProgramRecord) {
+              targetProgramRecord = await prisma.supportProgram.findFirst({
+                where: { title: { contains: cleanTitle } },
+                include: {
+                  documents: true,
+                  sources: true,
+                  analyses: { where: { status: "COMPLETED" }, orderBy: { createdAt: "desc" }, take: 1 },
+                },
+              });
+            }
+          }
+
+          if (targetProgramRecord) {
             const { analyzeProgramForPsst } = await import("@/lib/parser/outline-extractor");
-            const docTexts = found.documents.map((d) => d.extractedText || "").filter(Boolean);
-            const rawData = found.sources[0]?.rawData || "";
-            const analysis = analyzeProgramForPsst(found.title, found.targetDescription || "", docTexts, rawData);
+            const docTexts = targetProgramRecord.documents.map((d: any) => d.extractedText || "").filter(Boolean);
+            const rawData = targetProgramRecord.sources[0]?.rawData || "";
+            const analysis = analyzeProgramForPsst(targetProgramRecord.title, targetProgramRecord.targetDescription || "", docTexts, rawData);
             grantType = analysis.grantType;
             extractedOutline = analysis.outlines;
             maxBudgetWon = analysis.maxBudgetWon;
 
             // 공고 분석 결과(배점표·가점·자격요건)를 생성기에 넘긴다.
-            // psst-generator 에 이걸 프롬프트로 만드는 코드가 이미 있는데
-            // 여태 아무도 채워주지 않아 평가 기준을 모른 채 계획서를 쓰고 있었다.
-            if (found.analyses[0]?.resultJson) {
+            if (targetProgramRecord.analyses[0]?.resultJson) {
               try {
-                programAnalysis = JSON.parse(found.analyses[0].resultJson);
-                console.log(`📊 [PSST Chat] 공고 분석 결과를 생성에 반영합니다: ${found.title.slice(0, 30)}`);
+                programAnalysis = JSON.parse(targetProgramRecord.analyses[0].resultJson);
+                console.log(`📊 [PSST Chat] 공고 분석 결과를 생성에 반영합니다: ${targetProgramRecord.title.slice(0, 30)}`);
               } catch {
                 console.warn("[PSST Chat] 공고 분석 JSON 파싱 실패");
               }
@@ -205,23 +266,40 @@ ${JSON.stringify(currentPlan, null, 2)}
         }
       }
 
+      // 서식 스키마 결정: 클라이언트 전달 스키마 > 실제 파싱 스키마 > 표준 템플릿
+      const { getStandardFormSchema } = await import("@/features/psst/constants");
+      let planFormSchema: FormSchema | undefined = body.formSchema && body.formSchema.fields?.length > 0 ? body.formSchema : undefined;
+      if (!planFormSchema && targetProgramRecord) {
+        try {
+          const { loadRealFormSchema } = await import("@/lib/parser/load-form-schema");
+          const realSchema = await loadRealFormSchema(targetProgramRecord.id, targetProgramRecord.documents);
+          if (realSchema && realSchema.fields?.length > 0) {
+            planFormSchema = realSchema;
+          }
+        } catch {}
+      }
+      if (!planFormSchema) {
+        planFormSchema = getStandardFormSchema(targetProgramTitle || targetProgramRecord?.title);
+      }
+
       const planInput: PsstGeneratorInput = {
         companyName: "예비창업기업",
         itemName: "대화 내용 기반 맞춤형 창업 아이템",
         industry: "대화 기반 신산업",
         itemDescription: `[사용자와의 1:1 심층 인터뷰 대화 전문]\n${conversationSummary}\n\n위 대화에서 사용자가 직접 언급한 실제 창업 아이템, 타겟 고객, 기술적 차별점, 문제점, 사업 모델, 팀 역량을 100% 정확하게 추출하여 PSST 사업계획서 전문을 완성해 주세요.`,
-        targetProgramTitle: targetProgramTitle || "2026년 중소벤처기업부 초기창업패키지",
+        targetProgramTitle: targetProgramTitle || targetProgramRecord?.title || "2026년 중소벤처기업부 초기창업패키지",
         grantType,
         extractedOutline,
         maxBudgetWon,
         programAnalysis,
+        formSchema: planFormSchema,
       };
 
       const planResult = await generatePsstBusinessPlan(planInput);
 
       return NextResponse.json({
         success: true,
-        reply: `대표님과 나눈 심층 인터뷰 내용을 정밀 분석하여, **${targetProgramTitle || "중소벤처기업부"} 공인 서식에 최적화된 정부 표준 PSST 사업계획서(요약표, 경쟁사 비교표, Q1~Q4 로드맵, 예산표 포함)와 심사위원 100점 배점 리포트**를 완성했습니다! 🎉\n\n👉 **우측 문서 시트에 전문이 실시간으로 렌더링되었습니다.** 필요하신 경우 챗봇에게 *"3-1 단가를 월 5만원으로 수정해줘"* 처럼 말씀하시면 즉시 부분 수정도 가능합니다.`,
+        reply: `대표님과 나눈 심층 인터뷰 내용을 정밀 분석하여, **${targetProgramTitle || targetProgramRecord?.title || "중소벤처기업부"} 공인 서식에 최적화된 정부 표준 PSST 사업계획서(요약표, 경쟁사 비교표, Q1~Q4 로드맵, 예산표 포함)와 심사위원 100점 배점 리포트**를 완성했습니다! 🎉\n\n👉 **우측 문서 시트에 전문이 실시간으로 렌더링되었습니다.** 필요하신 경우 챗봇에게 *"3-1 단가를 월 5만원으로 수정해줘"* 처럼 말씀하시면 즉시 부분 수정도 가능합니다.`,
         plan: planResult,
         progress: {
           itemTarget: true,
@@ -238,14 +316,21 @@ ${JSON.stringify(currentPlan, null, 2)}
     // Case 3: Interactive Interview Mode with Quick Suggestions & Step Progress
 
     const { companyProfile, formSchema: clientFormSchema } = body;
-    const { getStandardFormSchema } = await import("@/features/psst/constants");
-    const activeSchema = clientFormSchema && clientFormSchema.fields?.length > 0
-      ? clientFormSchema
-      : getStandardFormSchema(targetProgramTitle);
 
-    // 공고문 발췌를 대화에 실어준다. 이게 없으면 챗봇이 공고 제목만 보고
-    // 어떤 사업이든 똑같은 일반 질문만 하게 된다.
-    const noticeContext = await loadNoticeContext(targetProgramTitle);
+    // 공고문 발췌와 실제 첨부 서식을 함께 가져온다 (DB 조회 한 번으로 묶는다).
+    const programContext = await loadProgramContext(targetProgramTitle, programId);
+    const noticeContext = { promptBlock: programContext.promptBlock, hasNotice: programContext.hasNotice };
+
+    // 우선순위: (1) 실제 첨부 서식 파싱 결과 > (2) 클라이언트가 보낸 서식 > (3) 표준 템플릿.
+    // 클라이언트는 매 턴 getStandardFormSchema() 결과를 보내는데, 예전 코드는 그걸
+    // "값이 있으니 그대로 쓴다"고 판단해서 실제 서식이 있어도 절대 쓰이지 못했다.
+    const { getStandardFormSchema } = await import("@/features/psst/constants");
+    const usingRealFormSchema = Boolean(programContext.realFormSchema);
+    const activeSchema =
+      programContext.realFormSchema ||
+      (clientFormSchema && clientFormSchema.fields?.length > 0
+        ? clientFormSchema
+        : getStandardFormSchema(targetProgramTitle));
 
     // 서식 칸 목록 및 작성 지침(※) 블록 생성
     const schemaFieldsBlock = activeSchema.fields.map((f: any, idx: number) => {
@@ -267,7 +352,7 @@ ${JSON.stringify(currentPlan, null, 2)}
 목표 지원사업: [${targetProgramTitle || activeSchema.title || "2026년 중소벤처기업부 초기창업패키지"}]
 ${noticeContext.promptBlock}
 
-[공식 사업계획서 서식 칸 목록 및 주관기관 작성지침(※)]:
+[${usingRealFormSchema ? "이 공고에 실제 첨부된 서식의 칸 목록 및 주관기관 작성지침(※)" : "표준 사업계획서 서식 칸 목록 (이 공고 전용 서식을 찾지 못해 표준 양식으로 진행)"}]:
 ${schemaFieldsBlock}
 ${companyProfileNote}
 
@@ -433,6 +518,11 @@ ${companyProfileNote}
       reply: replyText,
       suggestions,
       progress,
+      // 실제 서식이 파싱됐으면 그 스키마를 돌려준다. 클라이언트가 다음 턴부터
+      // 이 값을 formSchema 로 다시 보내면, 서버가 매 턴 원문 사이트에 재접속해
+      // 다시 파싱할 필요 없이(캐시로 완화되긴 하지만) 같은 스키마로 이어간다.
+      usingRealFormSchema,
+      formSchema: activeSchema,
     });
   } catch (error: any) {
     console.error("PSST Chat API Error:", error);

@@ -24,8 +24,17 @@ export interface ProcessingReport {
 export async function processPendingDocumentsPipeline(limit = 10): Promise<ProcessingReport> {
   console.log(`🚀 Starting Document Processing Pipeline (Max: ${limit} items)...`);
 
+  // 문서 파싱은 끝났지만 공고 단위 AI 분석이 아직 없는 경우도 대상에 포함한다.
+  // 기존에는 PENDING만 조회해 PARSED 상태에서 멈춘 공고가 분석 배치에서 누락됐다.
   const pendingDocs = await prisma.supportDocument.findMany({
-    where: { status: "PENDING" },
+    where: {
+      status: { in: ["PENDING", "PARSED"] },
+      supportProgram: {
+        analyses: {
+          none: { status: "COMPLETED" },
+        },
+      },
+    },
     include: {
       supportProgram: {
         include: {

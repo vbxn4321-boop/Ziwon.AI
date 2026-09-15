@@ -13,9 +13,14 @@ import { savePlanToBackend, fetchMyCompany } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
 import { convertPsstToHwpHtml, copyToHwpClipboard } from "@/lib/export/hwp-clipboard-exporter";
 
-export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any, initialProgramAnalysis?: ProgramAnalysisContext) {
+export function usePsstPlan(
+  initialProgramTitle?: string,
+  initialPlanData?: any,
+  initialProgramAnalysis?: ProgramAnalysisContext,
+  initialProgramId?: string
+) {
   // Mode: "chat" (AI Chatbot Interview) vs "form" (Quick Form Input)
-  const [creationMode, setCreationMode] = useState<CreationMode>("form");
+  const [creationMode, setCreationMode] = useState<CreationMode>("chat");
 
   // Document Canvas Theme: "dark" vs "light"
   const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>("dark");
@@ -65,6 +70,7 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
     itemDescription: validInitialPlan?.overview?.itemSummary || "",
     coreStrengths: validInitialPlan?.solution?.competitorDifferentiation || "",
     targetProgramTitle: initialTargetTitle,
+    programId: initialPlanData?.supportProgramId || initialProgramId || undefined,
     budget: validInitialPlan?.overview?.summaryTable?.targetBudget || "",
     // Attach linked program analysis context if provided
     programAnalysis: initialProgramAnalysis || undefined,
@@ -351,6 +357,7 @@ export function usePsstPlan(initialProgramTitle?: string, initialPlanData?: any,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+          programId: formData.programId || undefined,
           targetProgramTitle: formData.targetProgramTitle,
           currentPlan: generatedResult || undefined,
           companyProfile: userCompany || undefined,

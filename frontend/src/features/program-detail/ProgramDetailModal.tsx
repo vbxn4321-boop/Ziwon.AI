@@ -51,7 +51,7 @@ interface ProgramDetailModalProps {
   selectedProgram: SupportProgram;
   onClose: () => void;
   onAnalysisComplete?: (programId: string, updatedAnalysis: any) => void;
-  onCreatePsstPlan?: (programTitle: string) => void;
+  onCreatePsstPlan?: (programTitle: string, programId?: string) => void;
 }
 
 
@@ -848,9 +848,10 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       <button
                         onClick={() => {
                           if (onCreatePsstPlan) {
-                            onCreatePsstPlan(selectedProgram.title);
+                            onCreatePsstPlan(selectedProgram.title, selectedProgram.id);
                           } else {
                             navigateToPsstStudio(router, {
+                              programId: selectedProgram.id,
                               programTitle: selectedProgram.title,
                               programAnalysis: liveAnalysis || (selectedProgram.analyses && selectedProgram.analyses[0]),
                             });

@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import type { FormSchema } from "@/lib/parser/form-schema-parser";
 
 export interface ProgramAnalysisContext {
   organizerStrategy?: {
@@ -51,6 +52,8 @@ export interface PsstGeneratorInput {
   programAnalysis?: ProgramAnalysisContext;
   /** 공고문/서식에서 추출된 맞춤 목차 목록 */
   extractedOutline?: string[];
+  /** 공고 첨부 HWPX 서식 스키마 — 공고 고유 칸 구조 1:1 조립용 */
+  formSchema?: FormSchema;
   /** 지원사업 성격 (직접 현금 지원 vs 비현금성 입주/보육/바우처) */
   grantType?: "CASH_GRANT" | "NON_CASH_INCUBATION" | "VOUCHER_SERVICE" | "CONTEST";
   /** 공고의 최대 지원 상한액 (원 단위) */
@@ -58,6 +61,17 @@ export interface PsstGeneratorInput {
 }
 
 export interface PsstBusinessPlanResult {
+  /** 실제 공고 첨부 서식의 각 칸(Field)별로 조립된 상세 본문 */
+  formSections?: Array<{
+    id: string;
+    label: string;
+    sectionTitle?: string;
+    guidance?: string;
+    type?: "FACT" | "NARRATIVE" | "ATTACHMENT" | "CONSENT";
+    row?: number;
+    col?: number;
+    content: string;
+  }>;
   overview: {
     title: string;
     companyName: string;
@@ -216,6 +230,24 @@ ${input.extractedOutline.map((o, idx) => `  ${idx + 1}. ${o}`).join("\n")}
 `
       : "";
 
+  // Form schema directive if provided from HWPX form
+  const formSchemaDirective =
+    input.formSchema && input.formSchema.fields && input.formSchema.fields.length > 0
+      ? `
+📋 [공고 공식 서식 칸 1:1 맞춤 조립 지침]:
+이 공고는 아래의 실제 첨부 서식 칸 목록과 주관기관 작성 지침(※)을 가지고 있습니다.
+사용자와의 대화 및 입력 내용을 바탕으로, 각 칸마다 요구사항을 충실히 반영한 상세 본문을 "formSections" 배열에 빠짐없이 채워 넣으십시오:
+${input.formSchema.fields
+  .map(
+    (f, idx) =>
+      `  ${idx + 1}. [ID: ${f.id}] [${f.sectionTitle || "공통"}] ${f.label} (${f.type === "FACT" ? "사실정보" : f.type === "ATTACHMENT" ? "첨부" : "서술형"})${
+        f.guidance ? `\n     └ 주관기관 작성지침: ※ ${f.guidance}` : ""
+      }`
+  )
+  .join("\n")}
+`
+      : "";
+
   // Build program-specific context block if analysis data is provided
   const programContextBlock = input.programAnalysis
     ? `
@@ -244,6 +276,7 @@ ${(input.programAnalysis.summaryReport || []).map((step, i) => `  STEP ${i + 1}:
 
 ${budgetDirective}
 ${outlineDirective}
+${formSchemaDirective}
 
 [공고 맞춤 작성 필수 지시사항]
 1. 위 배점 기준에서 배점이 높은 항목일수록 해당 PSST 섹션의 분량과 구체성을 대폭 강화하십시오.
@@ -251,7 +284,7 @@ ${outlineDirective}
 3. 가점 요건(특허, 청년/여성 창업, 벤처인증, 지역 소재 등)에 해당하는 경우 각 섹션에서 반드시 명시적으로 어필하십시오.
 4. 지역 기반 공고라면 지역 경제 기여, 지역 일자리 창출, 정주 여건 개선을 모든 섹션에 녹여내십시오.
 `
-    : `\n[목표 지원사업]: ${input.targetProgramTitle || "중소벤처기업부 예비/초기 창업지원사업"}\n${budgetDirective}\n${outlineDirective}\n표준 PSST 프레임워크로 맞춤형 사업계획서를 작성하세요.`;
+    : `\n[목표 지원사업]: ${input.targetProgramTitle || "중소벤처기업부 예비/초기 창업지원사업"}\n${budgetDirective}\n${outlineDirective}\n${formSchemaDirective}\n표준 PSST 프레임워크로 맞춤형 사업계획서를 작성하세요.`;
 
   const prompt = `
 [역할]
@@ -271,10 +304,20 @@ ${programContextBlock}
 1. **사용자 입력/대화 100% 반영**: 사용자가 인터뷰나 입력폼에서 언급한 실제 아이템, 고객군, 기술, BM을 최우선으로 반영하세요.
 2. **도메인 특화 실전 팩트 기반 작성**: 뻔한 일반론("혁신적인 솔루션", "우수한 기술력") 대신, 해당 산업군의 실제 현장 고통, 실제 기술 스택, 실제 과금 단가 및 유통 구조를 구체적 수치와 명칭으로 서술하세요.
 3. **심사위원 관점 합격 논리 & 표(Table) 완벽 생성**: 심사위원이 한눈에 파악할 수 있도록 개요 요약표, TAM-SAM-SOM 시장규모, 경쟁사 비교표(competitorTable), Q1~Q4 로드맵(roadmapTable), 소요 예산 집행표(budgetTable), 팀원 명단(memberList)을 도메인에 맞게 정밀하게 생성하세요.
-4. **공고 맞춤 전략 반영**: 위 공고 AI 분석 데이터가 제공된 경우, 배점 비중이 높은 항목일수록 해당 PSST 섹션의 분량과 근거를 강화하세요.
+4. **공고 맞춤 전략 반영**: 위 공고 AI 분석 데이터 및 서식 칸 지침이 제공된 경우, 배점 비중이 높은 항목 및 고유 서식 항목(formSections)을 충실히 채우세요.
 
 [출력 요구사항 - 반드시 유효한 JSON 형식만 출력]
 {
+  "formSections": [
+    {
+      "id": "f1",
+      "label": "항목명",
+      "sectionTitle": "상위 섹션명",
+      "guidance": "작성지침",
+      "type": "NARRATIVE",
+      "content": "대화 및 입력 내용을 근거로 해당 서식 칸의 지침에 맞게 작성된 2~4단락의 고밀도 본문"
+    }
+  ],
   "overview": {
     "title": "공식 사업계획서 프로젝트 명칭",
     "companyName": "${input.companyName || "예비창업자"}",
@@ -480,6 +523,25 @@ ${programContextBlock}
       const rawText = response.text || "";
       const cleaned = cleanJsonString(rawText);
       const parsed: PsstBusinessPlanResult = JSON.parse(cleaned);
+
+      // 모델이 반환한 항목에 원본 서식의 위치 메타데이터를 다시 결합한다.
+      // 일부 모델이 선택 항목을 누락해도 모든 채울 칸이 결과물에 남도록 보정한다.
+      if (input.formSchema?.fields?.length) {
+        const generated = new Map((parsed.formSections || []).map((section) => [section.id, section]));
+        parsed.formSections = input.formSchema.fields.map((field) => {
+          const section = generated.get(field.id);
+          return {
+            id: field.id,
+            label: field.label,
+            sectionTitle: field.sectionTitle,
+            guidance: field.guidance,
+            type: field.type,
+            row: field.row,
+            col: field.col,
+            content: section?.content || "",
+          };
+        });
+      }
 
       if (!parsed.problem || !parsed.solution || !parsed.scaleUp || !parsed.team) {
         throw new Error("Invalid PSST structure in AI response");

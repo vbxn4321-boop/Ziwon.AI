@@ -115,6 +115,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
         <A4DocumentEditor
           plan={generatedResult}
           programTitle={formData.targetProgramTitle}
+          programId={formData.programId}
           isDirectEditing={isDirectEditing}
           setIsDirectEditing={setIsDirectEditing}
           canvasTheme={canvasTheme}
@@ -556,6 +557,55 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
               </div>
             </div>
           )}
+
+            {/* ── 5. Official Notice Form Custom Sections ── */}
+            {generatedResult.formSections && generatedResult.formSections.length > 0 && (
+              <div
+                className={`space-y-5 border-b pb-8 ${
+                  canvasTheme === "dark" ? "border-slate-800" : "border-slate-200"
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-xl font-extrabold text-cyan-400 border-l-4 border-cyan-500 pl-3">
+                    5. 공고 공식 서식 항목별 작성문
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[10px] font-bold">
+                    공고 공식 HWPX 서식 연동
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  ※ 해당 지원사업 공고의 공식 첨부 서식(HWPX) 항목 및 주관기관 지침에 맞추어 생성된 전문입니다.
+                </p>
+
+                <div className="space-y-4">
+                  {generatedResult.formSections.map((sec, idx) => (
+                    <div
+                      key={sec.id || idx}
+                      className="p-4 rounded-xl border border-cyan-500/20 bg-slate-950/60 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-bold text-cyan-200">
+                          {idx + 1}. [{sec.sectionTitle || "맞춤 서식"}] {sec.label}
+                        </h3>
+                        {sec.type && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                            {sec.type}
+                          </span>
+                        )}
+                      </div>
+                      {sec.guidance && (
+                        <div className="text-[11px] text-slate-400 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                          <span className="text-amber-400 font-semibold">※ 주관기관 작성지침:</span> {sec.guidance}
+                        </div>
+                      )}
+                      <p className="text-xs leading-relaxed whitespace-pre-line text-slate-200 pt-1">
+                        {sec.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── 6. Evaluation Report Section ── */}
             <PsstEvaluationCard

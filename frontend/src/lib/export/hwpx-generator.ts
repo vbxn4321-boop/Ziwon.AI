@@ -134,6 +134,23 @@ export function buildHwpxSectionXml(plan: PsstBusinessPlanResult, programTitle?:
   body += makeHeading("4-3. 협력 네트워크 및 외부 자문단", 2);
   body += makePara(team.collaborationNetwork || "산학연 협력 네트워크");
 
+  // 5. Official Notice Form Custom Sections (HWPX)
+  if (safePlan.formSections && safePlan.formSections.length > 0) {
+    body += makePara("", false, 500);
+    body += makeHeading("5. 공고 공식 서식 항목별 작성문", 1);
+    body += makePara("※ 해당 공고의 공식 첨부 서식(HWPX) 항목 구조 및 주관기관 지침에 맞추어 생성된 전문입니다.", false, 900);
+    body += makePara("", false, 300);
+
+    safePlan.formSections.forEach((sec: any, idx: number) => {
+      body += makeHeading(`${idx + 1}. [${sec.sectionTitle || "맞춤 서식"}] ${sec.label}`, 2);
+      if (sec.guidance) {
+        body += makePara(`※ 주관기관 작성지침: ${sec.guidance}`, false, 900);
+      }
+      body += makePara(sec.content || "내용이 작성 중입니다.");
+      body += makePara("", false, 300);
+    });
+  }
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <hp:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core">
   ${body}
@@ -213,12 +230,12 @@ export function buildHwpxVersionXml(): string {
 /**
  * Trigger client-side HWPX file download
  */
-export async function downloadHwpxDocument(plan: PsstBusinessPlanResult, programTitle?: string, fileName?: string) {
+export async function downloadHwpxDocument(plan: PsstBusinessPlanResult, programTitle?: string, fileName?: string, programId?: string) {
   try {
     const res = await fetch("/api/export/hwpx", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, programTitle, fileName }),
+      body: JSON.stringify({ plan, programTitle, fileName, programId }),
     });
 
     if (!res.ok) {
