@@ -23,7 +23,8 @@ export function usePsstPlan(
   const [creationMode, setCreationMode] = useState<CreationMode>("chat");
 
   // Document Canvas Theme: "dark" vs "light"
-  const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>("dark");
+  // 문서 작성은 Notion/LINER처럼 밝은 캔버스에서 시작하고, 필요할 때만 다크로 전환한다.
+  const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>("light");
 
   // Loaded Company Profile State from DB
   const [userCompany, setUserCompany] = useState<any>(null);

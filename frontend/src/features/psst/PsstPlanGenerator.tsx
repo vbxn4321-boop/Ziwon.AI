@@ -65,12 +65,13 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
   const currentStep = hasValidPlan ? 3 : isGenerating ? 2 : 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-slate-950 text-slate-100 font-sans select-text overflow-hidden">
+    <div className="psst-studio fixed inset-0 z-50 flex bg-[#f7f7f5] text-slate-900 font-sans select-text overflow-y-auto lg:overflow-hidden">
       {/* 1. Left Icon Sidebar */}
       <PsstSidebar
         onBackToNotices={onBackToNotices}
         onResetNew={handleResetNew}
         onScrollToSection={scrollToSection}
+        activeSection={activeSection}
       />
 
       {/* 2. Main Workspace Container */}
@@ -96,9 +97,9 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
         />
 
         {/* 2-Column Split Workspace */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-0 overflow-y-auto lg:overflow-hidden">
           {/* Left Panel: AI Interview Chat vs Fast Form Input */}
-          <div className="lg:col-span-5 flex flex-col h-full overflow-hidden border-r border-slate-800 bg-slate-950/60">
+          <div className="lg:order-2 flex flex-col min-h-[62vh] lg:min-h-0 lg:h-full overflow-hidden lg:border-l border-slate-200 bg-white">
             {creationMode === "chat" ? (
               <PsstChatPanel
                 chatMessages={chatMessages}
@@ -130,7 +131,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
 
           {/* Right Panel: Document Paper Canvas */}
           <PsstDocumentViewer
-            canvasTheme={canvasTheme}
+            canvasTheme="light"
             activeSection={activeSection}
             generatedResult={generatedResult}
             formData={formData}
@@ -144,7 +145,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
         </div>
 
         {/* Bottom Status Bar */}
-        <footer className="h-7 bg-slate-950 border-t border-slate-800/80 px-4 flex items-center justify-between text-[11px] text-slate-500 flex-shrink-0">
+        <footer className="h-7 bg-white border-t border-slate-200 px-4 flex items-center justify-between text-[11px] text-slate-400 flex-shrink-0">
           <div className="flex items-center space-x-3">
             <span>Ziwon.AI PSST Business Plan Workspace</span>
             <span>•</span>
@@ -166,6 +167,19 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           setShowVaultModal(false);
         }}
       />
+      <style jsx global>{`
+        .psst-studio button { transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+        .psst-studio h1, .psst-studio h2, .psst-studio h3 { letter-spacing: -0.015em; }
+        .psst-studio ::-webkit-scrollbar { width: 8px; height: 8px; }
+        .psst-studio ::-webkit-scrollbar-track { background: transparent; }
+        .psst-studio ::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 999px; }
+        .psst-studio ::-webkit-scrollbar-thumb:hover { background: #a8a29e; }
+        /* Legacy document cards were authored for the old dark console. Keep their
+           content readable when the studio uses the Notion-like light canvas. */
+        .psst-studio [class*="bg-slate-950"], .psst-studio [class*="bg-slate-900"] { background-color: #ffffff !important; }
+        .psst-studio [class*="text-slate-300"], .psst-studio [class*="text-slate-200"] { color: #475569 !important; }
+        .psst-studio [class*="border-slate-800"], .psst-studio [class*="border-slate-700"] { border-color: #e7e5e4 !important; }
+      `}</style>
     </div>
   );
 };
