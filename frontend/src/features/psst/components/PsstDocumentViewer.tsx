@@ -39,7 +39,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
   return (
     <div
       id="psst-document-canvas"
-      className={`lg:col-span-7 flex flex-col h-full overflow-hidden relative transition-colors ${
+      className={`lg:order-1 flex flex-col min-h-[70vh] lg:min-h-0 lg:h-full overflow-hidden relative transition-colors ${
         canvasTheme === "dark" ? "bg-slate-950 text-slate-100" : "bg-[#f1f5f9] text-slate-800"
       }`}
     >
@@ -52,7 +52,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
         }`}
       >
         <div className="flex items-center space-x-3">
-          <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 font-bold text-xs border border-blue-500/20">
+          <span className="text-slate-700 font-semibold text-xs">
             {SECTION_LABELS[activeSection] || "창업아이템 개요(요약)"}
           </span>
           {hasValidPlan && generatedResult?.evaluationReport && (
@@ -65,13 +65,13 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
         {hasValidPlan && (
           <div className="flex items-center space-x-2">
             {/* View Mode Toggle: A4 Editor vs Cards View */}
-            <div className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold">
+            <div className="flex items-center gap-1 text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setViewMode("a4")}
                 className={`px-3 py-1 rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
                   viewMode === "a4"
-                    ? "bg-blue-600 text-white shadow-xs"
+                    ? "bg-slate-900 text-white"
                     : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
@@ -82,7 +82,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 onClick={() => setViewMode("cards")}
                 className={`px-3 py-1 rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
                   viewMode === "cards"
-                    ? "bg-blue-600 text-white shadow-xs"
+                    ? "bg-slate-900 text-white"
                     : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
@@ -124,23 +124,23 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
         <div ref={docScrollRef as any} className="flex-1 p-4 sm:p-8 overflow-y-auto space-y-6 flex flex-col">
           {isGenerating ? (
             /* Real-time AI Generation Loading View */
-            <div className="max-w-2xl mx-auto rounded-3xl border border-blue-500/40 bg-gradient-to-b from-blue-950/80 via-slate-900 to-slate-950 p-8 sm:p-12 text-center space-y-6 my-auto shadow-2xl w-full">
-              <div className="w-16 h-16 rounded-2xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/30 animate-bounce">
+            <div className="max-w-2xl mx-auto rounded-2xl border border-slate-200 bg-white p-8 sm:p-12 text-center space-y-6 my-auto shadow-sm w-full">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
                 <Sparkles className="w-8 h-8 animate-spin text-amber-300" />
               </div>
               <div className="space-y-2 max-w-md mx-auto">
-                <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold inline-block animate-pulse">
+                <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-bold inline-block">
                   ⚡ Gemini 3.7 AI 엔진 실시간 작성 중
                 </span>
-                <h3 className="text-lg sm:text-xl font-black text-white">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900">
                   공고 맞춤형 PSST 사업계획서를 작성하고 있습니다
                 </h3>
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <p className="text-xs text-slate-600 leading-relaxed">
                   주관기관 심사 기준과 배점표를 반영하여 문제인식, 실현기술, 비즈니스 모델, 예산표, 100점 심사역 리포트를 정밀 도출 중입니다. (약 10~15초 소요)
                 </p>
               </div>
 
-              <div className="space-y-2 text-left max-w-md mx-auto text-xs text-slate-300 bg-slate-950/80 border border-slate-800 p-4 rounded-2xl">
+              <div className="space-y-2 text-left max-w-md mx-auto text-xs text-slate-600 bg-slate-50 border border-slate-200 p-4 rounded-xl">
                 <div className="flex items-center space-x-2 text-blue-400 font-bold">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>1. 공고 배점표 & 주관기관 성격 분석 반영 중...</span>
@@ -615,41 +615,14 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
             />
           </div>
         ) : (
-          /* Paper Sheet Empty Placeholder */
-          <div className="max-w-2xl mx-auto rounded-3xl border border-slate-800 bg-slate-900/80 p-8 sm:p-12 text-center space-y-6 my-auto shadow-2xl w-full">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
-              <FileText className="w-8 h-8" />
-            </div>
-            <div className="space-y-2 max-w-md mx-auto">
-              <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold inline-block">
-                실시간 PSST 문서 시트 대기 중
-              </span>
-              <h3 className="text-lg sm:text-xl font-black text-slate-100">
-                작성된 사업계획서가 이곳에 실시간 렌더링됩니다
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                좌측 폼에서 <strong className="text-blue-300">창업 아이템명</strong>과 <strong className="text-blue-300">사업 내용</strong>을 입력하신 후 <br className="hidden sm:inline" />
-                <strong className="text-white bg-blue-600/40 px-2 py-0.5 rounded-md border border-blue-500/40">[🚀 AI 사업계획서 초안 생성하기]</strong> 버튼을 누르면 정부 표준 PSST 한글 전문이 완성됩니다.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[11px] text-slate-400 max-w-lg mx-auto">
-              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
-                <span className="text-blue-400 font-bold block text-xs">P. 문제인식</span>
-                <span className="text-[10px] text-slate-500">시장 페인포인트</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
-                <span className="text-indigo-400 font-bold block text-xs">S. 실현가능성</span>
-                <span className="text-[10px] text-slate-500">핵심 기술 로드맵</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
-                <span className="text-purple-400 font-bold block text-xs">S. 성장전략</span>
-                <span className="text-[10px] text-slate-500">BM & 예산 집행표</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1 text-center">
-                <span className="text-emerald-400 font-bold block text-xs">T. 팀구성</span>
-                <span className="text-[10px] text-slate-500">역량 & 심사 배점</span>
-              </div>
-            </div>
+          /* Notion-like empty page: quiet canvas with a single next action. */
+          <div className="max-w-3xl mx-auto w-full px-6 sm:px-12 pt-16 sm:pt-24">
+            <FileText className="w-10 h-10 text-slate-300 mb-6" />
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 mb-3">사업계획서</h1>
+            <p className="text-sm text-slate-500 leading-relaxed max-w-lg">
+              오른쪽 AI 작성 도우미와 대화를 시작하면 이 페이지에 계획서 항목이 순서대로 작성됩니다.
+            </p>
+            <div className="mt-8 text-xs text-slate-400">새 문서를 작성하려면 오른쪽 입력창에 답변을 입력하세요.</div>
           </div>
         )}
       </div>

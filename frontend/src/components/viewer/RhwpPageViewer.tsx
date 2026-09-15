@@ -59,6 +59,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
     async function loadDoc() {
       if (!fileUrl) return;
       setLoading(true);
+      setRenderResult(null);
       try {
         const result = await fetchAndRenderHwp(fileUrl, fileName, entryPath);
         if (isMounted) {
@@ -88,7 +89,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [fileUrl, fileName, extractedText]);
+  }, [fileUrl, fileName, entryPath, extractedText]);
 
   const handleCopy = () => {
     if (extractedText) {

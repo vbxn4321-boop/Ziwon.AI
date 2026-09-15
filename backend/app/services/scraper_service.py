@@ -469,6 +469,8 @@ class ScraperService:
                       AND sd2."entryPath" IS NULL
                       AND (sd2."extractedText" IS NULL OR sd2."extractedText" = '')
                     )
+                    OR sd2."extractedText" IS NULL
+                    OR length(trim(sd2."extractedText")) < 30
                   )
               )
             )
