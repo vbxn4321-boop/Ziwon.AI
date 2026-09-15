@@ -8,14 +8,37 @@ import {
   buildHwpxHeaderXml,
   buildHwpxSectionXml,
 } from "@/lib/export/hwpx-generator";
+import { fillHwpxTemplate } from "@/lib/export/hwpx-template-filler";
+import { prisma } from "@/lib/db";
+import { safeFetch } from "@/lib/security/safe-fetch";
+import { extractZipEntry } from "@/lib/parser/document-parser";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { plan, programTitle, fileName } = body;
+    const { plan, programTitle, fileName, programId } = body;
 
     if (!plan) {
       return NextResponse.json({ error: "사업계획서 데이터가 누락되었습니다." }, { status: 400 });
+    }
+
+    if (programId && plan.formSections?.length) {
+      const docs = await prisma.supportDocument.findMany({ where: { supportProgramId: programId, fileType: "HWPX" }, orderBy: { createdAt: "asc" }, select: { fileName: true, fileUrl: true, entryPath: true } });
+      const template = docs.find((d) => /사업\s*계획\s*서|신청서|신청/i.test(d.fileName));
+      if (template) {
+        try {
+          const response = await safeFetch(template.fileUrl);
+          if (response.ok) {
+            let raw = Buffer.from(await response.arrayBuffer());
+            if (template.entryPath) raw = Buffer.from(extractZipEntry(raw, template.entryPath) || Buffer.alloc(0));
+            if (raw?.slice(0, 2).toString("latin1") === "PK") {
+              const filled = fillHwpxTemplate(raw, plan.formSections);
+              const outFileName = encodeURIComponent((fileName || `${plan?.overview?.title || "PSST_사업계획서"}`).replace(/[/\\?%*:|"<>]/g, "_"));
+              return new NextResponse(new Uint8Array(filled), { status: 200, headers: { "Content-Type": "application/hwp+zip", "Content-Disposition": `attachment; filename="${outFileName}.hwpx"; filename*=UTF-8''${outFileName}.hwpx`, "Content-Length": filled.length.toString() } });
+            }
+          }
+        } catch (templateError) { console.warn("[HWPX Export] 원본 서식 조립 실패, 신규 문서로 대체:", templateError); }
+      }
     }
 
     const zip = new AdmZip();

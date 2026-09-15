@@ -5,7 +5,7 @@ import {
   Sparkles,
   Send,
   Flame,
-  Target,
+  CheckCircle2,
   RefreshCw,
   User,
 } from "lucide-react";
@@ -13,14 +13,11 @@ import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import {
   ChatMessage,
   InterviewProgress,
-  PsstFormData,
   PsstSectionKey,
 } from "../types";
-import { TARGET_PROGRAM_FORMATS, SECTION_LABELS } from "../constants";
+import { SECTION_LABELS } from "../constants";
 
 interface PsstChatPanelProps {
-  formData: PsstFormData;
-  setFormData: React.Dispatch<React.SetStateAction<PsstFormData>>;
   chatMessages: ChatMessage[];
   chatInput: string;
   setChatInput: (val: string) => void;
@@ -37,8 +34,6 @@ interface PsstChatPanelProps {
 }
 
 export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
-  formData,
-  setFormData,
   chatMessages,
   chatInput,
   setChatInput,
@@ -53,28 +48,19 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
   onQuickSuggestion,
   onScrollToSection,
 }) => {
+  const totalFields = interviewProgress.totalFields || 5;
+  const completedFields = interviewProgress.completedCount || 0;
+  const interviewReady = completedFields >= totalFields;
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Chat Header Sub-Banner */}
       <div className="p-3 bg-slate-900/90 border-b border-slate-800 flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between flex-shrink-0 shadow-sm">
-        {/* Target Format Selector */}
-        <div className="flex-1 min-w-0 flex items-center space-x-2 bg-slate-950 px-3 py-2 rounded-xl border border-amber-500/30">
-          <span className="text-[11px] text-amber-400 font-bold flex-shrink-0 flex items-center space-x-1">
-            <Target className="w-3.5 h-3.5 text-amber-400" />
-            <span>목표 서식:</span>
-          </span>
-          <select
-            value={formData.targetProgramTitle}
-            onChange={(e) => setFormData({ ...formData, targetProgramTitle: e.target.value })}
-            className="w-full bg-transparent text-slate-100 text-xs font-bold focus:outline-none cursor-pointer pr-1"
-            title="AI 챗봇이 인터뷰할 기준이 되는 정부 공인 표준 서식"
-          >
-            {TARGET_PROGRAM_FORMATS.map((fmt) => (
-              <option key={fmt.id} value={fmt.name} className="bg-slate-900 text-slate-200 py-1">
-                [{fmt.badge}] {fmt.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex-1 min-w-0 flex items-center space-x-2 px-1">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[11px] text-slate-200 font-bold truncate">공고 맞춤 인터뷰</p>
+            <p className="text-[10px] text-slate-500 truncate">공식 서식과 공고 내용을 자동으로 반영합니다</p>
+          </div>
         </div>
 
         <button
@@ -84,7 +70,7 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
           className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center space-x-1.5 disabled:opacity-50 flex-shrink-0 cursor-pointer"
         >
           <Sparkles className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin" : ""}`} />
-          <span>{isGenerating ? "문서 생성 중..." : "대화 기반 PSST 생성"}</span>
+          <span>{isGenerating ? "초안 생성 중..." : interviewReady ? "초안 만들기" : "지금까지 답변으로 초안 만들기"}</span>
         </button>
       </div>
 
@@ -96,7 +82,7 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
             <span>서식 칸별 인터뷰 진행도</span>
           </span>
           <span className="text-indigo-400 font-extrabold">
-            {interviewProgress.completedCount} / {interviewProgress.totalFields || 5}개 항목 완료 ({Math.round((interviewProgress.completedCount / Math.max(1, interviewProgress.totalFields || 5)) * 100)}%)
+            {completedFields} / {totalFields}개 항목 완료 ({Math.round((completedFields / Math.max(1, totalFields)) * 100)}%)
           </span>
         </div>
 
@@ -104,7 +90,7 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
         <div className="w-full bg-slate-900 rounded-full h-1 overflow-hidden">
           <div
             className="bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-400 h-full rounded-full transition-all duration-300"
-            style={{ width: `${Math.max(8, (interviewProgress.completedCount / Math.max(1, interviewProgress.totalFields || 5)) * 100)}%` }}
+            style={{ width: `${Math.min(100, Math.max(8, (completedFields / Math.max(1, totalFields)) * 100))}%` }}
           />
         </div>
 
@@ -163,10 +149,13 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
 
         {/* Current Active Field Guidance Banner */}
         {interviewProgress.currentFieldGuidance && (
-          <div className="px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-[10px] text-indigo-300 flex items-center space-x-1.5">
+          <div className={`px-2.5 py-1 rounded-lg border text-[10px] flex items-center space-x-1.5 ${interviewReady ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300" : "bg-indigo-950/40 border-indigo-500/20 text-indigo-300"}`}>
             <span className="font-bold text-indigo-400 flex-shrink-0">※ 작성지침:</span>
             <span className="text-slate-300 truncate">{interviewProgress.currentFieldGuidance}</span>
           </div>
+        )}
+        {interviewReady && (
+          <p className="text-[10px] text-emerald-300 px-2.5">필수 답변이 모두 준비됐습니다. 아래 버튼을 눌러 초안을 만들어 보세요.</p>
         )}
       </div>
 
@@ -311,10 +300,21 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
           type="text"
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
-          placeholder="답변이나 질문을 입력해 주세요... (엔터로 전송)"
+          placeholder={`${interviewProgress.currentFieldLabel || "현재 항목"}에 대해 편하게 적어 주세요 (엔터로 전송)`}
           disabled={isChatSending || isGenerating}
           className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
         />
+        {!generatedResult && interviewProgress.currentFieldId && (
+          <button
+            type="button"
+            onClick={() => onQuickSuggestion("현재 항목은 건너뛰고 다음 항목으로 넘어가줘")}
+            disabled={isChatSending || isGenerating}
+            className="px-2.5 py-2.5 rounded-xl border border-slate-700 text-[10px] text-slate-400 hover:text-slate-200 hover:border-slate-500 whitespace-nowrap disabled:opacity-40"
+            title="이 항목은 나중에 작성하고 다음 질문으로 이동합니다"
+          >
+            건너뛰기
+          </button>
+        )}
         <button
           type="submit"
           disabled={!chatInput.trim() || isChatSending || isGenerating}

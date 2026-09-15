@@ -3,7 +3,6 @@
 import React from "react";
 import {
   Bot,
-  SlidersHorizontal,
   Moon,
   Sun,
   Copy,
@@ -252,18 +251,6 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
             >
               <Bot className="w-3 h-3" />
               <span>💬 AI 챗봇 인터뷰</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreationMode("form")}
-              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                creationMode === "form"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              <SlidersHorizontal className="w-3 h-3" />
-              <span>⚡ 빠른 폼 입력</span>
             </button>
           </div>
         </div>

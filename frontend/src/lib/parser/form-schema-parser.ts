@@ -35,6 +35,9 @@ export interface FormField {
   placeholder?: string;
   /** 속한 상위 섹션 (예: "제품‧서비스 개요") */
   sectionTitle?: string;
+  /** 원본 HWPX 표에서의 위치(행/열). 결과 조립 시 입력 순서와 표 구조를 보존하는 데 사용한다. */
+  row?: number;
+  col?: number;
 }
 
 export interface FormSchema {
@@ -232,7 +235,8 @@ export function parseHwpxFormSchema(hwpxBuffer: Buffer, fileName = ""): FormSche
           });
         }
 
-        for (const pair of pairs) {
+        for (let pairIndex = 0; pairIndex < pairs.length; pairIndex++) {
+          const pair = pairs[pairIndex];
           const label = pair.label.replace(/^[□○◦●■▣▶▪◆◇]\s*/, "").trim();
           if (!label || label.length > 40) continue;
 
@@ -252,6 +256,8 @@ export function parseHwpxFormSchema(hwpxBuffer: Buffer, fileName = ""): FormSche
             type: decideType(label, guidance, sectionTitleBuffer),
             placeholder: value && PLACEHOLDER_VALUE.test(value) ? value : undefined,
             sectionTitle: sectionTitleBuffer || undefined,
+            row: row[0]?.row,
+            col: row[pairIndex * 2]?.col,
           });
         }
       }

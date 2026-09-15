@@ -13,6 +13,7 @@ import SavedPlansModal from "@/components/auth/SavedPlansModal";
 export { TARGET_PROGRAM_FORMATS } from "./constants";
 
 export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
+  initialProgramId,
   initialProgramTitle,
   initialPlanData,
   onBackToNotices,
@@ -55,7 +56,7 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     handleSavePlan,
     handleDownloadPdf,
     handleLoadPlan,
-  } = usePsstPlan(initialProgramTitle, initialPlanData, initialProgramAnalysis);
+  } = usePsstPlan(initialProgramTitle, initialPlanData, initialProgramAnalysis, initialProgramId);
 
   const [showVaultModal, setShowVaultModal] = useState(false);
 
@@ -100,8 +101,6 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           <div className="lg:col-span-5 flex flex-col h-full overflow-hidden border-r border-slate-800 bg-slate-950/60">
             {creationMode === "chat" ? (
               <PsstChatPanel
-                formData={formData}
-                setFormData={setFormData}
                 chatMessages={chatMessages}
                 chatInput={chatInput}
                 setChatInput={setChatInput}

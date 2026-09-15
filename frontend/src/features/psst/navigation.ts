@@ -14,6 +14,8 @@ import { ProgramAnalysisContext } from "@/lib/ai/psst-generator";
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 export interface PsstNavigationOptions {
+  /** 연계할 공고 ID (서식 및 문서 100% 정밀 매칭용) */
+  programId?: string;
   /** 연계할 공고명 (PSST 서식 자동 선택에 사용) */
   programTitle: string;
   /** 공고 AI 심층분석 결과 데이터 */
@@ -27,7 +29,7 @@ export function navigateToPsstStudio(
   router: AppRouterInstance,
   options: PsstNavigationOptions
 ): void {
-  const { programTitle, programAnalysis } = options;
+  const { programId, programTitle, programAnalysis } = options;
 
   // Store analysis data in sessionStorage (scoped by unique key)
   const analysisKey = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -41,6 +43,9 @@ export function navigateToPsstStudio(
   }
 
   const params = new URLSearchParams();
+  if (programId) {
+    params.set("programId", programId);
+  }
   params.set("targetTitle", programTitle);
   if (programAnalysis) {
     params.set("analysisKey", analysisKey);

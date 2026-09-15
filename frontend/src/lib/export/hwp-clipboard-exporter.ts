@@ -351,12 +351,52 @@ export function convertPsstToHwpPages(plan: PsstBusinessPlanResult, programTitle
 </div>
   `.trim();
 
-  return [
+  // ────────────────────────────────────────────
+  // Page 5: 공고 공식 서식 항목별 작성문 (공고 맞춤형 HWPX 서식 연동 시)
+  // ────────────────────────────────────────────
+  const formSections = safePlan.formSections || [];
+  let page5Html = "";
+  if (formSections.length > 0) {
+    const sectionsHtml = formSections
+      .map((sec, idx) => {
+        const guidanceHtml = sec.guidance
+          ? `<div style="background-color: #f8fafc; border-left: 3pt solid #0284c7; padding: 5pt 8pt; margin: 4pt 0 6pt 0; font-size: 9pt; color: #334155; line-height: 150%;">※ <b>주관기관 작성지침:</b> ${sec.guidance}</div>`
+          : "";
+        return `
+  <div style="margin-bottom: 14pt;">
+    <h2 style="${h2Style}">${idx + 1}. [${sec.sectionTitle || "맞춤 서식"}] ${sec.label}</h2>
+    ${guidanceHtml}
+    <p style="${pStyle}">${(sec.content || "내용이 작성 중입니다.").replace(/\n/g, "<br/>")}</p>
+  </div>`;
+      })
+      .join("\n");
+
+    page5Html = `
+<div style="font-family: '맑은 고딕', 'Malgun Gothic', sans-serif; font-size: 10pt; line-height: 160%; color: #000000; width: 100%; box-sizing: border-box;">
+  <h1 style="${h1Style}">[공고 공식 서식 항목별 작성문]</h1>
+  <p style="${pStyle}; color: #64748b; font-size: 9.5pt;">※ 해당 공고의 공식 첨부 서식(HWPX) 항목 구조 및 주관기관 지침에 맞추어 생성된 전문입니다.</p>
+  ${sectionsHtml}
+</div>
+    `.trim();
+  }
+
+  const pages: PsstPageData[] = [
     { pageNum: 1, title: "표제부 & 창업아이템 개요(요약)", subtitle: "개요 및 요약표", html: page1Html },
     { pageNum: 2, title: "1. 문제인식 (Problem)", subtitle: "배경, 페인포인트, TAM-SAM-SOM", html: page2Html },
     { pageNum: 3, title: "2. 실현가능성 (Solution)", subtitle: "기술, 비교분석표, 로드맵", html: page3Html },
     { pageNum: 4, title: "3. 성장전략 & 4. 팀 구성", subtitle: "수익모델, 예산표, R&R 팀역량", html: page4Html },
   ];
+
+  if (page5Html) {
+    pages.push({
+      pageNum: 5,
+      title: "공고 공식 서식 항목별 작성문",
+      subtitle: `${formSections.length}개 서식 항목 전문`,
+      html: page5Html,
+    });
+  }
+
+  return pages;
 }
 
 /**
