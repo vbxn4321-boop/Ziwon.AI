@@ -53,6 +53,7 @@ export interface ProgramAnalysisResult {
 import { getCandidateModels } from "./models";
 import {
   extractNoticeForPrompt,
+  maskPersonalInfo,
   type NoticeDocumentInput,
 } from "@/lib/parser/notice-extractor";
 
@@ -104,7 +105,9 @@ export async function analyzeProgramWithGemini(
       `섹션 ${extraction.sections.length}개, 단계=${extraction.productStage}`
   );
 
-  const noticeText = extraction.promptText || documentText.slice(0, 24000);
+  // 폴백(원문 통째로)으로 내려가도 개인정보는 가린 뒤 넘긴다
+  const noticeText =
+    extraction.promptText || maskPersonalInfo(documentText.slice(0, 24000)).text;
 
   // 시제품용 사업에 양산 계획을 쓰면 안 되므로 AI 에 미리 못 박아둔다
   const productStageNote =

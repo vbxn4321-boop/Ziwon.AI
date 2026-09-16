@@ -188,9 +188,6 @@ export const PsstHeader: React.FC<PsstHeaderProps> = ({
         </div>
       </div>
 
-      <div className="h-8 px-4 sm:px-6 flex items-center justify-end border-t border-slate-100 bg-slate-50 text-[10px] text-slate-400">
-        <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />AI 작성 도우미 연결됨</span>
-      </div>
     </header>
   );
 };

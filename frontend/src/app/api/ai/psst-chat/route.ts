@@ -3,7 +3,7 @@ import { guardAiRoute, LIGHT_LIMITS } from "@/lib/security/ai-route-guard";
 import { GoogleGenAI } from "@google/genai";
 import { generatePsstBusinessPlan, PsstBusinessPlanResult, PsstGeneratorInput } from "@/lib/ai/psst-generator";
 import { getCandidateModels } from "@/lib/ai/models";
-import type { FormSchema } from "@/lib/parser/form-schema-parser";
+import { isAiSafeField, type FormSchema } from "@/lib/parser/form-schema-parser";
 
 /**
  * 대화 중에 참고할 공고문 맥락과, 있다면 실제 첨부 서식의 칸 구조를 함께 준비한다.
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey });
     const body = await req.json();
-    const { messages, generatePlan, targetProgramTitle, programId, currentPlan } = body;
+    const { messages, generatePlan, targetProgramTitle, programId, currentPlan, existingPlanText } = body;
 
     const userMessages = (messages || []).filter((m: any) => m.role === "user");
     const lastUserMessage = (userMessages.slice(-1)[0]?.content || "").trim();
@@ -332,8 +332,21 @@ ${JSON.stringify(currentPlan, null, 2)}
         ? clientFormSchema
         : getStandardFormSchema(targetProgramTitle));
 
+    // 개인정보(대표자 성명·연락처 등)와 동의서 칸은 Gemini 로 넘기지 않는다.
+    // AI 가 대신 써줄 수 있는 내용도 아니고, 프롬프트에 남아 있으면 챗봇이
+    // "연락처를 알려주세요" 같은 엉뚱한 질문을 하게 된다. 이 칸들은 최종 편집
+    // 화면에서 사용자가 직접 채운다.
+    const aiSafeFields = activeSchema.fields.filter((f: any) => isAiSafeField(f.type));
+    const withheldFields = activeSchema.fields.filter((f: any) => !isAiSafeField(f.type));
+    if (withheldFields.length > 0) {
+      console.log(
+        `[PSST Chat] 개인정보·동의서 ${withheldFields.length}개 칸을 AI 전송에서 제외: ` +
+          withheldFields.map((f: any) => f.label).join(", ")
+      );
+    }
+
     // 서식 칸 목록 및 작성 지침(※) 블록 생성
-    const schemaFieldsBlock = activeSchema.fields.map((f: any, idx: number) => {
+    const schemaFieldsBlock = aiSafeFields.map((f: any, idx: number) => {
       const typeNote = f.type === "FACT" ? "[사실정보-자동반영]" : f.type === "ATTACHMENT" ? "[첨부물]" : "[서술형-인터뷰]";
       const guideNote = f.guidance ? `\n    └ 주관기관 작성지침: ※ ${f.guidance}` : "";
       return `  ${idx + 1}. (ID: ${f.id}) [${f.sectionTitle || "공통"}] ${f.label} ${typeNote}${guideNote}`;
@@ -347,6 +360,9 @@ ${JSON.stringify(currentPlan, null, 2)}
 - 보유 특허/인증: ${[companyProfile.hasPatents ? "특허보유" : "", companyProfile.hasCertifications ? "벤처/이노비즈" : "", companyProfile.isExporting ? "수출기업" : ""].filter(Boolean).join(", ") || "없음"}
 ※ 위 FACT(사실정보) 칸은 이미 수집 완료되었으므로, 질문은 첫 번째 서술형(NARRATIVE) 칸부터 집중해서 질문하십시오.`
       : "";
+    const existingPlanNote = typeof existingPlanText === "string" && existingPlanText.trim()
+      ? `\n[사용자가 업로드한 기존 사업계획서]\n${existingPlanText.slice(0, 60000)}\n※ 위 내용은 이미 작성된 자료입니다. 서식 항목과 의미가 겹치는 내용은 다시 묻지 말고, 아직 근거가 없는 항목만 질문하십시오.`
+      : "";
 
     const systemInstruction = `당신은 대한민국 중소벤처기업부, 창업진흥원, 기술보증기금 출신의 수석 창업 컨설턴트 AI 'Ziwon-AI'입니다.
 목표 지원사업: [${targetProgramTitle || activeSchema.title || "2026년 중소벤처기업부 초기창업패키지"}]
@@ -355,6 +371,7 @@ ${noticeContext.promptBlock}
 [${usingRealFormSchema ? "이 공고에 실제 첨부된 서식의 칸 목록 및 주관기관 작성지침(※)" : "표준 사업계획서 서식 칸 목록 (이 공고 전용 서식을 찾지 못해 표준 양식으로 진행)"}]:
 ${schemaFieldsBlock}
 ${companyProfileNote}
+${existingPlanNote}
 
 [🚨 서식 칸 기반 1:1 인터뷰 원칙]:
 1. 위 서식 칸 목록의 **NARRATIVE(서술형)** 항목을 순서대로 하나씩 짚어가며 심층 질문을 진행하세요.
@@ -371,7 +388,7 @@ ${companyProfileNote}
 - (답변 추천 2: 또 다른 실무 예시)
 - (답변 추천 3: 다른 선택지)
 <<<PROGRESS>>>
-{"totalFields": ${activeSchema.fields.length}, "completedFieldIds": ["f1"], "currentFieldId": "f2", "currentFieldLabel": "${activeSchema.fields[1]?.label || '창업배경'}", "completedCount": 1, "itemTarget": true, "problem": false, "solution": false, "scaleUp": false, "team": false, "currentStep": 2}`;
+{"totalFields": ${aiSafeFields.length}, "completedFieldIds": ["f1"], "currentFieldId": "f2", "currentFieldLabel": "${aiSafeFields[1]?.label || '창업배경'}", "completedCount": 1, "itemTarget": true, "problem": false, "solution": false, "scaleUp": false, "team": false, "currentStep": 2}`;
 
     const chatHistory = (messages || []).map((m: any) => ({
       role: m.role === "user" ? "user" : "model",
@@ -411,15 +428,18 @@ ${companyProfileNote}
     let replyText = rawReply;
     let suggestions: string[] = [];
     
-    // Default fallback progress calculation based on active schema
-    const totalFieldsCount = activeSchema.fields.length;
+    // 진행률은 인터뷰로 채울 수 있는 칸(aiSafeFields)만 기준으로 센다.
+    // 개인정보·동의서 칸까지 분모에 넣으면 AI 가 절대 채우지 않으므로
+    // 진행률이 100% 에 도달하지 못해 "초안 만들기" 안내가 영영 안 뜬다.
+    const totalFieldsCount = aiSafeFields.length || activeSchema.fields.length;
+    const progressFields = aiSafeFields.length > 0 ? aiSafeFields : activeSchema.fields;
     const hasCompanyFact = Boolean(companyProfile && companyProfile.name);
     const initialCompletedCount = hasCompanyFact ? 1 : 0;
     const estimatedCompletedCount = Math.min(totalFieldsCount, initialCompletedCount + substantiveTurnCount);
     const currentFieldIndex = Math.min(totalFieldsCount - 1, estimatedCompletedCount);
-    const currentField = activeSchema.fields[currentFieldIndex] || activeSchema.fields[0];
+    const currentField = progressFields[currentFieldIndex] || progressFields[0];
 
-    const completedFieldIds: string[] = activeSchema.fields
+    const completedFieldIds: string[] = progressFields
       .slice(0, estimatedCompletedCount)
       .map((f: any) => f.id);
 
@@ -471,7 +491,10 @@ ${companyProfileNote}
     }
 
     // Build fieldProgress list for UI step chips
-    const fieldProgress = activeSchema.fields.map((field: any, idx: number) => {
+    // 화면 목차에는 챗봇이 실제로 물어볼 칸만 올린다.
+    // 개인정보·동의서 칸은 인터뷰 대상이 아니라 최종 편집 화면에서 직접 채우는
+    // 항목이라, 여기 섞이면 진행률 분모와 어긋나고 "왜 안 물어보지" 혼란을 준다.
+    const fieldProgress = progressFields.map((field: any, idx: number) => {
       const isCompleted = progress.completedFieldIds?.includes(field.id) || idx < progress.completedCount;
       return {
         id: field.id,

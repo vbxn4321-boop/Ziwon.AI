@@ -254,6 +254,45 @@ export function detectProductStage(text: string): "PROTOTYPE" | "MASS_PRODUCTION
   return "UNKNOWN";
 }
 
+/**
+ * 공고문에 박혀 있는 개인정보를 Gemini 로 넘기기 전에 지운다.
+ *
+ * 왜 여기서 하는가:
+ * `문의처`·`담당자` 섹션은 BOILERPLATE 로 이미 걸러내지만, 실제 공고문은
+ * "신청 문의: 홍길동 주무관 ☎ 042-000-0000, hong@abc.or.kr" 처럼 본문 문단
+ * 한가운데에 연락처를 끼워 넣는 경우가 흔하다. 섹션 단위 제외로는 잡히지 않아
+ * 마지막에 한 번 더 훑는다. 전송 전에 지워야 하므로 AI 를 쓰지 않고 정규식으로만
+ * 처리한다.
+ *
+ * 기관 대표번호까지 같이 지워지지만, 챗봇이 질문을 만드는 데 필요한 정보가
+ * 아니므로 남길 이유가 없다.
+ */
+export function maskPersonalInfo(text: string): { text: string; maskedCount: number } {
+  let maskedCount = 0;
+  const count = (_m: string) => {
+    maskedCount += 1;
+    return _m;
+  };
+
+  let out = text
+    // 주민등록번호
+    .replace(/\b\d{6}\s*-\s*[1-4]\d{6}\b/g, (m) => (count(m), "[주민등록번호]"))
+    // 이메일
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, (m) => (count(m), "[이메일]"))
+    // 구분자가 있는 유선/휴대 번호 (02-1234-5678, 042.000.0000, 010 1234 5678)
+    .replace(/\b0\d{1,2}[-.)\s]\s?\d{3,4}[-.\s]\d{4}\b/g, (m) => (count(m), "[연락처]"))
+    // 구분자 없는 휴대전화
+    .replace(/\b01[016789]\d{7,8}\b/g, (m) => (count(m), "[연락처]"));
+
+  // 문의 맥락에 붙은 담당자 실명 (예: "담당자: 홍길동 주무관")
+  out = out.replace(
+    /(담당자|문의처|문의|연락처)(\s*[:：]?\s*)[가-힣]{2,4}(\s*)(주무관|사무관|과장|팀장|대리|연구원|매니저|선임|책임|담당)/g,
+    (m, kw, sep, sp, title) => (count(m), `${kw}${sep}○○○${sp}${title}`)
+  );
+
+  return { text: out, maskedCount };
+}
+
 export interface NoticeDocumentInput {
   fileName: string;
   extractedText: string | null;
@@ -361,6 +400,13 @@ export function extractNoticeForPrompt(
   if (!promptText.trim() && usableText.trim()) {
     promptText = normalizeWhitespace(usableText).slice(0, maxChars);
   }
+
+  // Gemini 로 넘기기 직전에 개인정보를 지운다 (통화 요청: 파싱 단계에서 제외 처리)
+  const masked = maskPersonalInfo(promptText);
+  if (masked.maskedCount > 0) {
+    console.log(`[공고 추출] 개인정보 ${masked.maskedCount}건을 AI 전송 전에 가렸습니다.`);
+  }
+  promptText = masked.text;
 
   return {
     promptText,

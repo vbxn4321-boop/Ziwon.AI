@@ -12,6 +12,7 @@ import { DEFAULT_INITIAL_MESSAGE, DEFAULT_SUGGESTIONS, getStandardFormSchema } f
 import { savePlanToBackend, fetchMyCompany } from "@/lib/backend-client";
 import { getJwtToken } from "@/lib/supabase-client";
 import { convertPsstToHwpHtml, copyToHwpClipboard } from "@/lib/export/hwp-clipboard-exporter";
+import type { FormSchema } from "@/lib/parser/form-schema-parser";
 
 export function usePsstPlan(
   initialProgramTitle?: string,
@@ -25,6 +26,9 @@ export function usePsstPlan(
   // Document Canvas Theme: "dark" vs "light"
   // 문서 작성은 Notion/LINER처럼 밝은 캔버스에서 시작하고, 필요할 때만 다크로 전환한다.
   const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>("light");
+  const [realFormSchema, setRealFormSchema] = useState<FormSchema | null>(null);
+  const [realFormDocument, setRealFormDocument] = useState<any>(null);
+  const [importedPlanText, setImportedPlanText] = useState("");
 
   // Loaded Company Profile State from DB
   const [userCompany, setUserCompany] = useState<any>(null);
@@ -82,6 +86,49 @@ export function usePsstPlan(
   const [generatedResult, setGeneratedResult] = useState<PsstBusinessPlanResult | null>(
     validInitialPlan
   );
+
+  // Load the actual attached HWPX form once so the editor reflects this notice,
+  // instead of showing only the generic PSST template.
+  useEffect(() => {
+    if (!initialProgramId) return;
+    let cancelled = false;
+    fetch(`/api/ai/psst-schema?programId=${encodeURIComponent(initialProgramId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.success) {
+          setRealFormSchema(json.schema || null);
+          setRealFormDocument(json.formDocument || null);
+        }
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [initialProgramId]);
+
+  // 실제 공고 서식이 로드되면 진행 순서도 표준 템플릿에서 교체한다.
+  useEffect(() => {
+    if (!realFormSchema?.fields?.length) return;
+    setInterviewProgress((prev) => {
+      const completed = new Set((prev.fieldProgress || []).filter((field) => field.completed).map((field) => field.id));
+      const fieldProgress = realFormSchema.fields.map((field) => ({
+        id: field.id,
+        label: field.label,
+        guidance: field.guidance,
+        type: field.type,
+        sectionTitle: field.sectionTitle,
+        completed: completed.has(field.id),
+      }));
+      const current = fieldProgress.find((field) => !field.completed) || fieldProgress[0];
+      return {
+        ...prev,
+        totalFields: fieldProgress.length,
+        completedCount: fieldProgress.filter((field) => field.completed).length,
+        currentFieldId: current?.id,
+        currentFieldLabel: current?.label,
+        currentFieldGuidance: current?.guidance,
+        fieldProgress,
+      };
+    });
+  }, [realFormSchema]);
 
   // Interactive Suggestion Pills and Checklist Progress
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>(DEFAULT_SUGGESTIONS);
@@ -350,7 +397,9 @@ export function usePsstPlan(
     setChatMessages(updatedMessages);
     setIsChatSending(true);
 
-    const activeSchema = getStandardFormSchema(formData.targetProgramTitle);
+    // 공고에 실제 서식이 있으면 그 항목과 지침을 우선 사용한다.
+    // 파싱 결과가 없을 때만 기존 표준 PSST 질문으로 폴백한다.
+    const activeSchema = realFormSchema || getStandardFormSchema(formData.targetProgramTitle);
 
     try {
       const res = await fetch("/api/ai/psst-chat", {
@@ -363,6 +412,7 @@ export function usePsstPlan(
           currentPlan: generatedResult || undefined,
           companyProfile: userCompany || undefined,
           formSchema: activeSchema,
+          existingPlanText: importedPlanText || undefined,
         }),
       });
 
@@ -642,6 +692,10 @@ export function usePsstPlan(
     setCreationMode,
     canvasTheme,
     setCanvasTheme,
+    realFormSchema,
+    realFormDocument,
+    importedPlanText,
+    setImportedPlanText,
     formData,
     setFormData,
     chatMessages,

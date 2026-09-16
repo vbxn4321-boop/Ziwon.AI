@@ -21,6 +21,7 @@ export interface FormCandidateDoc {
   fileUrl: string;
   entryPath: string | null;
   fileType: string;
+  extractedText?: string | null;
 }
 
 /** 사업계획서 서식으로 볼 만한 파일명. "사업계획서"를 최우선으로, 없으면 신청서류로 넓힌다. */
@@ -35,15 +36,15 @@ const GENERIC_FORM_NAME = /(신청서|참가신청|사업\s*신청)/;
  * 개수만 기준을 넘는 경우가 있었다. 그래서 개수뿐 아니라 지시문이 실제로
  * 붙어있는(guidance 가 어느 정도 긴) 칸이 이만큼은 있어야 인정한다.
  */
-const MIN_NARRATIVE_FIELDS = 2;
-const MIN_GUIDANCE_LENGTH = 10;
+const MIN_NARRATIVE_FIELDS = 1;
+const MIN_GUIDANCE_LENGTH = 4;
 
 /** 같은 공고를 대화 턴마다 매번 다시 내려받지 않도록 짧게 캐시한다 */
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const cache = new Map<string, { schema: FormSchema | null; expiresAt: number }>();
 
 function pickCandidates(documents: FormCandidateDoc[]): FormCandidateDoc[] {
-  const hwpxDocs = documents.filter((d) => d.fileType === "HWPX");
+  const hwpxDocs = documents.filter((d) => d.fileType === "HWPX" || d.fileType === "HWP");
   const businessPlanDocs = hwpxDocs.filter((d) => BUSINESS_PLAN_NAME.test(d.fileName));
   const genericFormDocs = hwpxDocs.filter(
     (d) => !BUSINESS_PLAN_NAME.test(d.fileName) && GENERIC_FORM_NAME.test(d.fileName)
@@ -70,13 +71,30 @@ async function fetchAndParse(doc: FormCandidateDoc): Promise<FormSchema | null> 
       // adm-zip 이 돌려주는 Buffer 도 항상 ArrayBuffer 기반이라 타입만 좁힌다
       buf = inner as Buffer<ArrayBuffer>;
     }
-    if (buf.slice(0, 2).toString("latin1") !== "PK") return null; // HWPX 가 아니면 포기
+    if (buf.slice(0, 2).toString("latin1") !== "PK") {
+      // 구형 HWP는 표 XML을 읽을 수 없으므로, 저장된 추출 텍스트의
+      // 번호 제목만 사용해 실제 문서 기반의 최소 편집 항목을 만든다.
+      const headings = (doc.extractedText || "").split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => /^(?:\d+(?:[-.、]\d+)*|[가-힣A-Z])[.)、]?\s*\S{2,}/.test(line))
+        .slice(0, 40);
+      if (!headings.length) return null;
+      return {
+        title: doc.fileName,
+        fields: headings.map((label, index) => ({ id: `legacy-${index}`, label, guidance: "원문 서식의 해당 항목을 기준으로 작성하세요.", type: "NARRATIVE" as const })),
+        constraints: [],
+        warnings: ["구형 HWP는 표 좌표를 읽을 수 없어 추출된 제목 기준으로 표시했습니다."],
+      };
+    }
 
     const schema = parseHwpxFormSchema(buf, doc.fileName);
     const wellGuidedCount = schema.fields.filter(
       (f) => f.type === "NARRATIVE" && f.guidance.length >= MIN_GUIDANCE_LENGTH
     ).length;
-    return wellGuidedCount >= MIN_NARRATIVE_FIELDS ? schema : null;
+  // 실제 서식은 작성 지침이 짧거나 표 중심이어도 원문 구조가 우선이다.
+  // 엄격한 필터로 null을 반환하면 화면에서 표준 템플릿으로 오인될 수 있으므로
+  // 파싱된 칸이 하나라도 있으면 실제 서식으로 표시한다.
+  return schema.fields.length > 0 ? schema : null;
   } catch (e: any) {
     console.warn(`[FormSchema] '${doc.fileName}' 서식 다운로드/파싱 실패:`, e.message);
     return null;
