@@ -4,12 +4,15 @@ import React, { useState } from "react";
 import { Edit3, FileText, Sparkles, Loader2, CheckCircle2, FileCode, Layers } from "lucide-react";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import { CanvasTheme, PsstFormData, PsstSectionKey } from "../types";
+import type { FormSchema } from "@/lib/parser/form-schema-parser";
 import { SECTION_LABELS } from "../constants";
 import { PsstEvaluationCard } from "./PsstEvaluationCard";
 import { A4DocumentEditor } from "./A4DocumentEditor";
+import { RhwpPageViewer } from "@/components/viewer/RhwpPageViewer";
 
 interface PsstDocumentViewerProps {
   canvasTheme: CanvasTheme;
+  formSchema?: FormSchema | null;
   activeSection: PsstSectionKey;
   generatedResult: PsstBusinessPlanResult | null;
   formData: PsstFormData;
@@ -19,10 +22,24 @@ interface PsstDocumentViewerProps {
   docScrollRef: React.RefObject<HTMLDivElement | null>;
   sectionRefs: Record<PsstSectionKey, React.RefObject<HTMLDivElement | null>>;
   onScrollToSection: (sec: PsstSectionKey) => void;
+  onImportedPlanText?: (text: string) => void;
+  formDocumentNames?: string[];
+  formDocument?: { fileName: string; fileUrl: string; entryPath?: string | null; extractedText?: string | null } | null;
 }
+
+/** 사업계획서 목차. 사이드바에 있던 '페이지' 목록을 문서 영역으로 옮긴 것이다. */
+const DOCUMENT_OUTLINE: [PsstSectionKey, string][] = [
+  ["overview", "기업·아이템 개요"],
+  ["problem", "문제 인식"],
+  ["solution", "해결 방안"],
+  ["scaleUp", "사업화 전략"],
+  ["team", "팀 구성"],
+  ["evaluation", "평가 리포트"],
+];
 
 export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
   canvasTheme,
+  formSchema = null,
   activeSection,
   generatedResult,
   formData,
@@ -32,15 +49,66 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
   docScrollRef,
   sectionRefs,
   onScrollToSection,
+  onImportedPlanText,
+  formDocumentNames = [],
+  formDocument = null,
 }) => {
   const [viewMode, setViewMode] = useState<"a4" | "cards">("a4");
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [importedText, setImportedText] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [formView, setFormView] = useState<"edit" | "source">("edit");
+  const [rawDocumentText, setRawDocumentText] = useState("");
+
+  const handleImportPlan = async (file: File) => {
+    setIsImporting(true);
+    setImportError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch("/api/ai/import-plan", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || "파일을 읽지 못했습니다.");
+      const text = result.text || "";
+      setImportedText(text);
+      onImportedPlanText?.(text);
+
+      // 기존 문서의 제목·소제목 주변 문단을 같은 서식 칸에 우선 채운다.
+      // 매칭되지 않은 칸은 비워 두어 챗봇이 추가 질문할 대상으로 남긴다.
+      if (formSchema?.fields?.length && text) {
+        const paragraphs = text.split(/\n{1,2}|(?<=[.!?다요])\s{2,}/).map((p: string) => p.trim()).filter(Boolean);
+        const nextValues: Record<string, string> = {};
+        for (const field of formSchema.fields) {
+          if (field.type === "PERSONAL" || field.type === "CONSENT" || !field.label) continue;
+          const keywords = field.label.replace(/[^가-힣A-Za-z0-9 ]/g, " ").split(/\s+/).filter((word: string) => word.length >= 2);
+          if (!keywords.length) continue;
+          const match = paragraphs.find((paragraph: string) => {
+            const normalized = paragraph.toLowerCase();
+            return keywords.filter((word: string) => normalized.includes(word.toLowerCase())).length >= Math.min(2, keywords.length);
+          });
+          if (match) nextValues[field.id] = match.slice(0, 3000);
+        }
+        setFormValues((current) => ({ ...current, ...nextValues }));
+      }
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "파일을 읽지 못했습니다.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
   const hasValidPlan = !!(generatedResult && generatedResult.overview && generatedResult.overview.title);
+  const displaySchema = formSchema;
+  const aiFields = displaySchema?.fields.filter((field) => field.type !== "PERSONAL" && field.type !== "CONSENT") || [];
+  const missingImportedFields = importedText
+    ? aiFields.filter((field) => !formValues[field.id]?.trim()).length
+    : 0;
 
   return (
     <div
       id="psst-document-canvas"
-      className={`lg:order-1 flex flex-col min-h-[70vh] lg:min-h-0 lg:h-full overflow-hidden relative transition-colors ${
-        canvasTheme === "dark" ? "bg-slate-950 text-slate-100" : "bg-[#f1f5f9] text-slate-800"
+      className={`flex-1 min-w-0 flex flex-col min-h-[70vh] md:min-h-0 md:h-full overflow-hidden relative transition-colors ${
+        canvasTheme === "dark" ? "bg-slate-950 text-slate-100" : "bg-[#f7f6f3] text-slate-800"
       }`}
     >
       {/* Sheet Sub-Header */}
@@ -71,22 +139,22 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 onClick={() => setViewMode("a4")}
                 className={`px-3 py-1 rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
                   viewMode === "a4"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <span>📄 A4 한글 에디터</span>
+                <span>A4 문서</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("cards")}
                 className={`px-3 py-1 rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
                   viewMode === "cards"
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <span>📊 카드 뷰</span>
+                <span>요약 카드</span>
               </button>
             </div>
 
@@ -109,6 +177,31 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           </div>
         )}
       </div>
+
+      {/* 목차 — 사이드바 탭이 아니라 사업계획서 영역 안에 둔다.
+          문서 폭을 잡아먹지 않도록 가로 띠 형태로 배치했다. */}
+      <nav
+        aria-label="사업계획서 목차"
+        className={`flex-shrink-0 px-4 py-2 flex items-center gap-1.5 overflow-x-auto border-b ${
+          canvasTheme === "dark" ? "bg-slate-900/60 border-slate-800" : "bg-white border-slate-200"
+        }`}
+      >
+        <span className="text-[10px] font-bold tracking-wider text-slate-400 flex-shrink-0 pr-1">문서</span>
+        {DOCUMENT_OUTLINE.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onScrollToSection(key)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap transition-colors cursor-pointer border ${
+              activeSection === key
+                ? "bg-stone-100 text-slate-900 border-stone-300 font-semibold"
+                : "bg-transparent text-slate-500 border-transparent hover:bg-stone-50 hover:text-slate-900"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {/* Main Viewport Content */}
       {hasValidPlan && generatedResult && viewMode === "a4" ? (
@@ -588,7 +681,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                           {idx + 1}. [{sec.sectionTitle || "맞춤 서식"}] {sec.label}
                         </h3>
                         {sec.type && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white text-slate-500 border border-stone-200">
                             {sec.type}
                           </span>
                         )}
@@ -615,15 +708,86 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
             />
           </div>
         ) : (
-          /* Notion-like empty page: quiet canvas with a single next action. */
-          <div className="max-w-3xl mx-auto w-full px-6 sm:px-12 pt-16 sm:pt-24">
-            <FileText className="w-10 h-10 text-slate-300 mb-6" />
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 mb-3">사업계획서</h1>
-            <p className="text-sm text-slate-500 leading-relaxed max-w-lg">
-              오른쪽 AI 작성 도우미와 대화를 시작하면 이 페이지에 계획서 항목이 순서대로 작성됩니다.
-            </p>
-            <div className="mt-8 text-xs text-slate-400">새 문서를 작성하려면 오른쪽 입력창에 답변을 입력하세요.</div>
+          /* Show the actual attached form before AI generation. */
+          displaySchema ? (
+            <div className="w-full px-3 sm:px-5 py-4 sm:py-6">
+              <div className="bg-white border border-stone-200 rounded-xl shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-4 sm:px-6 py-5">
+                <p className="text-[11px] font-semibold text-indigo-600 mb-2">공고 첨부 서식</p>
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">{displaySchema.title || "사업계획서 서식"}</h1>
+                <p className="text-sm text-slate-500 mb-8">첨부파일의 작성 항목을 직접 입력할 수 있습니다. AI 질문은 왼쪽에서 진행됩니다.</p>
+                <div className="mb-5 flex items-center gap-2 border-b border-stone-200 pb-3">
+                  <button type="button" onClick={() => setFormView("edit")} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${formView === "edit" ? "bg-indigo-600 text-white" : "bg-stone-100 text-slate-600"}`}>편집 에디터</button>
+                  <button type="button" onClick={() => setFormView("source")} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${formView === "source" ? "bg-indigo-600 text-white" : "bg-stone-100 text-slate-600"}`}>원본 서식 보기</button>
+                </div>
+                {formDocument?.fileUrl && (
+                  <div className={`${formView === "source" ? "" : "hidden"} mb-6 overflow-hidden rounded-xl border border-stone-200 bg-slate-950 min-h-[520px]`}>
+                    <RhwpPageViewer
+                      fileName={formDocument.fileName}
+                      fileUrl={formDocument.fileUrl}
+                      entryPath={formDocument.entryPath}
+                      extractedText={formDocument.extractedText}
+                    />
+                  </div>
+                )}
+                <div className="mb-8 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div><p className="text-sm font-semibold text-slate-700">기존 사업계획서 가져오기</p><p className="text-xs text-slate-400 mt-1">PDF·DOCX·HWPX 파일을 읽어 현재 서식과 비교합니다.</p></div>
+                    <label className="shrink-0 cursor-pointer rounded-md bg-white border border-stone-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-indigo-300">
+                      {isImporting ? "읽는 중…" : "파일 선택"}
+                      <input type="file" accept=".pdf,.docx,.hwpx,.hwp,.txt" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleImportPlan(file); }} />
+                    </label>
+                  </div>
+                  {importError && <p className="mt-2 text-xs text-rose-600">{importError}</p>}
+                  {importedText && <p className="mt-3 max-h-20 overflow-hidden text-xs leading-relaxed text-emerald-700">기존 문서 내용을 서식 항목에 자동 매칭했습니다. {missingImportedFields > 0 ? `미매칭 항목 ${missingImportedFields}개는 왼쪽 AI가 추가로 질문합니다.` : "모든 작성 가능 항목이 채워졌습니다."}</p>}
+                </div>
+                <div className={`${formView === "edit" ? "" : "hidden"} space-y-5`}>
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">이 영역에서 공고 서식 항목을 직접 작성하고 수정할 수 있습니다.</div>
+                  {displaySchema.fields.map((field) => (
+                    <label key={field.id} className="block">
+                      <span className="block text-sm font-semibold text-slate-700 mb-1.5">{field.label}</span>
+                      {field.guidance && <span className="block text-xs text-slate-400 mb-2">{field.guidance}</span>}
+                      <textarea
+                        value={formValues[field.id] || ""}
+                        onChange={(event) => setFormValues((prev) => ({ ...prev, [field.id]: event.target.value }))}
+                        className="w-full min-h-20 resize-y rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:bg-white"
+                        placeholder="이 항목의 내용을 입력하세요."
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+          /* 실제 첨부 서식만 표시하며, 표준 템플릿으로 대체하지 않는다. */
+          <div className="w-full px-3 sm:px-5 py-4 sm:py-6">
+            <div className="min-h-[560px] bg-white border border-stone-200 rounded-xl shadow-[0_2px_8px_rgba(15,23,42,0.04)] px-8 sm:px-14 py-12">
+              <FileText className="w-8 h-8 text-indigo-500 mb-6" />
+              <p className="text-[11px] font-semibold text-indigo-600 mb-2">공고 첨부 서식</p>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 mb-4">{formDocument ? "첨부 서식 편집" : "실제 서식을 불러오는 중입니다"}</h1>
+              <p className="text-sm text-slate-500 leading-relaxed max-w-lg">
+                표준 템플릿으로 대체하지 않고 해당 공고의 첨부 서식만 표시합니다.
+              </p>
+              {formDocumentNames.length > 0 && <p className="mt-6 text-xs text-slate-400">확인 중인 첨부파일: {formDocumentNames.join(", ")}</p>}
+              {formDocument?.fileUrl && (
+                <div className="mt-8 overflow-hidden rounded-xl border border-stone-200">
+                  <RhwpPageViewer fileName={formDocument.fileName} fileUrl={formDocument.fileUrl} entryPath={formDocument.entryPath} extractedText={formDocument.extractedText} />
+                </div>
+              )}
+              {formDocument && (
+                <div className="mt-6 rounded-xl border border-indigo-100 bg-white p-4 text-left">
+                  <p className="mb-2 text-sm font-semibold text-slate-700">편집 에디터</p>
+                  <p className="mb-3 text-xs text-slate-500">원본 서식이 지원되지 않는 형식이어도 추출된 내용을 직접 수정할 수 있습니다.</p>
+                  <textarea
+                    value={rawDocumentText || formDocument.extractedText || ""}
+                    onChange={(event) => setRawDocumentText(event.target.value)}
+                    className="min-h-[320px] w-full resize-y rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm leading-6 text-slate-800 outline-none focus:border-indigo-400 focus:bg-white"
+                    placeholder="추출된 서식 내용을 입력하거나 수정하세요."
+                  />
+                </div>
+              )}
+            </div>
           </div>
+          )
         )}
       </div>
       )}
@@ -634,7 +798,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           <button
             type="button"
             onClick={() => onScrollToSection("overview")}
-            className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-[9px] shadow-lg flex items-center justify-center hover:scale-110 transition-transform cursor-pointer"
+            className="w-7 h-7 rounded-full bg-slate-900 text-white font-bold text-[9px] shadow-sm flex items-center justify-center hover:scale-110 transition-transform cursor-pointer"
             title="창업아이템 개요"
           >
             개요
@@ -642,7 +806,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           <button
             type="button"
             onClick={() => onScrollToSection("problem")}
-            className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 border border-slate-700 hover:bg-rose-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
+            className="w-7 h-7 rounded-full bg-white text-slate-500 border border-stone-200 hover:bg-rose-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
             title="P: 문제인식"
           >
             P
@@ -650,7 +814,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           <button
             type="button"
             onClick={() => onScrollToSection("solution")}
-            className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 border border-slate-700 hover:bg-blue-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
+            className="w-7 h-7 rounded-full bg-white text-slate-500 border border-stone-200 hover:bg-blue-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
             title="S: 실현가능성"
           >
             S
@@ -658,7 +822,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           <button
             type="button"
             onClick={() => onScrollToSection("scaleUp")}
-            className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 border border-slate-700 hover:bg-purple-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
+            className="w-7 h-7 rounded-full bg-white text-slate-500 border border-stone-200 hover:bg-purple-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
             title="S: 성장전략"
           >
             S
@@ -666,7 +830,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           <button
             type="button"
             onClick={() => onScrollToSection("team")}
-            className="w-7 h-7 rounded-full bg-slate-800 text-slate-300 border border-slate-700 hover:bg-emerald-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
+            className="w-7 h-7 rounded-full bg-white text-slate-500 border border-stone-200 hover:bg-emerald-600 hover:text-white font-bold text-[10px] shadow-md flex items-center justify-center hover:scale-110 transition-all cursor-pointer"
             title="T: 팀구성"
           >
             T

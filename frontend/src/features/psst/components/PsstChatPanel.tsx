@@ -52,9 +52,9 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
   const completedFields = interviewProgress.completedCount || 0;
   const interviewReady = completedFields >= totalFields;
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white text-slate-900">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fbfbfa] text-slate-900">
       {/* Chat Header Sub-Banner */}
-      <div className="p-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between flex-shrink-0">
+      <div className="p-4 bg-white border-b border-stone-200 flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between flex-shrink-0">
         <div className="flex-1 min-w-0 flex items-center space-x-2 px-1">
           <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
           <div className="min-w-0">
@@ -75,7 +75,7 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
       </div>
 
       {/* Compact document status, keeping the conversation as the primary action. */}
-      <div className="px-4 py-2 bg-white border-b border-slate-200 flex items-center gap-3 flex-shrink-0 text-[11px]">
+      <div className="px-4 py-2 bg-white border-b border-stone-200 flex items-center gap-3 flex-shrink-0 text-[11px]">
         <span className="font-semibold text-slate-600">현재 항목</span>
         <span className="truncate text-slate-900">{interviewProgress.currentFieldLabel || "사업계획서 개요"}</span>
         <span className="ml-auto text-slate-400 tabular-nums">{completedFields}/{totalFields} 완료</span>
@@ -98,7 +98,7 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
               </div>
             )}
 
-            <div className={`space-y-1 max-w-[85%] ${msg.role === "user" ? "text-right" : "text-left"}`}>
+                <div className={`space-y-1 max-w-[78%] ${msg.role === "user" ? "text-right" : "text-left"}`}>
               <span className="text-[10px] text-slate-500 font-semibold block">
                 {msg.role === "assistant" ? "Ziwon AI 컨설턴트" : "창업자"}
               </span>

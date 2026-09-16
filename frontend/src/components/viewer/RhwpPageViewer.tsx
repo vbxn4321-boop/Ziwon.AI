@@ -49,6 +49,8 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [viewMode, setViewMode] = useState<"rhwp" | "text">("rhwp");
+  const [isEditing, setIsEditing] = useState(false);
+  const [pageEdits, setPageEdits] = useState<Record<number, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -155,6 +157,11 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
 
         {/* Right: Controls (Zoom, Navigation, Print, Fullscreen, Download) */}
         <div className="flex items-center space-x-2">
+          {viewMode === "rhwp" && (renderResult?.success || !!extractedText) && (
+            <button type="button" onClick={() => setIsEditing((value) => !value)} className={`px-3 py-1.5 rounded-lg border font-semibold ${isEditing ? "bg-emerald-600 text-white border-emerald-500" : "bg-slate-950 text-slate-300 border-slate-700"}`}>
+              {isEditing ? "편집 저장" : "서식 편집"}
+            </button>
+          )}
           {viewMode === "rhwp" && renderResult?.success && (
             <>
               {/* Page Selector */}
@@ -304,6 +311,9 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
 
                   {/* High-Fidelity SVG Paper Sheet */}
                   <div
+                    className="relative"
+                  >
+                  <div
                     className="bg-white text-slate-900 rounded-xs shadow-2xl overflow-visible border border-slate-300 box-border select-text [&_svg]:!overflow-visible [&_svg]:max-w-full [&_svg]:h-auto"
                     style={{
                       width: "794px",
@@ -312,6 +322,16 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
                     }}
                     dangerouslySetInnerHTML={{ __html: svgContent }}
                   />
+                  {isEditing && (
+                    <textarea
+                      aria-label={`${idx + 1}쪽 편집 내용`}
+                      value={pageEdits[idx] || ""}
+                      onChange={(event) => setPageEdits((prev) => ({ ...prev, [idx]: event.target.value }))}
+                      placeholder="이 페이지에 추가하거나 수정할 내용을 입력하세요."
+                      className="absolute inset-x-6 bottom-6 min-h-24 rounded-lg border-2 border-indigo-400 bg-white/95 p-3 text-sm text-slate-800 shadow-lg outline-none"
+                    />
+                  )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -329,6 +349,14 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
                   {renderResult?.error || "암호화되었거나 특수 보안 포맷의 한글 문서입니다."}
                 </p>
               </div>
+              {extractedText && isEditing && (
+                <textarea
+                  aria-label="추출된 공고 서식 편집"
+                  defaultValue={extractedText}
+                  className="w-full max-w-2xl min-h-[320px] rounded-xl border border-indigo-300 bg-white p-4 text-left text-sm leading-6 text-slate-800 outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="추출된 서식 내용을 직접 수정하세요."
+                />
+              )}
 
               {extractedText ? (
                 <button

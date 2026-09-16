@@ -20,8 +20,14 @@ import AdmZip from "adm-zip";
 export type FormFieldType =
   | "FACT" // 기업명·사업자등록번호 등 사실 정보 → 회사 프로필에서 자동 채움
   | "NARRATIVE" // 제품 소개·차별성 등 서술형 → AI 챗봇이 작성
+  | "PERSONAL" // 대표자 성명·연락처 등 개인정보 → 사용자가 직접 입력, AI 에 넘기지 않음
   | "ATTACHMENT" // 제품 이미지·증빙서류 → 사용자가 직접 첨부
   | "CONSENT"; // 개인정보 동의서 등 → AI 관여 없이 원문 유지
+
+/** AI 프롬프트에 넣어도 되는 칸인지. PERSONAL·CONSENT 는 넘기지 않는다. */
+export function isAiSafeField(type: FormFieldType): boolean {
+  return type !== "PERSONAL" && type !== "CONSENT";
+}
 
 export interface FormField {
   /** 칸 식별자 */
@@ -49,9 +55,29 @@ export interface FormSchema {
   warnings: string[];
 }
 
+/** HWP 구형 인코딩 추출에서 생기는 모지바케 문구를 화면에 노출하지 않는다. */
+function cleanExtractedLabel(value: string, index: number): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  const suspicious = /[ÃÂÐÑæåçèéìíîï譁蜿莠帙繧謗莨]|�/.test(text);
+  const korean = (text.match(/[가-힣]/g) || []).length;
+  if (suspicious && korean < 2) return `서식 작성 항목 ${index + 1}`;
+  return text || `서식 작성 항목 ${index + 1}`;
+}
+
 /** 사실 정보 칸으로 볼 라벨 */
 const FACT_LABEL =
   /(기업명|회사명|상호|사업자등록번호|법인등록번호|대표자|성명|생년월일|이메일|연락처|전화|휴대폰|주소|소재지|설립|개업연월일|회사성립연월일|업종|업태|직원\s*수|종업원|매출|투자유치|자본금|담당자|직위|기술\s*분야)/;
+
+/**
+ * 개인을 특정할 수 있는 칸. AI 에 절대 넘기지 않는다.
+ *
+ * 이런 칸은 본인이 직접 적어야 하는 정보이고 AI 가 대신 써줄 수도 없는데,
+ * 프롬프트에 섞여 들어가면 챗봇이 "대표자 성함이 어떻게 되시나요", "연락처를
+ * 알려주세요" 같은 엉뚱한 질문을 하게 된다. 최종 편집 화면에서 사용자가
+ * 직접 채우는 것이 맞다.
+ */
+const PERSONAL_INFO_LABEL =
+  /(대표자|성명|이름|생년월일|주민등록|이메일|메일|연락처|전화|휴대폰|핸드폰|팩스|주소|소재지|담당자|서명|날인)/;
 
 /** 첨부물 칸 */
 const ATTACHMENT_LABEL = /(사진|이미지|로고|첨부|증빙|캡처|도면|스크린샷)/;
@@ -149,17 +175,55 @@ function collectTables(node: any, out: TableCell[][][] = []): TableCell[][][] {
   return out;
 }
 
+/**
+ * 채울 칸이 아닌데 표 구조 때문에 라벨처럼 잡히는 것들.
+ *
+ * 실측(베트남 테크페스트 서식): 20칸 중 7칸이 `’25년`, `’24년`, `신청일 현재`,
+ * `...` 였다. 매출·고용 현황표의 열 머리글인데 라벨-값 짝짓기에서 라벨 자리에
+ * 들어온 것이다. 그대로 두면 프롬프트 토큰만 먹고, 챗봇이 "’25년에 대해
+ * 말씀해 주세요" 같은 질문을 하게 된다.
+ */
+const YEAR_ONLY_LABEL = /^['’"]?\s*\d{2,4}\s*년도?\s*$/;
+const PUNCT_ONLY_LABEL = /^[.·…\-–—~\s]*$/;
+const TIME_MARKER_LABEL = /^(신청일\s*현재|현재|당해\s*연도|전년도)$/;
+/** 지시문이 없을 때만 버릴 표 머리글 */
+const TABLE_HEADER_LABEL = /^(구분|계|합계|소계|총계|누계|비고|연번|번호|순번|단위|항목|내용|기타)$/;
+
+function isNonFieldLabel(label: string, guidance: string): boolean {
+  if (label.length <= 1) return true;
+  if (YEAR_ONLY_LABEL.test(label)) return true;
+  if (PUNCT_ONLY_LABEL.test(label)) return true;
+  if (TIME_MARKER_LABEL.test(label)) return true;
+  // 머리글처럼 보여도 주관기관 지시문이 달렸다면 진짜 채울 칸이다
+  if (!guidance && TABLE_HEADER_LABEL.test(label)) return true;
+  return false;
+}
+
+/** 지시문이 붙어 있어도 서술할 내용이 아닌, 날짜·번호류 사실정보 칸 */
+const PURE_FACT_LABEL = /(연월일|년월일|일자|등록번호|법인번호|사업자번호)/;
+
 /** 라벨을 보고 칸의 성격을 정한다 */
 function decideType(label: string, guidance: string, sectionTitle: string): FormFieldType {
   const all = `${label} ${sectionTitle}`;
   if (CONSENT_LABEL.test(all)) return "CONSENT";
   if (ATTACHMENT_LABEL.test(all)) return "ATTACHMENT";
 
+  // 라벨 자체가 개인정보 항목명인 짧은 칸(`이메일`, `연락처(휴대폰)`, `생년월일`)은
+  // 지시문이 있든 없든 개인정보로 본다.
+  const isShortLabel = label.replace(/[^가-힣A-Za-z]/g, "").length <= 10;
+  if (isShortLabel && PERSONAL_INFO_LABEL.test(label)) return "PERSONAL";
+
+  // `개업연월일(회사성립연월일)` 처럼 지시문("개인:개업연월일, 법인:회사성립연월일")이
+  // 붙어 있어도 날짜 한 줄을 적는 칸이다. 서술형으로 보내면 챗봇이 문단을 요구한다.
+  if (label.length <= 20 && PURE_FACT_LABEL.test(label)) return "FACT";
+
   // 작성 지시문이 달려 있으면 서술형이다. 라벨 키워드보다 이걸 먼저 본다.
-  // (`투자유치 현황 및 계획` 은 "투자유치" 때문에 사실정보로 오분류되기 쉬운데,
-  //  "...기재" 라는 지시문이 붙어 있으면 서술해야 할 칸이다)
+  // (`투자유치 현황 및 계획` 은 "투자유치" 때문에 사실정보로,
+  //  `제품(서비스) 및 대표자 소개` 는 "대표자" 때문에 개인정보로 오분류되기 쉬운데,
+  //  "...기재" 라는 지시문이 붙어 있으면 실제로는 서술해야 할 칸이다)
   if (guidance.length > 10) return "NARRATIVE";
 
+  if (PERSONAL_INFO_LABEL.test(label)) return "PERSONAL";
   if (FACT_LABEL.test(label)) return "FACT";
   return label.length > 12 ? "NARRATIVE" : "FACT";
 }
@@ -249,6 +313,9 @@ export function parseHwpxFormSchema(hwpxBuffer: Buffer, fileName = ""): FormSche
           const isFillable = guidance !== "" || !value || PLACEHOLDER_VALUE.test(value);
           if (!isFillable) continue;
 
+          // 표 머리글·연도 표기 등 채울 칸이 아닌 것은 여기서 버린다
+          if (isNonFieldLabel(label, guidance)) continue;
+
           fields.push({
             id: `f${++seq}`,
             label,
@@ -268,5 +335,10 @@ export function parseHwpxFormSchema(hwpxBuffer: Buffer, fileName = ""): FormSche
     warnings.push("채울 칸을 찾지 못했습니다. 표가 없는 서식이거나 구조가 특이할 수 있습니다.");
   }
 
-  return { title, fields, constraints: [...new Set(constraints)], warnings };
+  return {
+    title,
+    fields: fields.map((field, index) => ({ ...field, label: cleanExtractedLabel(field.label, index) })),
+    constraints: [...new Set(constraints)],
+    warnings,
+  };
 }
