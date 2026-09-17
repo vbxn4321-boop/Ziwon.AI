@@ -1,30 +1,44 @@
 "use client";
 
 import React from "react";
-import { Sparkles, Plus, Home, FileText, Award } from "lucide-react";
+import { Sparkles, Plus, Home, FileText, Award, PanelLeftClose } from "lucide-react";
 import { PsstSectionKey } from "../types";
 
 interface PsstSidebarProps {
   onBackToNotices?: () => void;
   onResetNew: () => void;
   onScrollToSection: (section: PsstSectionKey) => void;
+  /** 사이드바를 통째로 감춘다. 작업 폭을 최대로 확보할 때 쓴다. */
+  onCollapse: () => void;
 }
 
 export const PsstSidebar: React.FC<PsstSidebarProps> = ({
   onBackToNotices,
   onResetNew,
   onScrollToSection,
+  onCollapse,
 }) => {
   return (
     <aside className="w-14 lg:w-60 bg-[#fbfbfa] border-r border-stone-200 flex flex-col py-3 justify-between flex-shrink-0 z-30">
       <div className="flex flex-col items-center space-y-5 w-full">
-        {/* Logo */}
-        <div
-          onClick={() => onBackToNotices && onBackToNotices()}
-          className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-extrabold text-sm cursor-pointer"
-          title="공고 탐색으로 이동"
-        >
-          <Sparkles className="w-5 h-5 text-white" />
+        {/* Logo + 접기 */}
+        <div className="w-full px-3 flex items-center justify-center lg:justify-between">
+          <div
+            onClick={() => onBackToNotices && onBackToNotices()}
+            className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-extrabold text-sm cursor-pointer flex-shrink-0"
+            title="공고 탐색으로 이동"
+          >
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          <button
+            type="button"
+            onClick={onCollapse}
+            title="사이드바 숨기기"
+            aria-label="사이드바 숨기기"
+            className="hidden lg:flex w-7 h-7 rounded-lg items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-stone-200 transition-colors cursor-pointer"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Plus Button */}

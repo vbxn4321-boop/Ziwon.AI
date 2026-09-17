@@ -22,6 +22,7 @@ import LoginPromptModal from "@/components/auth/LoginPromptModal";
 // Modularized Sub-Components & Helpers
 import { getDDay } from "@/features/program-detail/components/detail-helpers";
 import { ProgramHeader } from "@/features/program-detail/components/ProgramHeader";
+import { AnalysisGateModal } from "@/features/program-detail/components/AnalysisGateModal";
 import { ProgramSummaryCard } from "@/features/program-detail/components/ProgramSummaryCard";
 import { NoticeOriginalTab } from "@/features/program-detail/components/NoticeOriginalTab";
 import { AiStrategyTab } from "@/features/program-detail/components/AiStrategyTab";
@@ -42,6 +43,12 @@ export default function ProgramDetailPage() {
   // AI Deep Analysis
   const [liveAnalysis, setLiveAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // 계획서 작성 게이트: 이 계정이 이 공고의 AI 분석을 열었는지 확인한 결과
+  const [planGateChecking, setPlanGateChecking] = useState(false);
+  const [planGate, setPlanGate] = useState<{ isOpen: boolean; hasAnalysis: boolean }>({
+    isOpen: false,
+    hasAnalysis: false,
+  });
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Bookmark states
@@ -220,6 +227,7 @@ export default function ProgramDetailPage() {
     try {
       const res = await fetch(`/api/support-programs/${program.id}/analyze`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
       });
       const rawText = await res.text();
       let json: any = null;
@@ -238,6 +246,78 @@ export default function ProgramDetailPage() {
         setAnalysisError(errMsg);
       }
     } catch {
+      setAnalysisError("AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  /** 계획서 작성 화면으로 이동. editorOnly 면 챗봇 없이 에디터만 연다. */
+  const goToPlanEditor = (editorOnly: boolean) => {
+    if (!program) return;
+    const q = new URLSearchParams({ targetTitle: program.title, programId: program.id });
+    if (editorOnly) q.set("editorOnly", "1");
+    router.push(`/consultant?${q.toString()}`);
+  };
+
+  /**
+   * 계획서 작성 버튼. 이 계정이 이 공고의 AI 분석을 열어 뒀는지 먼저 확인한다.
+   * 열려 있으면 그대로 넘기고, 아니면 무엇을 포기하는지 알리고 선택을 받는다.
+   */
+  const handleWritePlan = async () => {
+    if (!program) return;
+    const token = await checkIsLoggedIn();
+    if (!token) {
+      setLoginPromptState({
+        isOpen: true,
+        title: "사업계획서 작성은 회원 전용이에요",
+        subtitle: "3초 간편 로그인 후 이 공고의 서식에 맞춘 AI 사업계획서 작성을 시작해 보세요.",
+        featureBadge: "📝 AI 사업계획서 작성",
+      });
+      return;
+    }
+
+    setPlanGateChecking(true);
+    try {
+      const res = await fetch(`/api/support-programs/${program.id}/analysis-access`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => null);
+      if (json?.unlocked) {
+        goToPlanEditor(false);
+        return;
+      }
+      setPlanGate({ isOpen: true, hasAnalysis: Boolean(json?.hasAnalysis) });
+    } catch {
+      // 확인 자체가 실패했다고 작성을 막을 이유는 없다. 에디터로 보낸다.
+      goToPlanEditor(true);
+    } finally {
+      setPlanGateChecking(false);
+    }
+  };
+
+  /** 모달의 "지금 분석하기". 분석이 끝나면 그대로 계획서로 넘어간다. */
+  const handleAnalyzeThenWrite = async () => {
+    if (!program) return;
+    const token = await checkIsLoggedIn();
+    if (!token) return;
+
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch(`/api/support-programs/${program.id}/analyze`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => null);
+      if (json?.success) {
+        setPlanGate({ isOpen: false, hasAnalysis: true });
+        goToPlanEditor(false);
+      } else {
+        setPlanGate({ isOpen: false, hasAnalysis: false });
+        setAnalysisError(json?.error || "AI 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+    } catch {
+      setPlanGate({ isOpen: false, hasAnalysis: false });
       setAnalysisError("AI 분석 서버와의 통신에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsAnalyzing(false);
@@ -367,6 +447,8 @@ export default function ProgramDetailPage() {
           isBookmarked={isBookmarked}
           bookmarkLoading={bookmarkLoading}
           onToggleBookmark={handleToggleBookmark}
+          onWritePlan={handleWritePlan}
+          planGateChecking={planGateChecking}
         />
 
         {/* 1. Main Notice Info Banner */}
@@ -495,6 +577,19 @@ export default function ProgramDetailPage() {
       )}
 
       {/* Login Conversion Modal */}
+      <AnalysisGateModal
+        isOpen={planGate.isOpen}
+        programTitle={program.title}
+        hasAnalysis={planGate.hasAnalysis}
+        isAnalyzing={isAnalyzing}
+        onAnalyze={handleAnalyzeThenWrite}
+        onProceedEditorOnly={() => {
+          setPlanGate({ isOpen: false, hasAnalysis: false });
+          goToPlanEditor(true);
+        }}
+        onClose={() => setPlanGate({ isOpen: false, hasAnalysis: false })}
+      />
+
       <LoginPromptModal
         isOpen={loginPromptState.isOpen}
         onClose={() => setLoginPromptState((prev) => ({ ...prev, isOpen: false }))}

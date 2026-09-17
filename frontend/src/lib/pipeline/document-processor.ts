@@ -135,7 +135,7 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
           select: { fileName: true, extractedText: true },
         });
 
-        const aiAnalysisResult = await analyzeProgramWithGemini(
+        const { result: aiAnalysisResult, modelUsed } = await analyzeProgramWithGemini(
           doc.supportProgram.title,
           doc.supportProgram.organizer,
           extractedText,
@@ -145,7 +145,9 @@ export async function processPendingDocumentsPipeline(limit = 10): Promise<Proce
         await prisma.supportAnalysis.create({
           data: {
             supportProgramId: doc.supportProgramId,
-            model: process.env.AI_GENERAL_MODEL || "gemini-2.5-flash",
+            // 카스케이드로 응답한 실제 모델명을 기록한다.
+            // "gemini-2.5-flash" 는 후보 목록에 없는 이름이라 늘 잘못 기록되고 있었다.
+            model: modelUsed,
             promptVersion: "v2.0-selective",
             status: "COMPLETED",
             resultJson: JSON.stringify(aiAnalysisResult),

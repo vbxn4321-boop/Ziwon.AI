@@ -79,7 +79,7 @@ export async function analyzeProgramWithGemini(
    * 토큰이 크게 줄고, 배점표·일정표가 잘려나가지 않는다.
    */
   documents?: NoticeDocumentInput[]
-): Promise<ProgramAnalysisResult> {
+): Promise<{ result: ProgramAnalysisResult; modelUsed: string }> {
   const apiKey = process.env.GEMINI_API_KEY || "";
   if (!apiKey) {
     throw new Error("AI 분석 API 키(GEMINI_API_KEY)가 설정되지 않았습니다. 환경 변수를 확인해 주세요.");
@@ -280,7 +280,9 @@ ${noticeText}
       const parsed = JSON.parse(jsonStr) as ProgramAnalysisResult;
 
       console.log(`✅ [Gemini Cascade] Tier ${i + 1} (${modelName}) succeeded!`);
-      return parsed;
+      // 실제로 응답한 모델명을 함께 돌려준다. 카스케이드라 후보 1번이 항상
+      // 응답하는 게 아니라서, 호출부가 하드코딩된 이름을 저장하면 실제와 어긋난다.
+      return { result: parsed, modelUsed: modelName };
     } catch (error: any) {
       console.warn(
         `⚠️ [Gemini Cascade Tier ${i + 1} Failed] ${modelName}: ${

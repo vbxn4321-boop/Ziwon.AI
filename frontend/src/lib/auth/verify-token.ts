@@ -102,6 +102,23 @@ export function extractBearerToken(req: NextRequest): string | null {
  * 요청에서 인증된 사용자를 꺼냅니다. 인증되지 않았으면 null.
  * 로그인 필수가 아닌 라우트(비로그인 체험 허용)에서 사용합니다.
  */
+/**
+ * 로그인이 반드시 필요한 라우트용. 인증되지 않았으면 이유를 함께 돌려줍니다.
+ *
+ * `getOptionalUser` 는 실패 사유를 버려서 "토큰이 없다"와 "토큰이 만료됐다"를
+ * 구분하지 못합니다. 만료는 클라이언트가 조용히 리프레시하면 되는 상황이라
+ * 호출부가 구분할 수 있어야 합니다.
+ */
+export function requireUser(
+  req: NextRequest
+): { ok: true; user: AccessTokenPayload } | { ok: false; reason: string } {
+  const token = extractBearerToken(req);
+  if (!token) return { ok: false, reason: "로그인이 필요합니다." };
+  const result = verifyAccessToken(token);
+  if (!result.valid) return { ok: false, reason: `유효하지 않은 인증 토큰입니다. (${result.reason})` };
+  return { ok: true, user: result.payload };
+}
+
 export function getOptionalUser(req: NextRequest): AccessTokenPayload | null {
   const token = extractBearerToken(req);
   if (!token) return null;

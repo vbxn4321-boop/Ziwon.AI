@@ -111,6 +111,27 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { messages, generatePlan, targetProgramTitle, programId, currentPlan, existingPlanText } = body;
 
+    // 공고 맞춤 인터뷰는 그 공고의 AI 분석을 연 계정만 쓸 수 있다.
+    // 버튼에만 게이트를 두면 이 라우트를 직접 호출해 우회할 수 있어서 여기서도 막는다.
+    // programId 가 없는 범용 작성은 무료 영역이라 그대로 통과시킨다.
+    if (programId) {
+      const { getOptionalUser } = await import("@/lib/auth/verify-token");
+      const { getAnalysisAccess } = await import("@/lib/auth/analysis-access");
+      const user = getOptionalUser(req);
+      const access = await getAnalysisAccess(user?.sub ?? null, programId);
+      if (!access.unlocked) {
+        console.log(`[PSST Chat] 공고 ${programId}: 분석 이용권 없음, 요청 거절`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: "이 공고의 AI 분석을 먼저 열어야 맞춤 인터뷰를 사용할 수 있습니다.",
+            needsAnalysis: true,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const userMessages = (messages || []).filter((m: any) => m.role === "user");
     const lastUserMessage = (userMessages.slice(-1)[0]?.content || "").trim();
     const lastUserLower = lastUserMessage.toLowerCase();

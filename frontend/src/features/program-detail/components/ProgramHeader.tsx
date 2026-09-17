@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import {
   ArrowLeft,
   Share2,
@@ -19,6 +18,9 @@ interface ProgramHeaderProps {
   isBookmarked: boolean;
   bookmarkLoading: boolean;
   onToggleBookmark: () => void;
+  /** 계획서 작성 진입. 링크가 아니라 콜백인 이유는 AI 분석 이용권을 먼저 확인해야 해서다. */
+  onWritePlan: () => void;
+  planGateChecking?: boolean;
 }
 
 export const ProgramHeader: React.FC<ProgramHeaderProps> = ({
@@ -29,6 +31,8 @@ export const ProgramHeader: React.FC<ProgramHeaderProps> = ({
   isBookmarked,
   bookmarkLoading,
   onToggleBookmark,
+  onWritePlan,
+  planGateChecking = false,
 }) => {
   return (
     <div className="flex items-center justify-between flex-wrap gap-3">
@@ -65,14 +69,16 @@ export const ProgramHeader: React.FC<ProgramHeaderProps> = ({
           <span>{isBookmarked ? "찜 완료" : "관심 공고 찜"}</span>
         </button>
 
-        {/* PSST Plan Creation Link */}
-        <Link
-          href={`/consultant?targetTitle=${encodeURIComponent(program.title)}&programId=${encodeURIComponent(program.id)}`}
-          className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm shadow-blue-600/20"
+        {/* PSST 사업계획서 작성 — 바로 넘기지 않고 AI 분석 이용권부터 확인한다 */}
+        <button
+          type="button"
+          onClick={onWritePlan}
+          disabled={planGateChecking}
+          className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm shadow-blue-600/20 disabled:opacity-60 cursor-pointer"
         >
-          <Sparkles className="w-4 h-4" />
+          <Sparkles className={`w-4 h-4 ${planGateChecking ? "animate-pulse" : ""}`} />
           <span>PSST 사업계획서 작성</span>
-        </Link>
+        </button>
       </div>
     </div>
   );
