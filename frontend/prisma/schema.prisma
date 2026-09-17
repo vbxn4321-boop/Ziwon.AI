@@ -2,7 +2,14 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+  // "native" 하나면 충분하다. Vercel 빌드 서버에서 `prisma generate` 가 돌 때
+  // "native" 는 그 서버의 실제 리눅스 배포판으로 알아서 해석된다. 예전에 여기
+  // 4개 타겟을 더 박아놨는데, Vercel 함수는 이 중 하나만 쓰면서도 정적 분석기가
+  // 런타임에 어느 걸 고를지 몰라 존재하는 엔진 파일을 전부 함수 번들에 끼워넣었다.
+  // 실측: 안 쓰는 엔진 4개 = ~74MB, 이걸 Prisma 를 쓰는 API 라우트 12개가 각자
+  // 중복으로 짊어져 배포 1회당 ~890MB 가 순수 낭비로 나갔다. 백엔드(Railway)는
+  // Python 이라 이 클라이언트를 아예 안 쓰므로 다른 배포 타겟을 위한 것도 아니었다.
+  binaryTargets = ["native"]
 }
 
 datasource db {
@@ -12,33 +19,34 @@ datasource db {
 }
 
 model User {
-  id            String              @id @default(uuid())
-  email         String              @unique
-  passwordHash  String?             // PBKDF2 salted password hash
-  name          String?
-  avatarUrl     String?
-  role          String              @default("USER") // USER, CONSULTANT, ADMIN
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  userCompanies UserCompany[]
-  savedPlans    SavedPsstPlan[]
-  bookmarks     BookmarkedProgram[]
+  id              String                @id @default(uuid())
+  email           String                @unique
+  passwordHash    String? // PBKDF2 salted password hash
+  name            String?
+  avatarUrl       String?
+  role            String                @default("USER") // USER, CONSULTANT, ADMIN
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  userCompanies   UserCompany[]
+  savedPlans      SavedPsstPlan[]
+  bookmarks       BookmarkedProgram[]
+  analysisUnlocks UserProgramAnalysis[]
 }
 
 model Company {
   id                String           @id @default(uuid())
   name              String
-  bizRegNo          String?          // 사업자등록번호
-  industryCode      String?          // 표준산업분류코드
-  industry          String?          // 산업분야 (예: AI SaaS, 스마트팜)
-  region            String           // 소재지 (예: 서울특별시, 경기도)
-  foundedDate       DateTime?        // 창업일 (업력 계산용)
-  revenue           Decimal?         // 최근 매출액 (원)
+  bizRegNo          String? // 사업자등록번호
+  industryCode      String? // 표준산업분류코드
+  industry          String? // 산업분야 (예: AI SaaS, 스마트팜)
+  region            String // 소재지 (예: 서울특별시, 경기도)
+  foundedDate       DateTime? // 창업일 (업력 계산용)
+  revenue           Decimal? // 최근 매출액 (원)
   employeeCount     Int              @default(1) // 상시 근로자 수
   isExporting       Boolean          @default(false)
   hasPatents        Boolean          @default(false)
   hasCertifications Boolean          @default(false) // 벤처기업, 여성기업 등
-  coreItemSummary   String?          // 핵심 아이템 설명
+  coreItemSummary   String? // 핵심 아이템 설명
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   userCompanies     UserCompany[]
@@ -59,12 +67,12 @@ model UserCompany {
 model SavedPsstPlan {
   id                 String          @id @default(uuid())
   userId             String
-  title              String          // 사업계획서 제목
-  targetProgramTitle String?         // 목표 지원사업 서식명
-  supportProgramId   String?         // 연계된 지원사업 ID (선택)
-  planJson           String          // PSST 사업계획서 전체 JSON
-  score              Int?            // 심사위원 점수
-  grade              String?         // S, A, B 등급
+  title              String // 사업계획서 제목
+  targetProgramTitle String? // 목표 지원사업 서식명
+  supportProgramId   String? // 연계된 지원사업 ID (선택)
+  planJson           String // PSST 사업계획서 전체 JSON
+  score              Int? // 심사위원 점수
+  grade              String? // S, A, B 등급
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -83,27 +91,28 @@ model BookmarkedProgram {
 }
 
 model SupportProgram {
-  id                String              @id @default(uuid())
-  title             String              // 통합 정규화 사업명
-  organizer         String              // 주관기관 (예: 중소벤처기업부)
-  executingAgency   String?             // 수행기관 (예: 창업진흥원)
-  category          String              // 지원분야 (창업/R&D/수출/인력/금융 등)
-  region            String              // 지원지역 (전국, 광주, 서울 등)
-  targetDescription String?             // 지원대상 요약
-  startDate         DateTime?           // 신청 시작일
-  endDate           DateTime?           // 신청 마감일
-  budget            String?             // 지원규모/금액 요약
-  officialNoticeNo  String?             // 공식 공고번호
-  duplicateStatus   String              @default("UNIQUE") // UNIQUE, MERGE_CANDIDATE
-  canonicalId       String?             // 중복일 경우 대표 사업 ID
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                String                @id @default(uuid())
+  title             String // 통합 정규화 사업명
+  organizer         String // 주관기관 (예: 중소벤처기업부)
+  executingAgency   String? // 수행기관 (예: 창업진흥원)
+  category          String // 지원분야 (창업/R&D/수출/인력/금융 등)
+  region            String // 지원지역 (전국, 광주, 서울 등)
+  targetDescription String? // 지원대상 요약
+  startDate         DateTime? // 신청 시작일
+  endDate           DateTime? // 신청 마감일
+  budget            String? // 지원규모/금액 요약
+  officialNoticeNo  String? // 공식 공고번호
+  duplicateStatus   String                @default("UNIQUE") // UNIQUE, MERGE_CANDIDATE
+  canonicalId       String? // 중복일 경우 대표 사업 ID
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
   sources           SupportSource[]
   documents         SupportDocument[]
   analyses          SupportAnalysis[]
   recommendations   Recommendation[]
   savedPlans        SavedPsstPlan[]
   bookmarks         BookmarkedProgram[]
+  analysisUnlocks   UserProgramAnalysis[]
 
   @@index([endDate])
   @@index([createdAt])
@@ -113,11 +122,11 @@ model SupportProgram {
 model SupportSource {
   id               String         @id @default(uuid())
   supportProgramId String
-  sourceType       String         // K_STARTUP, BIZINFO, NAVER
-  externalId       String         // 외부 출처 고유 ID
-  sourceUrl        String         // 원문 공고 URL
-  rawTitle         String         // 원문 사업명
-  rawData          String         // 수집 원본 raw JSON 데이터
+  sourceType       String // K_STARTUP, BIZINFO, NAVER
+  externalId       String // 외부 출처 고유 ID
+  sourceUrl        String // 원문 공고 URL
+  rawTitle         String // 원문 사업명
+  rawData          String // 수집 원본 raw JSON 데이터
   createdAt        DateTime       @default(now())
   supportProgram   SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
 
@@ -128,13 +137,13 @@ model SupportSource {
 model SupportDocument {
   id               String          @id @default(uuid())
   supportProgramId String
-  fileName         String          // 첨부파일명
-  fileUrl          String          // 첨부파일 다운로드 URL
-  entryPath        String?         // ZIP 첨부파일 내부 경로 (압축 내 개별 문서일 때만)
-  fileType         String          // HWP, PDF, HTML, DOCX
-  fileHash         String?         // 문서 변경 검증용 SHA256 해시
+  fileName         String // 첨부파일명
+  fileUrl          String // 첨부파일 다운로드 URL
+  entryPath        String? // ZIP 첨부파일 내부 경로 (압축 내 개별 문서일 때만)
+  fileType         String // HWP, PDF, HTML, DOCX
+  fileHash         String? // 문서 변경 검증용 SHA256 해시
   status           String          @default("PENDING") // PENDING, PARSED, FAILED
-  extractedText    String?         // 파싱된 전체 원문 텍스트
+  extractedText    String? // 파싱된 전체 원문 텍스트
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   supportProgram   SupportProgram  @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
@@ -161,27 +170,50 @@ model DocumentChunk {
 model SupportAnalysis {
   id                 String         @id @default(uuid())
   supportProgramId   String
-  model              String         // gemini-3.6-flash
-  promptVersion      String         // v1.0
-  sourceDocumentHash String?        // 캐시 무효화 검증용
+  model              String // gemini-3.6-flash
+  promptVersion      String // v1.0
+  sourceDocumentHash String? // 캐시 무효화 검증용
   status             String         @default("COMPLETED") // PENDING, COMPLETED, FAILED
-  resultJson         String         // Gemini AI 분석 결과 JSON
+  resultJson         String // Gemini AI 분석 결과 JSON
   createdAt          DateTime       @default(now())
   supportProgram     SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
 
   @@index([supportProgramId, createdAt])
 }
 
+/// 계정 단위 AI 분석 이용권.
+///
+/// SupportAnalysis 는 공고 단위 캐시라 "누가 분석했는지"를 담지 못한다.
+/// 그래서 계정별로 이 공고의 분석을 열었다는 사실을 따로 남긴다.
+///
+/// 이렇게 나눠두면 과금은 계정별로 하면서 Gemini 호출은 공고당 한 번만
+/// 하게 된다. B 사용자가 A 가 이미 분석한 공고를 열면 토큰은 0원이지만
+/// 이용권 기록은 따로 생긴다.
+model UserProgramAnalysis {
+  id               String         @id @default(uuid())
+  userId           String
+  supportProgramId String
+  /// 이 계정이 분석을 연 시점
+  unlockedAt       DateTime       @default(now())
+  /// 이때 Gemini 를 실제로 호출했는지. false 면 기존 분석을 재사용한 것이다.
+  consumedTokens   Boolean        @default(false)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supportProgram   SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, supportProgramId])
+  @@index([userId, unlockedAt])
+}
+
 model Recommendation {
   id               String         @id @default(uuid())
   companyId        String
   supportProgramId String
-  totalScore       Float          // 0 ~ 100점
+  totalScore       Float // 0 ~ 100점
   hardEligibility  Boolean        @default(true) // 1차 Rule Engine 통과 여부
-  breakdownJson    String         // 항목별 득점표 JSON
-  passedConditions String         // 충족한 조건 목록
-  warningNotices   String?        // 주의/불이익 항목
-  aiReasoning      String?        // 2차 AI 추천 사유 요약
+  breakdownJson    String // 항목별 득점표 JSON
+  passedConditions String // 충족한 조건 목록
+  warningNotices   String? // 주의/불이익 항목
+  aiReasoning      String? // 2차 AI 추천 사유 요약
   createdAt        DateTime       @default(now())
   company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   supportProgram   SupportProgram @relation(fields: [supportProgramId], references: [id], onDelete: Cascade)
@@ -191,8 +223,8 @@ model Recommendation {
 
 model CrawlLog {
   id           String   @id @default(uuid())
-  sourceType   String   // K_STARTUP, BIZINFO
-  status       String   // SUCCESS, FAILED
+  sourceType   String // K_STARTUP, BIZINFO
+  status       String // SUCCESS, FAILED
   itemCount    Int      @default(0)
   errorMessage String?
   executedAt   DateTime @default(now())

@@ -30,6 +30,8 @@ function ConsultantContent() {
   const [selectedPlanToLoad, setSelectedPlanToLoad] = useState<any>(null);
   const [selectedProgramAnalysis, setSelectedProgramAnalysis] = useState<ProgramAnalysisContext | undefined>(undefined);
   const [isFullStudioOpen, setIsFullStudioOpen] = useState(false);
+  /** AI 분석 이용권이 없어 에디터만 여는 모드 (통화: 무료는 에디터만) */
+  const [editorOnly, setEditorOnly] = useState(false);
 
   // Auth Guard
   useEffect(() => {
@@ -69,7 +71,10 @@ function ConsultantContent() {
       setIsFullStudioOpen(true);
     }
 
-    // Receive program analysis from query param (base64 encoded JSON) or sessionStorage
+    // 상세 페이지가 게이트를 통과시키며 붙여 준 표시
+    if (searchParams.get("editorOnly") === "1") setEditorOnly(true);
+
+    // 예전 경로: sessionStorage 로 넘겨받은 분석. 같은 탭에서 넘어올 때만 살아 있다.
     const analysisKey = searchParams.get("analysisKey");
     if (analysisKey) {
       try {
@@ -81,6 +86,47 @@ function ConsultantContent() {
     }
   }, [searchParams]);
 
+  /**
+   * 분석 이용권과 분석 본문을 DB 에서 직접 확인한다.
+   *
+   * 예전에는 sessionStorage 로만 넘겨받아서, 주소로 바로 들어오거나 새로고침하면
+   * 분석이 있어도 못 썼다. 게이트를 붙인 이상 서버 판정이 유일한 근거여야 한다.
+   */
+  useEffect(() => {
+    const progId = searchParams.get("programId") || searchParams.get("id");
+    if (!progId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getJwtToken();
+        if (!token) {
+          if (!cancelled) setEditorOnly(true);
+          return;
+        }
+        const res = await fetch(`/api/support-programs/${progId}/analysis-access`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+
+        if (json?.unlocked) {
+          setEditorOnly(false);
+          if (json.analysis) setSelectedProgramAnalysis(json.analysis);
+        } else {
+          setEditorOnly(true);
+        }
+      } catch {
+        // 확인이 안 되면 보수적으로 에디터만 연다
+        if (!cancelled) setEditorOnly(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
+
   // If user opens the full studio mode
   if (isFullStudioOpen) {
     return (
@@ -90,12 +136,14 @@ function ConsultantContent() {
           initialProgramTitle={selectedTargetProgramForPlan || undefined}
           initialPlanData={selectedPlanToLoad}
           initialProgramAnalysis={selectedProgramAnalysis}
+          editorOnly={editorOnly}
           onBackToNotices={() => {
             setIsFullStudioOpen(false);
             setSelectedPlanToLoad(null);
             setSelectedProgramId("");
             setSelectedTargetProgramForPlan("");
             setSelectedProgramAnalysis(undefined);
+            setEditorOnly(false);
           }}
         />
       </main>

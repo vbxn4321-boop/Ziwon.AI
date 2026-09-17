@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { analyzeProgramWithGemini } from "@/lib/ai/gemini-analyzer";
+import { requireUser } from "@/lib/auth/verify-token";
+import { getCachedAnalysis, grantAnalysisAccess } from "@/lib/auth/analysis-access";
 import { scrapeMissingAttachments } from "@/lib/parser/attachment-scraper";
 import { extractTextFromUrl } from "@/lib/parser/document-parser";
 
@@ -16,6 +18,32 @@ export async function POST(
 
     if (!id) {
       return NextResponse.json({ success: false, error: "Missing program ID" }, { status: 400 });
+    }
+
+    // 이용권은 계정 단위라 누가 요청했는지 알아야 한다.
+    const auth = requireUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ success: false, error: auth.reason }, { status: 401 });
+    }
+    const userId = auth.user.sub;
+
+    // 다른 사용자가 이미 분석해 둔 공고면 Gemini 를 부르지 않는다.
+    // 아래 스크래핑·텍스트 추출까지 전부 건너뛰므로 응답도 훨씬 빠르다.
+    // `force=1` 은 관리자가 낡은 분석을 다시 돌릴 때만 쓴다.
+    const force = req.nextUrl.searchParams.get("force") === "1";
+    if (!force) {
+      const cached = await getCachedAnalysis(id);
+      if (cached) {
+        const granted = await grantAnalysisAccess(userId, id, false);
+        console.log(`[분석] 공고 ${id}: 기존 분석 재사용, Gemini 호출 생략 (토큰 0)`);
+        return NextResponse.json({
+          success: true,
+          reused: true,
+          entitlementRecorded: granted,
+          analysis: cached,
+          result: JSON.parse(cached.resultJson),
+        });
+      }
     }
 
     // 2. Fetch support program, sources, and documents
@@ -148,10 +176,18 @@ ${documentTexts || "첨부파일 원문 텍스트 없음 (기본 공고 정보 �
     console.log(`🤖 [On-Demand AI] Triggering Gemini AI for Program: ${program.title} (Text Length: ${textToAnalyze.length})...`);
 
     // 4. Execute Gemini AI Analysis
-    const aiResult = await analyzeProgramWithGemini(
+    //
+    // documents 배열을 함께 넘긴다. 배치 경로(document-processor)는 이걸 넘겨
+    // extractNoticeForPrompt 가 공고문 본문만 섹션별로 골라내는데, 이 온디맨드
+    // 경로는 documentText 하나만 넘겨서 섹션 분해가 통째로 폴백되고 있었다
+    // (실측: 절감율 89% vs 2%). textToAnalyze 는 K-Startup/기업마당 원문
+    // 메타데이터(structuredSourceText)를 담고 있어 배치 경로엔 없는 정보라
+    // documentText 폴백용으로는 그대로 남겨둔다.
+    const { result: aiResult, modelUsed } = await analyzeProgramWithGemini(
       program.title,
       program.organizer,
-      textToAnalyze
+      textToAnalyze,
+      docs.map((d) => ({ fileName: d.fileName, extractedText: d.extractedText }))
     );
 
     // 5. Save/Update Analysis in DB (replace older records so the latest is always clean)
@@ -162,15 +198,23 @@ ${documentTexts || "첨부파일 원문 텍스트 없음 (기본 공고 정보 �
     const newAnalysis = await prisma.supportAnalysis.create({
       data: {
         supportProgramId: program.id,
-        model: process.env.AI_GENERAL_MODEL || "gemini-3.6-flash",
+        // 카스케이드로 여러 모델을 순서대로 시도하므로, 실제 응답한 모델명을
+        // 그대로 기록한다. 하드코딩하면 후보 1번이 실패해 2번이 응답했을 때
+        // 기록과 실제가 어긋난다.
+        model: modelUsed,
         promptVersion: "v1.0",
         status: "COMPLETED",
         resultJson: JSON.stringify(aiResult),
       },
     });
 
+    // 분석은 이미 저장됐다. 이용권 발급이 실패해도 결과까지 버리지는 않는다.
+    const granted = await grantAnalysisAccess(userId, program.id, true);
+
     return NextResponse.json({
       success: true,
+      reused: false,
+      entitlementRecorded: granted,
       analysis: newAnalysis,
       result: aiResult,
     });

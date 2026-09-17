@@ -13,6 +13,11 @@ export interface PsstPlanGeneratorProps {
   onBackToNotices?: () => void;
   /** 공고 상세 페이지에서 넘어온 경우, 해당 공고의 AI 심층분석 결과를 전달 */
   initialProgramAnalysis?: ProgramAnalysisContext;
+  /**
+   * AI 분석 이용권이 없을 때 켜지는 모드. 챗봇 없이 에디터만 보여준다.
+   * 게이트 판정은 서버가 하고, 여기서는 결과만 받는다.
+   */
+  editorOnly?: boolean;
 }
 
 export interface ChatMessage {

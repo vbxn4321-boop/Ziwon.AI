@@ -402,9 +402,14 @@ export function usePsstPlan(
     const activeSchema = realFormSchema || getStandardFormSchema(formData.targetProgramTitle);
 
     try {
+      // 공고 맞춤 인터뷰는 서버가 분석 이용권을 확인하므로 토큰을 실어 보낸다
+      const chatToken = await getJwtToken();
       const res = await fetch("/api/ai/psst-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(chatToken ? { Authorization: `Bearer ${chatToken}` } : {}),
+        },
         body: JSON.stringify({
           messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
           programId: formData.programId || undefined,
@@ -452,9 +457,32 @@ export function usePsstPlan(
             docScrollRef.current.scrollTop = 0;
           }
         }
+      } else {
+        // 실패 응답을 그냥 삼키면 화면에서는 아무 일도 안 일어난 것처럼 보인다.
+        // 분석 이용권이 없어 거절된 경우(403)가 여기로 온다.
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now() + 1}`,
+            role: "assistant",
+            content:
+              json?.error ||
+              "답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+            timestamp: "방금 전",
+          },
+        ]);
       }
     } catch (err) {
       console.error("Chat error:", err);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `msg-${Date.now() + 1}`,
+          role: "assistant",
+          content: "AI 서버와 통신하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          timestamp: "방금 전",
+        },
+      ]);
     } finally {
       setIsChatSending(false);
     }

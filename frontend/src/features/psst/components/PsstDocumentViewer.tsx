@@ -178,8 +178,10 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
         )}
       </div>
 
-      {/* 목차 — 사이드바 탭이 아니라 사업계획서 영역 안에 둔다.
-          문서 폭을 잡아먹지 않도록 가로 띠 형태로 배치했다. */}
+      {/* 문서 내 이동용 목차. 대화의 목차(어느 칸을 채우는 중인가)와 역할이 달라서
+          이건 생성된 문서를 훑는 스크롤 내비게이션이다. 문서가 없으면 쓸모가
+          없으므로 초안이 나온 뒤에만 띄운다. */}
+      {hasValidPlan && (
       <nav
         aria-label="사업계획서 목차"
         className={`flex-shrink-0 px-4 py-2 flex items-center gap-1.5 overflow-x-auto border-b ${
@@ -202,6 +204,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           </button>
         ))}
       </nav>
+      )}
 
       {/* Main Viewport Content */}
       {hasValidPlan && generatedResult && viewMode === "a4" ? (
