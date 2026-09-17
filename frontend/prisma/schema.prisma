@@ -31,6 +31,7 @@ model User {
   savedPlans      SavedPsstPlan[]
   bookmarks       BookmarkedProgram[]
   analysisUnlocks UserProgramAnalysis[]
+  savedDocuments  SavedDocument[]
 }
 
 model Company {
@@ -113,6 +114,7 @@ model SupportProgram {
   savedPlans        SavedPsstPlan[]
   bookmarks         BookmarkedProgram[]
   analysisUnlocks   UserProgramAnalysis[]
+  savedDocuments    SavedDocument[]
 
   @@index([endDate])
   @@index([createdAt])
@@ -189,6 +191,28 @@ model SupportAnalysis {
 /// 이렇게 나눠두면 과금은 계정별로 하면서 Gemini 호출은 공고당 한 번만
 /// 하게 된다. B 사용자가 A 가 이미 분석한 공고를 열면 토큰은 0원이지만
 /// 이용권 기록은 따로 생긴다.
+/// 사용자가 rhwp 에디터에서 편집해 저장한 문서(HWP/HWPX).
+///
+/// 실제 바이트는 Supabase Storage 버킷("user-documents")에 있고, 여기는
+/// 경로와 메타데이터만 가진다. 계정별 "내 저장소" 목록/다운로드/재편집의
+/// 진입점이다.
+model SavedDocument {
+  id               String          @id @default(uuid())
+  userId           String
+  fileName         String
+  /// Supabase Storage 객체 경로. 버킷 안에서 "{userId}/{id}.{format}" 형태로 둔다.
+  storagePath      String
+  format           String // "hwp" | "hwpx"
+  fileSize         Int
+  supportProgramId String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supportProgram   SupportProgram? @relation(fields: [supportProgramId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+}
+
 model UserProgramAnalysis {
   id               String         @id @default(uuid())
   userId           String

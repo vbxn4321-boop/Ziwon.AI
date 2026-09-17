@@ -28,6 +28,10 @@ export function usePsstPlan(
   const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>("light");
   const [realFormSchema, setRealFormSchema] = useState<FormSchema | null>(null);
   const [realFormDocument, setRealFormDocument] = useState<any>(null);
+  // 첨부 서식 조회가 실제로 진행 중인지. 이게 없으면 "찾음/못 찾음/조회 중"을
+  // 구분할 방법이 없어서, 못 찾은 확정 상태를 화면이 영원히 "불러오는 중"으로
+  // 잘못 표시하는 버그가 있었다.
+  const [isFormSchemaLoading, setIsFormSchemaLoading] = useState(false);
   const [importedPlanText, setImportedPlanText] = useState("");
 
   // Loaded Company Profile State from DB
@@ -92,6 +96,7 @@ export function usePsstPlan(
   useEffect(() => {
     if (!initialProgramId) return;
     let cancelled = false;
+    setIsFormSchemaLoading(true);
     fetch(`/api/ai/psst-schema?programId=${encodeURIComponent(initialProgramId)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
@@ -100,7 +105,10 @@ export function usePsstPlan(
           setRealFormDocument(json.formDocument || null);
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIsFormSchemaLoading(false);
+      });
     return () => { cancelled = true; };
   }, [initialProgramId]);
 
@@ -722,6 +730,7 @@ export function usePsstPlan(
     setCanvasTheme,
     realFormSchema,
     realFormDocument,
+    isFormSchemaLoading,
     importedPlanText,
     setImportedPlanText,
     formData,

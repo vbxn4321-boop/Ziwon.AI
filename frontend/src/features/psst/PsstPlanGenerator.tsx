@@ -29,9 +29,8 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     setCreationMode,
     canvasTheme,
     setCanvasTheme,
-    realFormSchema,
     realFormDocument,
-    setImportedPlanText,
+    isFormSchemaLoading,
     formData,
     setFormData,
     chatMessages,
@@ -309,9 +308,8 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           {/* 3) 계획서 에디터 */}
           <PsstDocumentViewer
             canvasTheme="light"
-            formSchema={realFormSchema}
             formDocument={realFormDocument}
-            onImportedPlanText={setImportedPlanText}
+            isFormSchemaLoading={isFormSchemaLoading}
             activeSection={activeSection}
             generatedResult={generatedResult}
             formData={formData}
