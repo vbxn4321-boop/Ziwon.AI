@@ -1,0 +1,61 @@
+/*
+ * Ziwon.AI 브랜드 재스킨.
+ *
+ * rhwp-studio 는 색상을 :root 커스텀 속성(디자인 토큰)으로 전부 빼놨다.
+ * 원본 코드를 고치지 않고 이 파일 하나로 값만 덮어써서, 스튜디오 다크/기본
+ * 스킨을 우리 앱의 인디고 + 스톤/슬레이트 팔레트에 맞춘다.
+ *
+ * index.html 의 메인 번들 CSS 뒤에 이 파일을 <link> 로 얹어서, 소스 순서상
+ * 같은 특이도의 :root 규칙을 그대로 덮는다. 스튜디오를 다시 빌드해서
+ * VENDORED.md 절차를 다시 밟을 때, 이 파일과 index.html 의 <link> 태그를
+ * 다시 추가해야 한다 — 빌드 산출물이 아니라 우리가 얹은 파일이라
+ * 재빌드하면 사라진다.
+ */
+
+:root {
+  --ui-bg: #fafaf9;
+  --ui-bg-light: #f5f5f4;
+  --ui-surface: #ffffff;
+  --ui-surface-raised: #fafaf9;
+  --ui-surface-muted: #f5f5f4;
+  --ui-border: #e7e5e4;
+  --ui-border-light: #f0efed;
+  --ui-border-subtle: #e7e5e4;
+  --ui-border-strong: #d6d3d1;
+  --ui-text: #1e293b;
+  --ui-text-secondary: #475569;
+  --ui-text-muted: #64748b;
+  --ui-text-hint: #94a3b8;
+  --ui-text-disabled: #cbd5e1;
+  --ui-text-placeholder: #94a3b8;
+  --ui-hover: #f1f5f9;
+  --ui-hover-strong: #e2e8f0;
+  --ui-active: #cbd5e1;
+  --ui-selected: #eef2ff;
+  --ui-menu-open: #4f46e5;
+  --ui-menu-open-border: #6366f1;
+  --ui-toolbar-bg-start: #ffffff;
+  --ui-toolbar-bg-end: #fafaf9;
+  --ui-accent-bg: #eef2ff;
+  --ui-accent-bg-light: #eef2ff;
+  --ui-link: #4f46e5;
+  --focus-ring: #6366f1;
+  --selection-fill: #c7d2fe;
+  --resize-handle: #4f46e5;
+  --table-selection-fill: rgba(79, 70, 229, 0.14);
+  --table-selection-stroke: #4f46e5;
+}
+
+:root[data-theme-effective="dark"] {
+  --ui-selected: #312e81;
+  --ui-menu-open: #6366f1;
+  --ui-menu-open-border: #818cf8;
+  --ui-accent-bg: #312e81;
+  --ui-accent-bg-light: #363681;
+  --ui-link: #a5b4fc;
+  --focus-ring: #818cf8;
+  --selection-fill: #4338ca;
+  --resize-handle: #818cf8;
+  --table-selection-fill: rgba(129, 140, 248, 0.2);
+  --table-selection-stroke: #818cf8;
+}

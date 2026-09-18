@@ -33,6 +33,11 @@ export function usePsstPlan(
   // 잘못 표시하는 버그가 있었다.
   const [isFormSchemaLoading, setIsFormSchemaLoading] = useState(false);
   const [importedPlanText, setImportedPlanText] = useState("");
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [isUploadingPlan, setIsUploadingPlan] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isMappingPlan, setIsMappingPlan] = useState(false);
+  const [mappedPlanPreview, setMappedPlanPreview] = useState<any | null>(null);
 
   // Loaded Company Profile State from DB
   const [userCompany, setUserCompany] = useState<any>(null);
@@ -97,18 +102,26 @@ export function usePsstPlan(
     if (!initialProgramId) return;
     let cancelled = false;
     setIsFormSchemaLoading(true);
-    fetch(`/api/ai/psst-schema?programId=${encodeURIComponent(initialProgramId)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
+    // 이 라우트는 첨부 원문 경로를 내주므로 로그인을 요구한다 — 토큰을 실어 보낸다.
+    void (async () => {
+      const token = await getJwtToken();
+      if (cancelled) return;
+      try {
+        const res = await fetch(
+          `/api/ai/psst-schema?programId=${encodeURIComponent(initialProgramId)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        const json = res.ok ? await res.json() : null;
         if (!cancelled && json?.success) {
           setRealFormSchema(json.schema || null);
           setRealFormDocument(json.formDocument || null);
         }
-      })
-      .catch(() => undefined)
-      .finally(() => {
+      } catch {
+        // 조회 실패는 표준 서식 폴백으로 이어진다 — 화면이 멈추지 않게 조용히 넘긴다.
+      } finally {
         if (!cancelled) setIsFormSchemaLoading(false);
-      });
+      }
+    })();
     return () => { cancelled = true; };
   }, [initialProgramId]);
 
@@ -292,7 +305,6 @@ export function usePsstPlan(
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const [isDirectEditing, setIsDirectEditing] = useState(false);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
@@ -534,13 +546,19 @@ export function usePsstPlan(
       itemDescription: `[사용자와의 1:1 심층 서식 인터뷰 대화 전문]\n${conversationSummary}\n\n위 대화에서 사용자가 직접 언급한 실제 창업 아이템, 타겟 고객, 기술적 차별점, 문제점, 사업 모델을 100% 정확하게 추출하여 PSST 사업계획서 전문을 완성해 주세요.`,
       coreStrengths: (formData.coreStrengths || "").trim() || "대화 속 핵심 기술 및 차별화 요소",
       targetProgramTitle: formData.targetProgramTitle || "2026년 초기창업패키지",
+      // 서버가 이용권을 확인하는 기준이라 반드시 같이 보낸다
+      programId: formData.programId,
       programAnalysis: formData.programAnalysis,
     };
 
     try {
+      const planToken = await getJwtToken();
       const res = await fetch("/api/ai/psst-plan", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(planToken ? { Authorization: `Bearer ${planToken}` } : {}),
+        },
         body: JSON.stringify(inputData),
       });
 
@@ -586,9 +604,13 @@ export function usePsstPlan(
     };
 
     try {
+      const planToken = await getJwtToken();
       const res = await fetch("/api/ai/psst-plan", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(planToken ? { Authorization: `Bearer ${planToken}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -617,9 +639,13 @@ export function usePsstPlan(
     setIsModifying(true);
     try {
       const updatedPrompt = `${formData.itemDescription}\n[추가 수정 요청 사항 for ${activeSection}]: ${modificationText}`;
+      const planToken = await getJwtToken();
       const res = await fetch("/api/ai/psst-plan", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(planToken ? { Authorization: `Bearer ${planToken}` } : {}),
+        },
         body: JSON.stringify({
           ...formData,
           itemDescription: updatedPrompt,
@@ -721,6 +747,117 @@ export function usePsstPlan(
     }));
   };
 
+  // Upload existing business plan (PDF/HWP/HWPX/DOCX/TXT)
+  const uploadExistingPlan = async (file: File) => {
+    if (!file) return;
+    setIsUploadingPlan(true);
+    setUploadError(null);
+
+    try {
+      const token = await getJwtToken();
+      const body = new FormData();
+      body.append("file", file);
+
+      const res = await fetch("/api/ai/import-plan", {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "파일을 업로드하지 못했습니다.");
+      }
+
+      setImportedPlanText(data.text);
+      setUploadedFileName(data.fileName);
+
+      // Add a helpful guidance message to chat
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `msg-import-${Date.now()}`,
+          role: "assistant",
+          content: `📄 **기존 사업계획서 ('${data.fileName}')를 성공적으로 가져왔습니다!**\n- 추출 글자 수: 약 ${data.returnedCharacters?.toLocaleString()}자${data.truncated ? " (최대 길이로 조정됨)" : ""}\n- 개인정보 ${data.maskedCount || 0}건 마스킹 보호 완료\n\n챗봇이 기존 문서 내용을 기억한 채 부족한 항목 위주로 맞춤 질문을 진행합니다. 작성 폼에 항목을 자동으로 채우시려면 **[기존 내용으로 항목 채우기]** 버튼을 눌러주세요.`,
+          timestamp: "방금 전",
+        },
+      ]);
+    } catch (err: any) {
+      setUploadError(err.message || "업로드 중 오류가 발생했습니다.");
+    } finally {
+      setIsUploadingPlan(false);
+    }
+  };
+
+  const clearImportedPlan = () => {
+    setImportedPlanText("");
+    setUploadedFileName(null);
+    setUploadError(null);
+    setMappedPlanPreview(null);
+  };
+
+  const handleAutoMapFromImportedPlan = async () => {
+    if (!importedPlanText || importedPlanText.trim().length < 20) {
+      setUploadError("가져온 사업계획서 내용이 비어 있습니다.");
+      return;
+    }
+    setIsMappingPlan(true);
+    setUploadError(null);
+
+    try {
+      const token = await getJwtToken();
+      const res = await fetch("/api/ai/import-plan/map", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          text: importedPlanText,
+          targetFormSchema: realFormSchema,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.mappedPlan) {
+        throw new Error(data.error || "항목 자동 매핑에 실패했습니다.");
+      }
+
+      setMappedPlanPreview(data.mappedPlan);
+    } catch (err: any) {
+      setUploadError(err.message || "자동 매핑 중 오류가 발생했습니다.");
+    } finally {
+      setIsMappingPlan(false);
+    }
+  };
+
+  const handleApplyMappedFields = (mappedFields: any, overwrite = false) => {
+    if (!mappedFields) return;
+    setFormData((prev) => ({
+      ...prev,
+      itemName: overwrite || !prev.itemName ? mappedFields.itemName || prev.itemName : prev.itemName,
+      itemDescription:
+        overwrite || !prev.itemDescription
+          ? mappedFields.itemDescription || prev.itemDescription
+          : prev.itemDescription,
+      targetCustomer:
+        overwrite || !prev.targetCustomer
+          ? mappedFields.marketAnalysis || prev.targetCustomer
+          : prev.targetCustomer,
+      coreStrengths:
+        overwrite || !prev.coreStrengths
+          ? mappedFields.solutionOverview || prev.coreStrengths
+          : prev.coreStrengths,
+    }));
+    setMappedPlanPreview(null);
+  };
+
+  const handleDismissMappingModal = () => {
+    setMappedPlanPreview(null);
+  };
+
   return {
     userCompany,
     handlePrefillFromCompany,
@@ -733,6 +870,16 @@ export function usePsstPlan(
     isFormSchemaLoading,
     importedPlanText,
     setImportedPlanText,
+    uploadedFileName,
+    isUploadingPlan,
+    uploadError,
+    isMappingPlan,
+    mappedPlanPreview,
+    uploadExistingPlan,
+    clearImportedPlan,
+    handleAutoMapFromImportedPlan,
+    handleApplyMappedFields,
+    handleDismissMappingModal,
     formData,
     setFormData,
     chatMessages,
@@ -747,8 +894,6 @@ export function usePsstPlan(
     errorMessage,
     setErrorMessage,
     isCopied,
-    isDirectEditing,
-    setIsDirectEditing,
     isSavingPlan,
     saveSuccessMsg,
     activeSection,

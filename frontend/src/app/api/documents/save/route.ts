@@ -2,21 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireUser } from "@/lib/auth/verify-token";
 import { prisma } from "@/lib/db";
-import { getSupabaseAdmin, USER_DOCUMENTS_BUCKET } from "@/lib/storage/supabase-admin";
 
 export const maxDuration = 30;
 
 /** base64 인코딩 전 원본 바이트 상한. HWPX 계획서는 보통 수백 KB대라 여유를 둔다. */
 const MAX_BYTES = 15 * 1024 * 1024;
 
+/** 목록·저장 응답에 매번 파일 바이트를 실어 보내지 않기 위한 공통 select. */
+const DOCUMENT_META_SELECT = {
+  id: true,
+  fileName: true,
+  format: true,
+  fileSize: true,
+  supportProgramId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 /**
- * rhwp 에디터에서 편집한 문서를 사용자 계정 저장소에 저장한다.
+ * rhwp 에디터에서 편집한 문서를 사용자 계정에 저장한다.
  *
- * 바이트는 Supabase Storage에, 메타데이터는 `SavedDocument`에 남긴다.
- * `id`를 함께 보내면 같은 문서를 덮어써 갱신하고(재저장), 없으면 새로 만든다.
+ * 별도 오브젝트 스토리지(서비스 롤 키·버킷) 없이 바이트를 그대로 DB 컬럼에
+ * 담는다. `id`를 함께 보내면 같은 문서를 덮어써 갱신하고(재저장), 없으면
+ * 새로 만든다.
  */
 export async function POST(req: NextRequest) {
-  const auth = requireUser(req);
+  const auth = await requireUser(req);
   if (!auth.ok) {
     return NextResponse.json({ success: false, error: auth.reason }, { status: 401 });
   }
@@ -38,7 +49,10 @@ export async function POST(req: NextRequest) {
 
     // 이 계정 소유가 아닌 id로 덮어쓰려는 시도를 막는다.
     if (existingId) {
-      const existing = await prisma.savedDocument.findUnique({ where: { id: existingId } });
+      const existing = await prisma.savedDocument.findUnique({
+        where: { id: existingId },
+        select: { userId: true },
+      });
       if (existing && existing.userId !== userId) {
         return NextResponse.json({ success: false, error: "이 문서에 대한 권한이 없습니다." }, { status: 403 });
       }
@@ -56,32 +70,20 @@ export async function POST(req: NextRequest) {
     }
 
     const id = existingId || randomUUID();
-    const storagePath = `${userId}/${id}.${format}`;
-
-    const supabase = getSupabaseAdmin();
-    const { error: uploadError } = await supabase.storage
-      .from(USER_DOCUMENTS_BUCKET)
-      .upload(storagePath, bytes, {
-        contentType: format === "hwpx" ? "application/vnd.hancom.hwpx" : "application/x-hwp",
-        upsert: true,
-      });
-    if (uploadError) {
-      console.error("[문서 저장] Storage 업로드 실패:", uploadError.message);
-      return NextResponse.json({ success: false, error: "저장소 업로드에 실패했습니다." }, { status: 500 });
-    }
 
     const saved = await prisma.savedDocument.upsert({
       where: { id },
-      update: { fileName, fileSize: bytes.length, format, storagePath },
+      update: { fileName, fileSize: bytes.length, format, content: bytes },
       create: {
         id,
         userId,
         fileName,
         fileSize: bytes.length,
         format,
-        storagePath,
+        content: bytes,
         supportProgramId: supportProgramId || null,
       },
+      select: DOCUMENT_META_SELECT,
     });
 
     return NextResponse.json({ success: true, document: saved });

@@ -15,8 +15,6 @@ interface PsstDocumentViewerProps {
   generatedResult: PsstBusinessPlanResult | null;
   formData: PsstFormData;
   isGenerating?: boolean;
-  isDirectEditing: boolean;
-  setIsDirectEditing: React.Dispatch<React.SetStateAction<boolean>>;
   docScrollRef: React.RefObject<HTMLDivElement | null>;
   sectionRefs: Record<PsstSectionKey, React.RefObject<HTMLDivElement | null>>;
   onScrollToSection: (sec: PsstSectionKey) => void;
@@ -41,8 +39,6 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
   generatedResult,
   formData,
   isGenerating = false,
-  isDirectEditing,
-  setIsDirectEditing,
   docScrollRef,
   sectionRefs,
   onScrollToSection,

@@ -96,7 +96,7 @@ ${extraction.promptText}${stageNote}
 export async function POST(req: NextRequest) {
   try {
     // 비인가 대량 호출로 Gemini 비용이 새는 것을 막습니다.
-    const blocked = guardAiRoute(req, "ai/psst-chat", LIGHT_LIMITS);
+    const blocked = await guardAiRoute(req, "ai/psst-chat", LIGHT_LIMITS);
     if (blocked) return blocked;
 
     const apiKey = process.env.GEMINI_API_KEY || "";
@@ -111,24 +111,32 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { messages, generatePlan, targetProgramTitle, programId, currentPlan, existingPlanText } = body;
 
-    // 공고 맞춤 인터뷰는 그 공고의 AI 분석을 연 계정만 쓸 수 있다.
-    // 버튼에만 게이트를 두면 이 라우트를 직접 호출해 우회할 수 있어서 여기서도 막는다.
+    // 공고 맞춤 인터뷰는 그 공고의 AI 분석을 연 계정만 쓸 수 있다 — 단, 유료
+    // 티어링이 아직 사업적으로 확정 전이라 지금은 판정만 하고 막지는 않는다
+    // (ENTITLEMENT_ENFORCED, 기본 꺼짐). 버튼에만 게이트를 두면 이 라우트를
+    // 직접 호출해 우회할 수 있어서, 켜졌을 때는 여기서도 막아야 한다.
     // programId 가 없는 범용 작성은 무료 영역이라 그대로 통과시킨다.
     if (programId) {
       const { getOptionalUser } = await import("@/lib/auth/verify-token");
       const { getAnalysisAccess } = await import("@/lib/auth/analysis-access");
-      const user = getOptionalUser(req);
+      const { ENTITLEMENT_ENFORCED } = await import("@/lib/auth/entitlement-flag");
+      const user = await getOptionalUser(req);
       const access = await getAnalysisAccess(user?.sub ?? null, programId);
       if (!access.unlocked) {
-        console.log(`[PSST Chat] 공고 ${programId}: 분석 이용권 없음, 요청 거절`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: "이 공고의 AI 분석을 먼저 열어야 맞춤 인터뷰를 사용할 수 있습니다.",
-            needsAnalysis: true,
-          },
-          { status: 403 }
+        console.log(
+          `[PSST Chat] 공고 ${programId}: 분석 이용권 없음 ` +
+            `(강제 적용 ${ENTITLEMENT_ENFORCED ? "ON — 거절" : "OFF — 통과시킴"})`
         );
+        if (ENTITLEMENT_ENFORCED) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "이 공고의 AI 분석을 먼저 열어야 맞춤 인터뷰를 사용할 수 있습니다.",
+              needsAnalysis: true,
+            },
+            { status: 403 }
+          );
+        }
       }
     }
 

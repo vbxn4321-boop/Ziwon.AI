@@ -7,7 +7,8 @@ import { getCandidateModels } from "@/lib/ai/models";
 export async function POST(req: NextRequest) {
   try {
     // 비인가 대량 호출로 Gemini 비용이 새는 것을 막습니다.
-    const blocked = guardAiRoute(req, "ai/match", LIGHT_LIMITS);
+    // 내 기업 정보와 공고를 비교하는 기능이라 비로그인으로 쓸 이유가 없다.
+    const blocked = await guardAiRoute(req, "ai/match", { ...LIGHT_LIMITS, requireLogin: true });
     if (blocked) return blocked;
 
     const body = await req.json();

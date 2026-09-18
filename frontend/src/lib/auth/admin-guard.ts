@@ -96,7 +96,7 @@ export async function verifyAdminRequest(req: NextRequest): Promise<AdminAuthRes
     }
 
     // 2. JWT 검증 (서명 + 만료 + 토큰 종류). 검증 실패 시 폴백 없이 거부합니다.
-    const verified = verifyAccessToken(token);
+    const verified = await verifyAccessToken(token);
     if (!verified.valid) {
       return {
         authorized: false,

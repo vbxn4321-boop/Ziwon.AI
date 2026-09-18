@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth/verify-token";
 
 export async function GET(req: NextRequest) {
+  // 이용권(유료)까지 요구하지는 않는다 — 분석을 안 연 계정도 에디터 전용 모드에서
+  // 첨부 원문은 봐야 하기 때문이다. 다만 첨부파일 목록·원문 경로가 나가는
+  // 라우트라 로그인은 요구한다. (/consultant 자체가 로그인 전용 화면이다)
+  const auth = await requireUser(req);
+  if (!auth.ok) {
+    return NextResponse.json({ success: false, error: auth.reason }, { status: 401 });
+  }
+
   const programId = req.nextUrl.searchParams.get("programId");
   if (!programId) return NextResponse.json({ success: false, error: "programId가 필요합니다." }, { status: 400 });
 

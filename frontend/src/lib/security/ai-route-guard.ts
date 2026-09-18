@@ -42,12 +42,12 @@ export interface AiGuardOptions {
 /**
  * 통과하면 null, 막아야 하면 그대로 반환할 NextResponse 를 돌려줍니다.
  */
-export function guardAiRoute(
+export async function guardAiRoute(
   req: NextRequest,
   routeName: string,
   options: AiGuardOptions
-): NextResponse | null {
-  const user = getOptionalUser(req);
+): Promise<NextResponse | null> {
+  const user = await getOptionalUser(req);
 
   if (!user && options.requireLogin) {
     return NextResponse.json(

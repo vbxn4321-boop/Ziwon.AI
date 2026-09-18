@@ -8,15 +8,24 @@
  *   4. type 클레임 미검증 → refresh 토큰이 access 토큰으로 통과하던 문제 차단
  *
  * Supabase OAuth 토큰(Google/Kakao 소셜 로그인)에 대해:
- *   Supabase JWT 는 JWT_SECRET 이 아니라 Supabase 프로젝트 키로 서명되므로
- *   여기서는 검증할 수 없고, 검증 없이 통과시키는 것은 곧 인증 우회입니다.
- *   따라서 현재는 명시적으로 거부합니다. 소셜 로그인 사용자에게 보호된 API를
- *   열어주려면 JWKS 기반 검증(jose + <project>.supabase.co/auth/v1/.well-known/jwks.json)
- *   또는 SUPABASE_JWT_SECRET 기반 HS256 검증을 별도로 추가해야 합니다.
+ *   Supabase JWT 는 JWT_SECRET 이 아니라 Supabase 프로젝트 자신의 키(이 프로젝트는
+ *   ES256 비대칭키)로 서명되므로, 우리 자체 HMAC 검증으로는 볼 수 없다. 예전엔
+ *   이걸 서명 검증 없이 통과시키던 실제 보안 구멍이 있었고, 그걸 막은 뒤로는
+ *   소셜 로그인 자체가 보호된 API를 하나도 못 쓰는 상태로 방치돼 있었다
+ *   (2026-09-17 실측: 구글로 로그인한 계정이 auth.users 에는 있는데 대응하는
+ *   public.User 행이 없었다 — 로그인은 되는데 아무것도 못 하는 상태).
+ *
+ *   지금은 토큰의 iss 클레임(서명 검증 전, 판단용으로만 봄)으로 두 경로를
+ *   가른다. "/auth/v1" 이 있으면 Supabase JWKS 로, 아니면 우리 자체 HMAC 으로
+ *   검증한다. Supabase 쪽이 검증되면 이메일로 우리 public.User 를 찾거나
+ *   새로 만들어(findOrCreateUserForSocialLogin) sub 를 우리 쪽 id 로 바꿔치기
+ *   한다 — 이 앱의 모든 쿼리가 sub 를 public.User.id 로 가정하고 있어서다.
  */
 
 import crypto from "crypto";
 import type { NextRequest } from "next/server";
+import { peekIssuer, verifySupabaseToken } from "@/lib/auth/supabase-jwt";
+import { findOrCreateUserForSocialLogin } from "@/lib/auth/provision-social-user";
 
 export interface AccessTokenPayload {
   sub: string;
@@ -39,10 +48,8 @@ function signaturesMatch(expected: string, actual: string): boolean {
   return crypto.timingSafeEqual(expectedBuf, actualBuf);
 }
 
-/**
- * Access Token 을 검증합니다. 서명·만료·토큰 종류를 모두 확인합니다.
- */
-export function verifyAccessToken(token: string): VerifyResult {
+/** 우리 자체 HMAC 서명 토큰 검증. 서명·만료·토큰 종류를 모두 확인합니다. */
+function verifyOwnToken(token: string): VerifyResult {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
     // 시크릿이 없으면 어떤 토큰도 신뢰할 수 없습니다. 통과시키지 않습니다.
@@ -89,6 +96,38 @@ export function verifyAccessToken(token: string): VerifyResult {
   return { valid: true, payload: data };
 }
 
+/**
+ * Access Token 을 검증합니다. 우리 자체 토큰과 Supabase 소셜 로그인 토큰을
+ * 모두 받아들입니다 — 판단 기준은 검증 전에 들여다본 iss 클레임입니다.
+ *
+ * Supabase 쪽이면 서명 검증 후 이메일로 우리 public.User 를 찾거나 새로
+ * 만들어서, 반환하는 payload.sub 는 항상 public.User.id 공간의 값이 되도록
+ * 맞춥니다 — 호출부는 두 경로를 구분할 필요가 없습니다.
+ */
+export async function verifyAccessToken(token: string): Promise<VerifyResult> {
+  const issuer = peekIssuer(token);
+  if (issuer && issuer.includes("/auth/v1")) {
+    const result = await verifySupabaseToken(token);
+    if (!result.valid) return result;
+    if (!result.payload.email) {
+      return { valid: false, reason: "소셜 로그인 토큰에 이메일이 없습니다." };
+    }
+    const user = await findOrCreateUserForSocialLogin(result.payload.email, result.payload.name);
+    return {
+      valid: true,
+      payload: {
+        sub: user.id,
+        email: user.email,
+        name: user.name || undefined,
+        role: user.role,
+        type: "access",
+      },
+    };
+  }
+
+  return verifyOwnToken(token);
+}
+
 /** Authorization: Bearer <token> 에서 토큰만 꺼냅니다. */
 export function extractBearerToken(req: NextRequest): string | null {
   const authHeader = req.headers.get("authorization");
@@ -109,19 +148,19 @@ export function extractBearerToken(req: NextRequest): string | null {
  * 구분하지 못합니다. 만료는 클라이언트가 조용히 리프레시하면 되는 상황이라
  * 호출부가 구분할 수 있어야 합니다.
  */
-export function requireUser(
+export async function requireUser(
   req: NextRequest
-): { ok: true; user: AccessTokenPayload } | { ok: false; reason: string } {
+): Promise<{ ok: true; user: AccessTokenPayload } | { ok: false; reason: string }> {
   const token = extractBearerToken(req);
   if (!token) return { ok: false, reason: "로그인이 필요합니다." };
-  const result = verifyAccessToken(token);
+  const result = await verifyAccessToken(token);
   if (!result.valid) return { ok: false, reason: `유효하지 않은 인증 토큰입니다. (${result.reason})` };
   return { ok: true, user: result.payload };
 }
 
-export function getOptionalUser(req: NextRequest): AccessTokenPayload | null {
+export async function getOptionalUser(req: NextRequest): Promise<AccessTokenPayload | null> {
   const token = extractBearerToken(req);
   if (!token) return null;
-  const result = verifyAccessToken(token);
+  const result = await verifyAccessToken(token);
   return result.valid ? result.payload : null;
 }

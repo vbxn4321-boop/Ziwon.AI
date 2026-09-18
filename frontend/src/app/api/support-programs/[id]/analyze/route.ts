@@ -21,7 +21,7 @@ export async function POST(
     }
 
     // 이용권은 계정 단위라 누가 요청했는지 알아야 한다.
-    const auth = requireUser(req);
+    const auth = await requireUser(req);
     if (!auth.ok) {
       return NextResponse.json({ success: false, error: auth.reason }, { status: 401 });
     }
