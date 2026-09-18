@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 
 /** 이 계정이 저장해 둔 문서 목록 ("내 저장소"). */
 export async function GET(req: NextRequest) {
-  const auth = requireUser(req);
+  const auth = await requireUser(req);
   if (!auth.ok) {
     return NextResponse.json({ success: false, error: auth.reason }, { status: 401 });
   }

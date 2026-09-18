@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: false, error: "공고 ID가 없습니다." }, { status: 400 });
     }
 
-    const user = getOptionalUser(req);
+    const user = await getOptionalUser(req);
     const access = await getAnalysisAccess(user?.sub ?? null, id);
 
     // 열려 있으면 분석 본문까지 같이 준다. 계획서 작성 화면이 이걸 그대로 쓰므로

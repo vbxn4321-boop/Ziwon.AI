@@ -8,6 +8,11 @@ import {
   CheckCircle2,
   RefreshCw,
   User,
+  Upload,
+  FileText,
+  X,
+  Loader2,
+  Wand2,
 } from "lucide-react";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import {
@@ -31,6 +36,13 @@ interface PsstChatPanelProps {
   onGenerateFromChat: () => void;
   onQuickSuggestion: (sugg: string) => void;
   onScrollToSection: (sec: PsstSectionKey) => void;
+  uploadedFileName?: string | null;
+  isUploadingPlan?: boolean;
+  uploadError?: string | null;
+  isMappingPlan?: boolean;
+  onUploadExistingPlan?: (file: File) => void;
+  onClearImportedPlan?: () => void;
+  onAutoMapPlan?: () => void;
 }
 
 export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
@@ -47,12 +59,40 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
   onGenerateFromChat,
   onQuickSuggestion,
   onScrollToSection,
+  uploadedFileName = null,
+  isUploadingPlan = false,
+  uploadError = null,
+  isMappingPlan = false,
+  onUploadExistingPlan,
+  onClearImportedPlan,
+  onAutoMapPlan,
 }) => {
   const totalFields = interviewProgress.totalFields || 5;
   const completedFields = interviewProgress.completedCount || 0;
   const interviewReady = completedFields >= totalFields;
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onUploadExistingPlan) {
+      onUploadExistingPlan(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fbfbfa] text-slate-900">
+      {/* Hidden File Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,.hwpx,.hwp,.txt"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Chat Header Sub-Banner */}
       <div className="p-4 bg-white border-b border-stone-200 flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between flex-shrink-0">
         <div className="flex-1 min-w-0 flex items-center space-x-2 px-1">
@@ -63,16 +103,81 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onGenerateFromChat}
-          disabled={isGenerating}
-          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-50 flex-shrink-0 cursor-pointer"
-        >
-          <Sparkles className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin" : ""}`} />
-          <span>{isGenerating ? "초안 생성 중..." : interviewReady ? "초안 만들기" : "지금까지 답변으로 초안 만들기"}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Plan Upload Button */}
+          {!uploadedFileName && onUploadExistingPlan && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingPlan}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 font-medium text-[11px] transition-all flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer"
+              title="기존 사업계획서(PDF, HWP, HWPX, DOCX, TXT)를 업로드하여 챗봇 참고자료 및 자동 완성에 활용합니다"
+            >
+              {isUploadingPlan ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+              ) : (
+                <Upload className="w-3.5 h-3.5 text-slate-500" />
+              )}
+              <span>{isUploadingPlan ? "문서 분석 중..." : "기존 계획서 가져오기"}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onGenerateFromChat}
+            disabled={isGenerating}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-50 flex-shrink-0 cursor-pointer shadow-sm"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin" : ""}`} />
+            <span>{isGenerating ? "초안 생성 중..." : interviewReady ? "초안 만들기" : "지금까지 답변으로 초안 만들기"}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Uploaded File Badge & Auto-mapping Action */}
+      {uploadedFileName && (
+        <div className="px-4 py-2 bg-indigo-50/80 border-b border-indigo-100 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+          <div className="flex items-center space-x-1.5 min-w-0 text-indigo-900 font-medium">
+            <FileText className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+            <span className="text-slate-500 font-normal">참고 문서:</span>
+            <span className="truncate max-w-[200px] font-semibold">{uploadedFileName}</span>
+            {onClearImportedPlan && (
+              <button
+                type="button"
+                onClick={onClearImportedPlan}
+                className="p-0.5 rounded text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 cursor-pointer transition-colors"
+                title="참고 문서 해제"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {onAutoMapPlan && (
+            <button
+              type="button"
+              onClick={onAutoMapPlan}
+              disabled={isMappingPlan}
+              className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[10px] transition-colors flex items-center space-x-1 disabled:opacity-50 cursor-pointer shadow-sm"
+              title="업로드된 사업계획서 내용을 분석하여 작성 폼의 빈 항목을 자동으로 채웁니다"
+            >
+              {isMappingPlan ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Wand2 className="w-3 h-3" />
+              )}
+              <span>{isMappingPlan ? "항목 매핑 중..." : "기존 내용으로 항목 채우기"}</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Upload Error Banner */}
+      {uploadError && (
+        <div className="px-4 py-2 bg-rose-50 border-b border-rose-200 text-rose-700 text-[11px] flex items-center justify-between">
+          <span>⚠️ {uploadError}</span>
+        </div>
+      )}
 
       {/* Compact document status, keeping the conversation as the primary action. */}
       <div className="px-4 py-2 bg-white border-b border-stone-200 flex items-center gap-3 flex-shrink-0 text-[11px]">

@@ -44,12 +44,12 @@ function makeToken(payload: Record<string, unknown>, secret = SECRET): string {
 const future = Math.floor(Date.now() / 1000) + 3600;
 const past = Math.floor(Date.now() / 1000) - 10;
 
-function runJwtChecks() {
+async function runJwtChecks() {
   console.log("\n[1] JWT 검증 — 관리자 인증 우회 차단");
 
   check(
     "정상 access 토큰은 통과",
-    verifyAccessToken(makeToken({ sub: "u1", type: "access", exp: future })).valid
+    (await verifyAccessToken(makeToken({ sub: "u1", type: "access", exp: future }))).valid
   );
 
   // 실제 취약점: 서명 없이 Supabase 토큰인 척하던 페이로드
@@ -63,36 +63,38 @@ function runJwtChecks() {
 
   check(
     "위조 Supabase 토큰(aud=authenticated, 서명 없음) 거부",
-    !verifyAccessToken(`${forgedHeader}.${forgedPayload}.anysignaturehere`).valid
+    !(await verifyAccessToken(`${forgedHeader}.${forgedPayload}.anysignaturehere`)).valid
   );
 
   check(
-    "iss=supabase 위조 토큰 거부",
-    !verifyAccessToken(
-      `${forgedHeader}.${b64({ sub: "x", iss: "https://x.supabase.co", exp: future })}.zzz`
+    "iss=/auth/v1 위조 토큰 거부 (진짜 우리 프로젝트 JWKS 서명이 아니므로 실패해야 함)",
+    !(
+      await verifyAccessToken(
+        `${forgedHeader}.${b64({ sub: "x", iss: "https://x.supabase.co/auth/v1", aud: "authenticated", exp: future })}.zzz`
+      )
     ).valid
   );
 
   check(
     "refresh 토큰을 access 자리에 쓰면 거부",
-    !verifyAccessToken(makeToken({ sub: "u1", type: "refresh", exp: future })).valid
+    !(await verifyAccessToken(makeToken({ sub: "u1", type: "refresh", exp: future }))).valid
   );
 
   check(
     "만료된 토큰 거부",
-    !verifyAccessToken(makeToken({ sub: "u1", type: "access", exp: past })).valid
+    !(await verifyAccessToken(makeToken({ sub: "u1", type: "access", exp: past }))).valid
   );
 
   check(
     "다른 시크릿으로 서명한 토큰 거부",
-    !verifyAccessToken(makeToken({ sub: "u1", type: "access", exp: future }, "wrong-secret")).valid
+    !(await verifyAccessToken(makeToken({ sub: "u1", type: "access", exp: future }, "wrong-secret"))).valid
   );
 
   // timingSafeEqual 길이 불일치 크래시 회귀 방지
   let threw = false;
   let shortSigAccepted = true;
   try {
-    shortSigAccepted = verifyAccessToken(`${forgedHeader}.${forgedPayload}.x`).valid;
+    shortSigAccepted = (await verifyAccessToken(`${forgedHeader}.${forgedPayload}.x`)).valid;
   } catch {
     threw = true;
   }
@@ -102,8 +104,8 @@ function runJwtChecks() {
     threw ? "예외 발생(timingSafeEqual 길이 불일치)" : ""
   );
 
-  check("점 3개가 아닌 토큰 거부", !verifyAccessToken("not.a.valid.jwt.at.all").valid);
-  check("빈 문자열 거부", !verifyAccessToken("").valid);
+  check("점 3개가 아닌 토큰 거부", !(await verifyAccessToken("not.a.valid.jwt.at.all")).valid);
+  check("빈 문자열 거부", !(await verifyAccessToken("")).valid);
 }
 
 async function expectBlocked(url: string, label: string) {
@@ -140,7 +142,7 @@ async function runSsrfChecks() {
 }
 
 async function main() {
-  runJwtChecks();
+  await runJwtChecks();
   await runSsrfChecks();
   console.log(`\n결과: ${passed}건 통과, ${failed}건 실패\n`);
   process.exit(failed > 0 ? 1 : 0);

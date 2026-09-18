@@ -68,27 +68,175 @@ export function extractTextFromHWPX(buffer: Buffer): string {
   }
 }
 
+export type HwpParseStatus =
+  | "PARSED"
+  | "ENCRYPTED"
+  | "DISTRIBUTION"
+  | "INVALID_HEADER"
+  | "NO_BODY_TEXT"
+  | "EMPTY_TEXT"
+  | "CORRUPTED";
+
+export interface HwpFileFlags {
+  compressed: boolean | null;
+  encrypted: boolean;
+  distribution: boolean;
+  validHeader: boolean;
+}
+
+export interface HwpParseResult {
+  text: string;
+  status: HwpParseStatus;
+  validHeader: boolean;
+  compressed: boolean | null;
+  encrypted: boolean;
+  distribution: boolean;
+  sectionCount: number;
+}
+
 /**
- * High-accuracy binary HWP 5.0 (OLE5 CFBF Compound Document) Text Extractor
- * Decompresses Section streams using zlib, skips extended control binary headers,
- * and decodes clean UTF-16LE Korean & ASCII text without garbage tokens.
+ * HWP 5.0 FileHeader 플래그를 해석한다.
+ * FileHeader 스트림 (256바이트)의 36번째 오프셋 uint32 속성 플래그:
+ * - bit 0: 압축 여부 (1=압축, 0=비압축)
+ * - bit 1: 암호 설정 여부 (1=암호화)
+ * - bit 2: 배포용 문서 여부 (1=배포용 DRM)
  */
-export function extractTextFromHWP(buffer: Buffer): string {
+export function readHwpFileFlags(cfb: ReturnType<typeof CFB.read>): HwpFileFlags {
+  if (!cfb || !cfb.FullPaths || !cfb.FileIndex) {
+    return { compressed: null, encrypted: false, distribution: false, validHeader: false };
+  }
+  const headerIdx = cfb.FullPaths.findIndex((p) =>
+    /\/FileHeader$/i.test(p.replace(/\\/g, "/"))
+  );
+  if (headerIdx < 0) {
+    return { compressed: null, encrypted: false, distribution: false, validHeader: false };
+  }
+  const entry = cfb.FileIndex[headerIdx];
+  if (!entry?.content || entry.content.length < 40) {
+    return { compressed: null, encrypted: false, distribution: false, validHeader: false };
+  }
+  const buf = Buffer.from(entry.content);
+  // HWP 5.0 서명: "HWP Document File" (0x00~0x11)
+  const sig = buf.subarray(0, 18).toString("latin1");
+  if (!sig.startsWith("HWP Document File")) {
+    return { compressed: null, encrypted: false, distribution: false, validHeader: false };
+  }
+  const flags = buf.readUInt32LE(36);
+  return {
+    compressed: (flags & 0x01) !== 0,
+    encrypted: (flags & 0x02) !== 0,
+    distribution: (flags & 0x04) !== 0,
+    validHeader: true,
+  };
+}
+
+// HWP 5.0 HWPTAG_PARA_TEXT 레코드 제어 코드 분류 (한컴 HWP 5.0 규격 표 6)
+// 인라인 컨트롤: 첫 WCHAR(2바이트)를 읽은 후 남은 7 WCHAR(14바이트) skip
+const INLINE_CONTROLS = new Set([4, 5, 6, 7, 8, 9, 19, 20]);
+// 확장 컨트롤: 첫 WCHAR(2바이트)를 읽은 후 남은 7 WCHAR(14바이트) skip
+const EXTENDED_CONTROLS = new Set([1, 2, 3, 11, 12, 14, 15, 16, 17, 18, 21, 22, 23]);
+
+/**
+ * HWP 5.0 정밀 파서 및 상세 진단 함수.
+ */
+export function parseHwpWithDetails(buffer: Buffer): HwpParseResult {
   try {
-    // 1. If HWP file is actually an HWPX (ZIP) with .hwp extension
+    // 1. ZIP 기반 HWPX가 .hwp 확장자로 들어온 경우
     const hwpxAttempt = extractTextFromHWPX(buffer);
     if (hwpxAttempt && hwpxAttempt.length > 50) {
-      return hwpxAttempt;
+      return {
+        text: hwpxAttempt,
+        status: "PARSED",
+        validHeader: true,
+        compressed: true,
+        encrypted: false,
+        distribution: false,
+        sectionCount: 1,
+      };
     }
 
-    // 2. Parse OLE Compound Document
-    const cfb = CFB.read(buffer, { type: "buffer" });
-    const sectionEntries = cfb.FileIndex.filter((entry) =>
-      entry.name.includes("BodyText/Section") || entry.name.includes("Section")
-    );
+    // 2. OLE Compound Document (CFB) 파싱
+    let cfb: ReturnType<typeof CFB.read>;
+    try {
+      cfb = CFB.read(buffer, { type: "buffer" });
+    } catch {
+      return {
+        text: "",
+        status: "CORRUPTED",
+        validHeader: false,
+        compressed: null,
+        encrypted: false,
+        distribution: false,
+        sectionCount: 0,
+      };
+    }
+
+    if (!cfb || !cfb.FullPaths || !cfb.FileIndex) {
+      return {
+        text: "",
+        status: "CORRUPTED",
+        validHeader: false,
+        compressed: null,
+        encrypted: false,
+        distribution: false,
+        sectionCount: 0,
+      };
+    }
+
+    // 3. FileHeader 플래그 검사
+    const flags = readHwpFileFlags(cfb);
+
+    if (flags.encrypted) {
+      console.warn("[HWP] 암호화된 문서입니다. 파싱을 중단합니다.");
+      return {
+        text: "",
+        status: "ENCRYPTED",
+        validHeader: flags.validHeader,
+        compressed: flags.compressed,
+        encrypted: true,
+        distribution: flags.distribution,
+        sectionCount: 0,
+      };
+    }
+
+    if (flags.distribution) {
+      console.warn("[HWP] 배포용(DRM) 문서입니다. 파싱을 중단합니다.");
+      return {
+        text: "",
+        status: "DISTRIBUTION",
+        validHeader: flags.validHeader,
+        compressed: flags.compressed,
+        encrypted: flags.encrypted,
+        distribution: true,
+        sectionCount: 0,
+      };
+    }
+
+    // 4. Section 탐색: FullPaths 기반 정규식 매칭 및 숫자 기준 정렬 (Section0, Section1, ...)
+    const sectionEntries = cfb.FullPaths
+      .map((fullPath, index) => ({
+        fullPath: fullPath.replace(/\\/g, "/"),
+        entry: cfb.FileIndex[index],
+      }))
+      .filter(({ fullPath }) => /\/BodyText\/Section\d+$/i.test(fullPath))
+      .sort((a, b) => {
+        const numA = parseInt(a.fullPath.match(/Section(\d+)$/i)?.[1] || "0", 10);
+        const numB = parseInt(b.fullPath.match(/Section(\d+)$/i)?.[1] || "0", 10);
+        return numA - numB;
+      })
+      .map(({ entry }) => entry)
+      .filter(Boolean);
 
     if (sectionEntries.length === 0) {
-      return "";
+      return {
+        text: "",
+        status: flags.validHeader ? "NO_BODY_TEXT" : "INVALID_HEADER",
+        validHeader: flags.validHeader,
+        compressed: flags.compressed,
+        encrypted: flags.encrypted,
+        distribution: flags.distribution,
+        sectionCount: 0,
+      };
     }
 
     let fullText = "";
@@ -99,17 +247,23 @@ export function extractTextFromHWP(buffer: Buffer): string {
       const rawBuf = Buffer.from(entry.content);
       let decompressed: Buffer;
 
-      try {
-        decompressed = zlib.inflateRawSync(rawBuf);
-      } catch {
+      if (flags.compressed === false) {
+        // 비압축 문서: 스트림 직접 사용
+        decompressed = rawBuf;
+      } else {
+        // 압축 또는 헤더 미확인(null): inflateRawSync -> inflateSync -> raw fallback
         try {
-          decompressed = zlib.inflateSync(rawBuf);
+          decompressed = zlib.inflateRawSync(rawBuf);
         } catch {
-          decompressed = rawBuf;
+          try {
+            decompressed = zlib.inflateSync(rawBuf);
+          } catch {
+            decompressed = rawBuf;
+          }
         }
       }
 
-      // Parse HWP 5.0 Paragraph records from decompressed buffer
+      // HWP 5.0 레코드 스트림 파싱
       let text = "";
       let offset = 0;
 
@@ -131,9 +285,9 @@ export function extractTextFromHWP(buffer: Buffer): string {
           break;
         }
 
-        // Tag ID 67: HWPTAG_PARA_TEXT (Paragraph text content in UTF-16LE)
+        // Tag ID 67: HWPTAG_PARA_TEXT (UTF-16LE 텍스트)
         if (tagId === 67) {
-          const textBuf = decompressed.slice(offset, offset + size);
+          const textBuf = decompressed.subarray(offset, offset + size);
           let paraText = "";
           let i = 0;
 
@@ -144,13 +298,25 @@ export function extractTextFromHWP(buffer: Buffer): string {
             if (charCode === 10 || charCode === 13) {
               paraText += "\n";
             } else if (charCode === 9) {
+              // 탭: 공백 2개로 보존하되, 인라인 컨트롤이므로 남은 14바이트 skip
               paraText += "  ";
+              if (i + 14 > textBuf.length) break;
+              i += 14;
+            } else if (INLINE_CONTROLS.has(charCode) || EXTENDED_CONTROLS.has(charCode)) {
+              // 인라인/확장 컨트롤: 남은 7 WCHAR(14바이트) skip
+              if (i + 14 > textBuf.length) break;
+              i += 14;
+            } else if (charCode === 24) {
+              // 하이픈 (문자 컨트롤 24)
+              paraText += "-";
+            } else if (charCode === 30 || charCode === 31) {
+              // 묶음 빈칸 (30), 고정폭 빈칸 (31)
+              paraText += " ";
             } else if (charCode < 32) {
-              // Skip 12 words (24 bytes) of extended control properties
-              i += 24;
+              // 단일 WCHAR 제어문자 (0, 25~29 등): 속성 데이터 없음
               continue;
             } else {
-              // Accept only valid Hangul, ASCII, Numbers, and Korean special punctuation & symbols
+              // 유효 한글, ASCII, 기호 및 문장부호
               const isHangul =
                 (charCode >= 0xac00 && charCode <= 0xd7af) ||
                 (charCode >= 0x3130 && charCode <= 0x318f) ||
@@ -183,10 +349,34 @@ export function extractTextFromHWP(buffer: Buffer): string {
       }
     }
 
-    return sanitizeUtf8(fullText);
+    const sanitized = sanitizeUtf8(fullText);
+    return {
+      text: sanitized,
+      status: sanitized.length > 0 ? "PARSED" : "EMPTY_TEXT",
+      validHeader: flags.validHeader,
+      compressed: flags.compressed,
+      encrypted: flags.encrypted,
+      distribution: flags.distribution,
+      sectionCount: sectionEntries.length,
+    };
   } catch (err: any) {
-    return "";
+    return {
+      text: "",
+      status: "CORRUPTED",
+      validHeader: false,
+      compressed: null,
+      encrypted: false,
+      distribution: false,
+      sectionCount: 0,
+    };
   }
+}
+
+/**
+ * High-accuracy binary HWP 5.0 (OLE5 CFBF Compound Document) Text Extractor
+ */
+export function extractTextFromHWP(buffer: Buffer): string {
+  return parseHwpWithDetails(buffer).text;
 }
 
 /**

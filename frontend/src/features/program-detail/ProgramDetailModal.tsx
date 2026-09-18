@@ -608,7 +608,10 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
     try {
       const res = await fetch("/api/ai/match", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           company: comp,
           program: selectedProgram,

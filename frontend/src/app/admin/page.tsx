@@ -71,7 +71,9 @@ interface AdminStats {
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"merged" | "queue" | "logs">("merged");
+  const [activeTab, setActiveTab] = useState<"merged" | "queue" | "logs" | "system">("merged");
+  const [systemCheck, setSystemCheck] = useState<any>(null);
+  const [isSystemChecking, setIsSystemChecking] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -130,6 +132,19 @@ export default function AdminDashboardPage() {
       console.error("Failed to load admin stats:", err);
     } finally {
       if (!isBackground) setIsLoading(false);
+    }
+  };
+
+  const runSystemCheck = async () => {
+    setIsSystemChecking(true);
+    try {
+      const res = await authFetch("/api/admin/system-check", { cache: "no-store" });
+      const json = await res.json();
+      setSystemCheck(json.success ? json.data : { error: json.error || "시스템 점검에 실패했습니다." });
+    } catch (error) {
+      setSystemCheck({ error: error instanceof Error ? error.message : "시스템 점검에 실패했습니다." });
+    } finally {
+      setIsSystemChecking(false);
     }
   };
 
@@ -918,7 +933,48 @@ export default function AdminDashboardPage() {
             >
               📜 크롤러 수집 파이프라인 로그 ({stats?.crawlLogs.length || 0}건)
             </button>
+            <button
+              onClick={() => { setActiveTab("system"); if (!systemCheck) void runSystemCheck(); }}
+              className={`pb-3 px-4 text-xs font-bold transition-all relative cursor-pointer ${
+                activeTab === "system" ? "text-emerald-400 border-b-2 border-emerald-500" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              🩺 시스템 빠른 점검
+            </button>
           </div>
+
+          {activeTab === "system" && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/70 p-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-extrabold text-white">개발자 시스템 빠른 점검</h2>
+                  <p className="text-xs text-slate-400 mt-1">데이터를 변경하지 않고 DB, 환경설정, 대기열, FastAPI 연결만 확인합니다.</p>
+                </div>
+                <button onClick={() => void runSystemCheck()} disabled={isSystemChecking} className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-white flex items-center gap-2">
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSystemChecking ? "animate-spin" : ""}`} />
+                  다시 점검
+                </button>
+              </div>
+              {systemCheck?.error ? (
+                <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-4 text-xs text-rose-300">{systemCheck.error}</div>
+              ) : systemCheck ? (
+                <div className="grid gap-3">
+                  {systemCheck.checks.map((check: any) => (
+                    <div key={check.name} className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {check.status === "PASS" ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : check.status === "WARN" ? <AlertTriangle className="w-5 h-5 text-amber-400" /> : <AlertCircle className="w-5 h-5 text-rose-400" />}
+                        <div><p className="text-xs font-bold text-slate-200">{check.name}</p><p className="text-xs text-slate-400 mt-1">{check.detail}</p></div>
+                      </div>
+                      <span className="text-[11px] text-slate-500 whitespace-nowrap">{check.durationMs}ms</span>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-slate-500">최근 점검: {new Date(systemCheck.checkedAt).toLocaleString("ko-KR")}</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-8 text-center text-xs text-slate-400">점검을 준비하고 있습니다...</div>
+              )}
+            </div>
+          )}
 
           {activeTab === "merged" && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl">

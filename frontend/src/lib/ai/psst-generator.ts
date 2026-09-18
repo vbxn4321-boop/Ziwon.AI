@@ -48,6 +48,12 @@ export interface PsstGeneratorInput {
   itemDescription: string;
   coreStrengths?: string;
   targetProgramTitle?: string;
+  /**
+   * 연계 공고 ID. 이용권(유료) 확인의 기준이다 — 제목 매칭은 fuzzy 라
+   * 게이트 판정에 쓸 수 없어서 id 를 따로 받는다. 없으면 공고와 무관한
+   * 범용 작성으로 보고 무료 영역으로 통과시킨다.
+   */
+  programId?: string;
   /** 연계 공고의 AI 심층분석 데이터 — 공고 특성에 맞춘 맞춤형 사업계획서 작성에 사용 */
   programAnalysis?: ProgramAnalysisContext;
   /** 공고문/서식에서 추출된 맞춤 목차 목록 */

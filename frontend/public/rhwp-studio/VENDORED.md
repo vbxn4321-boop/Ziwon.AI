@@ -51,6 +51,25 @@ MSYS_NO_PATHCONV=1 RHWP_WITHOUT_HWPCTRL=1 npx vite build --base=/rhwp-studio/
 안에서의 postMessage 브리지·메뉴 UI 자체는 이 세션에서 실제 브라우저로
 띄워보지는 못했다 — 처음 통합할 때 한 번은 실제로 열어서 확인 필요.
 
+## studioUrl 은 index.html 을 직접 가리켜야 한다
+
+`/rhwp-studio/`(디렉터리 형태)로 주면 Next.js 가 trailingSlash 기본
+설정 때문에 `/rhwp-studio` 로 308 리다이렉트하는데, `public/` 정적
+서빙은 디렉터리 인덱스 파일을 자동으로 안 찾아줘서 리다이렉트 직후
+404 가 난다. `RhwpEditorPanel.tsx` 에서 `studioUrl: "/rhwp-studio/index.html"`
+처럼 파일을 직접 지정해야 한다. 빌드가 `--base=/rhwp-studio/` 라 에셋
+참조는 전부 절대경로라, 문서 URL이 `index.html` 로 끝나도 문제없다.
+
+## Ziwon.AI 브랜드 재스킨
+
+`ziwon-theme.css` 와 `index.html` 안의 그 stylesheet `<link>` 태그는
+빌드 산출물이 아니라 우리가 직접 얹은 파일이다. rhwp-studio 는 색상을
+`:root` 커스텀 속성(디자인 토큰, `src/styles/base.css`)으로 빼놨는데,
+그 값을 이 파일에서 인디고/스톤 팔레트로 덮어써서 우리 앱과 톤을
+맞췄다. **studio 를 다시 빌드하면 이 폴더가 통째로 새로 생성되므로,
+`ziwon-theme.css` 를 다시 복사하고 `index.html` 에 그 `<link>` 태그를
+다시 추가해야 한다** — 안 하면 재스킨이 조용히 사라진다.
+
 ## 업그레이드하려면
 
 `@rhwp/core`를 업그레이드하면 이 폴더도 같은 버전으로 다시 빌드해야

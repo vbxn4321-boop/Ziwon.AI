@@ -10,7 +10,7 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     // 비인가 대량 호출로 Gemini 비용이 새는 것을 막습니다.
-    const blocked = guardAiRoute(req, "ai/psst-plan", HEAVY_LIMITS);
+    const blocked = await guardAiRoute(req, "ai/psst-plan", HEAVY_LIMITS);
     if (blocked) return blocked;
 
     const body: PsstGeneratorInput = await req.json();
@@ -20,6 +20,36 @@ export async function POST(req: NextRequest) {
         { success: false, error: "창업 아이템명과 핵심 설명은 필수 입력 항목입니다." },
         { status: 400 }
       );
+    }
+
+    // 공고 맞춤 계획서 생성은 그 공고의 AI 분석을 연 계정만 쓸 수 있다 —
+    // 단, 유료 티어링이 아직 사업적으로 확정 전이라 지금은 판정만 하고
+    // 막지는 않는다(ENTITLEMENT_ENFORCED, 기본 꺼짐). 켜지면 psst-chat 에만
+    // 게이트를 두는 것으로는 부족하다 — 실제 생성(가장 비싼 Gemini 호출)이
+    // 여기서 일어나므로 이 라우트를 직접 불러 우회할 수 있기 때문이다.
+    // programId 가 없으면 공고와 무관한 범용 작성이라 무료 영역으로 통과시킨다.
+    if (body.programId) {
+      const { getOptionalUser } = await import("@/lib/auth/verify-token");
+      const { getAnalysisAccess } = await import("@/lib/auth/analysis-access");
+      const { ENTITLEMENT_ENFORCED } = await import("@/lib/auth/entitlement-flag");
+      const user = await getOptionalUser(req);
+      const access = await getAnalysisAccess(user?.sub ?? null, body.programId);
+      if (!access.unlocked) {
+        console.log(
+          `[PSST Plan] 공고 ${body.programId}: 분석 이용권 없음 ` +
+            `(강제 적용 ${ENTITLEMENT_ENFORCED ? "ON — 거절" : "OFF — 통과시킴"})`
+        );
+        if (ENTITLEMENT_ENFORCED) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "이 공고의 AI 분석을 먼저 열어야 맞춤 계획서를 생성할 수 있습니다.",
+              needsAnalysis: true,
+            },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     console.log(`🚀 [PSST Plan API] Generating business plan for: ${body.itemName}...`);

@@ -141,48 +141,72 @@ Python은 SQLAlchemy 생 SQL, TS는 Prisma로 **같은 DB를 각자 다른 ORM�
 
 ## 6. 알려진 채무 (해결 안 됨, 우선순위 순)
 
-1. **`ai/*` 라우트 대부분 무인증** — `psst-chat`은 이용권을 재확인하도록 고쳤지만
-   `psst-plan`, `psst-schema`, `match`, `import-plan`은 여전히 열려 있다. 유료
-   티어링을 넓히려면 여기부터 막아야 한다.
-2. **첨부 본문 확보율 53%** (2026-09-16 실측, 문서 5,186건 중 2,430건 텍스트 없음).
-   HWP가 2,562건 중 1,231건 공백으로 단일 최대 항목 — 구형 HWP 바이너리 파서가
-   가장 수익이 큰 다음 작업.
-   - `form-schema-parser.ts`(서식 **칸 구조** 파서)는 AdmZip+fast-xml-parser로
-     HWPX(ZIP+XML)만 읽는다. 구버전 바이너리 HWP(OLE2/CFB, 매직바이트
-     `D0CF11E0...`)는 `load-form-schema.ts`의 `PK` 매직바이트 체크에서 걸러져
-     `loadRealFormSchema()`가 항상 null을 반환한다.
-     **주의: 이건 "이 프로젝트가 바이너리 HWP를 못 읽는다"는 뜻이 아니다.**
-     상세 페이지 뷰어가 쓰는 `@rhwp/core`(Rust/WASM 엔진, `RhwpPageViewer` →
-     `rhwp-engine.ts`)는 바이너리 HWP를 정식 지원하고 `getTableDimensions`/
-     `getTextInCell`/`getSectionCount` 같은 구조 읽기 API도 있다 — 즉 표 구조
-     추출이 원천적으로 불가능한 게 아니라, **서식 칸 파서가 이 엔진을 아직
-     안 쓰고 있을 뿐**이다. `@rhwp/core`는 현재 브라우저 전용
-     (`rhwp-engine.ts`가 `window` 없으면 즉시 throw, canvas 폰트 측정 때문)이라
-     서버(API 라우트)에서 도는 `form-schema-parser.ts`가 바로 재사용은 못
-     하고, 서버 호환 초기화 경로를 새로 만들어야 한다 — 미착수, 실제 손봐야
-     할 작업.
-     (2026-09-17 실측 사례: `c29d9630-62fc-45fe-88b3-3c101f2e5dbd`, 첨부 2건
-     전부 바이너리 HWP.)
-   - 실제 서식 구조를 못 찾으면 챗봇(`psst-chat`)은 표준 PSST 템플릿으로
-     조용히 폴백하는데, 문서 패널(`PsstDocumentViewer`)에는 대응하는 폴백이
-     없어 "실제 서식을 불러오는 중입니다"가 영구 정지 상태로 표시되는 버그가
-     있었다 → 같은 날 수정. `isFormSchemaLoading` 플래그로 "조회 중"과
-     "확정적으로 못 찾음"을 구분하고, 후자일 때 문서 패널도 챗봇과 동일하게
-     표준 스키마로 폴백한다.
-   - 별개로, `/api/ai/psst-schema` 라우트가 "화면에 원문으로 보여줄 파일"도
-     서식 후보와 같은 좁은 파일명 필터(`사업계획서`/`신청서`)로 골라서, 이름이
-     "사업 안내서"·"사업 공고문"처럼 다른 공고는 실제 첨부가 있는데도
-     `formDocument`가 null이 돼 "원본 서식 보기" 탭 자체가 안 떴다 (상세
-     페이지는 이런 필터가 없어 같은 파일이 정상 표시됨). "서식 후보 판정"과
-     "뷰어에 보여줄 파일 선정"은 기준이 다르다는 게 핵심 — 전자는 구조 파싱
-     성공 여부가 걸려 있어 엄격해야 하지만 후자는 그냥 보여만 주는 것이라
-     느슨해도 된다. 같은 날 수정: 후자에 "위 필터에 안 걸리면 이미지가 아닌
-     첨부 중 아무거나" 최후 폴백을 추가.
+> 2026-09-18 갱신: 1번(ai/* 무인증)과 4번(파서 테스트 0), 5번(빈 디렉터리)은
+> 해결했다. 아래 1번은 기록으로 남기고 해결 내용을 함께 적는다.
+
+1. ~~**`ai/*` 라우트 대부분 무인증**~~ → **로그인 요구는 2026-09-18 해결.
+   이용권(유료) 강제 차단은 대표님 방침에 따라 보류 — 아래 참고.**
+   - `psst-plan`: `programId`가 있으면 이용권을 조회는 하지만, 지금은
+     `ENTITLEMENT_ENFORCED`(`entitlement-flag.ts`, 기본 꺼짐)가 꺼져 있어
+     막지는 않는다. 켜졌을 때를 대비해 코드는 만들어뒀다 — **로그만 남기고
+     통과시킨다.** `PsstGeneratorInput`에 `programId`를 추가했다 — 제목
+     매칭은 fuzzy 라 게이트 판정 기준으로 쓸 수 없다.
+   - `psst-schema`: 로그인 필수. 이용권까지는 요구하지 않는다 — 분석을 안 연
+     계정도 에디터 전용 모드에서 첨부 원문은 봐야 하기 때문이다.
+   - `match`: `guardAiRoute`의 `requireLogin: true` 사용.
+   - `import-plan`: 로그인 필수.
+   - **`ENTITLEMENT_ENFORCED` 관련 경위**: 09-18에 처음 psst-plan을 손볼 때
+     이 이용권 체크를 곧바로 403 하드 블록으로 넣었다가 지적받았다 — 유료
+     티어링이 아직 사업적으로 확정 전이라 "이용권 확인 로직은 만들어두되
+     실제로 막는 건 나중에" 가 방침이었다. psst-chat 에 이미 있던 동일한
+     하드 블록(09-16~17에 추가)도 같은 이유로 함께 꺼졌다. 이제 둘 다
+     `ENTITLEMENT_ENFORCED=1` 환경변수 하나로 언제든 켤 수 있다 — 코드
+     수정 없이. 실측 확인(dev 서버): 이용권 없는 공고로 psst-plan·psst-chat
+     둘 다 200으로 통과함(이전엔 403).
+     로그인 자체(토큰 없음)는 여전히 401로 막는다 — 이건 이용권과 별개다.
+2. **첨부 본문 HWP 5.0 정밀 파서 개선 완료** (2026-09-18 갱신)
+   - 실측 기준선: HWP 총 2,634건 중 PARSED 1,391건(텍스트 보유율 100%), READY 21건(100%), PENDING 1,222건(상세페이지 URL 등 파싱 대기 1,213건).
+   - 실제 바이너리 파싱 시도 대비 추출 성공률: **100.00% (1,391/1,391)**.
+   - `document-parser.ts` HWP 5.0 공식 스펙(Revision 1.3 표 6) 전면 개선:
+     - Section 탐색을 `cfb.FullPaths` 기반으로 교체 (`/\/BodyText\/Section\d+$/i`, Section0, Section1 숫자 기준 정렬).
+     - `readHwpFileFlags`: FileHeader 서명(`"HWP Document File"`) 및 속성 플래그 36번 오프셋 판별 (bit 0: 압축, bit 1: 암호화, bit 2: 배포용 DRM).
+     - 암호화 / 배포용 문서 감지 시 `ENCRYPTED` / `DISTRIBUTION` 상태로 조기 안전 중단.
+     - 비압축 문서(`compressed === false`) 스트림 직접 파싱 경로 구현.
+     - HWPTAG_PARA_TEXT 제어문자 정밀화: 인라인/확장 컨트롤 남은 7 WCHAR(14바이트) skip, 탭(`\t` -> 2 spaces + 14바이트 skip), 문자 컨트롤 24(하이픈 `-`), 30/31(공백 ` `) 텍스트 보존.
 3. **AI 분석 배치가 5건/시간** — 신규 유입 69건/일 대비 배치 처리량 120건/일이라
    순증은 하지만, 기존 백로그(3천여 건)를 줄이려면 배치 크기 상향이 필요.
    (다만 대표님 방침상 AI 분석은 유료화 대상이라 우선순위는 보류 중.)
-4. **파서 테스트 커버리지 0** — `form-schema-parser.ts`, `notice-extractor.ts`는
-   최근 변경이 가장 잦은 파일인데 자동 테스트가 없다. 검증을 매번 임시 스크립트로
-   DB를 조회해 확인하는 중 (`scripts/__tmp-*.ts`, 확인 후 삭제하는 관례).
-5. **`frontend/src/components/psst/`** — `features/psst`로 이전 후 안 지운 빈
-   디렉터리 (git 미추적, import 없음).
+4. ~~**파서 테스트 커버리지 0**~~ → **2026-09-18 해결**. `npm test` 12개 → 49개 전체 통과.
+   - `scripts/tests/hwp-parser.test.cjs`: 합성 OLE CFB 픽스처(암호화, 배포용, 비압축, 14바이트 skip, 하이픈/공백 보존, 다중 Section 정렬, 확장 크기 레코드, 손상 버퍼).
+   - `scripts/tests/upload-validation.test.cjs`: 업로드 15MB 초과, 확장자 위조, 매직바이트, 일반 ZIP 거부, ZIP 폭탄(500개 엔트리, 30MB/100MB 크기), 바이너리 TXT 거부.
+   - `scripts/tests/import-plan-route.test.cjs`: 401 비로그인, 400 누락, 415 위조, 200 개인정보 마스킹 및 절단 메타데이터.
+   - `scripts/tests/import-plan-map.test.cjs`: 401 비로그인, 400 짧은 텍스트, Zod 스키마 검증.
+   - `scripts/tests/notice-extractor.test.cjs` & `form-schema-parser.test.cjs`.
+5. ~~**`frontend/src/components/psst/`**~~ → **2026-09-18 삭제 완료**.
+
+## 7. 기존 사업계획서 업로드 및 자동 매핑 파이프라인 (2026-09-18 신규)
+
+```
+사용자 파일 업로드 (PDF, HWP, HWPX, DOCX, TXT)
+   │
+   ▼
+[1단계: upload-validator.ts 엄격 검증]
+   ├ 크기 검사 (최대 15MB)
+   ├ 매직바이트 검증 (%PDF, OLE CFB, ZIP+HWPX XML, ZIP+DOCX XML)
+   ├ 일반 ZIP 압축파일 거부 (단일 문서 전용)
+   ├ ZIP 폭탄 방어 (엔트리 500개, 단일 30MB, 전체 100MB 제한)
+   └ 바이너리 TXT 거부 (NULL 바이트 및 비출력 문자 비율 검사)
+   │
+   ▼
+[2단계: document-parser.ts 텍스트 추출 + notice-extractor.ts 마스킹]
+   ├ HWP 5.0 / HWPX / PDF / DOCX 텍스트 추출
+   ├ maskPersonalInfo(): 주민번호, 휴대폰, 이메일, 담당자 실명 마스킹
+   └ 120,000자 상한 절단 및 원본/반환 메타데이터 응답
+   │
+   ▼
+[3단계: 챗봇 프롬프트 및 자동 매핑 연계]
+   ├ psst-chat: 기존 문서 내용을 existingPlanText로 챗봇에 전달 (기존 내용 기반 맞춤 인터뷰)
+   ├ /api/ai/import-plan/map: Gemini FAST 모델 카스케이드로 구조화 PSST JSON 매핑 추출
+   ├ Zod 스키마(MappedPsstPlanSchema) 검증
+   └ 클라이언트 미리보기 모달(PsstMappingModal)에서 사용자 승인 후 빈 필드만 안전하게 채움
+```

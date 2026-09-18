@@ -10,6 +10,7 @@ import { PsstChatPanel } from "./components/PsstChatPanel";
 import { PsstFormPanel } from "./components/PsstFormPanel";
 import { PsstDocumentViewer } from "./components/PsstDocumentViewer";
 import { PsstConversationOutline } from "./components/PsstConversationOutline";
+import { PsstMappingModal } from "./components/PsstMappingModal";
 import SavedPlansModal from "@/components/auth/SavedPlansModal";
 
 export { TARGET_PROGRAM_FORMATS } from "./constants";
@@ -31,6 +32,16 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     setCanvasTheme,
     realFormDocument,
     isFormSchemaLoading,
+    uploadedFileName,
+    isUploadingPlan,
+    uploadError,
+    isMappingPlan,
+    mappedPlanPreview,
+    uploadExistingPlan,
+    clearImportedPlan,
+    handleAutoMapFromImportedPlan,
+    handleApplyMappedFields,
+    handleDismissMappingModal,
     formData,
     setFormData,
     chatMessages,
@@ -43,8 +54,6 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     generatedResult,
     errorMessage,
     isCopied,
-    isDirectEditing,
-    setIsDirectEditing,
     isSavingPlan,
     saveSuccessMsg,
     activeSection,
@@ -253,6 +262,13 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
                     onGenerateFromChat={handleGenerateFromChat}
                     onQuickSuggestion={handleQuickSuggestion}
                     onScrollToSection={scrollToSection}
+                    uploadedFileName={uploadedFileName}
+                    isUploadingPlan={isUploadingPlan}
+                    uploadError={uploadError}
+                    isMappingPlan={isMappingPlan}
+                    onUploadExistingPlan={uploadExistingPlan}
+                    onClearImportedPlan={clearImportedPlan}
+                    onAutoMapPlan={handleAutoMapFromImportedPlan}
                   />
                 ) : (
                   <PsstFormPanel
@@ -314,8 +330,6 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
             generatedResult={generatedResult}
             formData={formData}
             isGenerating={isGenerating}
-            isDirectEditing={isDirectEditing}
-            setIsDirectEditing={setIsDirectEditing}
             docScrollRef={docScrollRef}
             sectionRefs={sectionRefs}
             onScrollToSection={scrollToSection}
@@ -336,6 +350,15 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           handleLoadPlan(plan);
           setShowVaultModal(false);
         }}
+      />
+
+      {/* Auto-Mapping Preview & Confirmation Modal */}
+      <PsstMappingModal
+        isOpen={!!mappedPlanPreview}
+        onClose={handleDismissMappingModal}
+        mappedPlan={mappedPlanPreview}
+        currentFormData={formData}
+        onApply={handleApplyMappedFields}
       />
       <style jsx global>{`
         .psst-studio button { transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
