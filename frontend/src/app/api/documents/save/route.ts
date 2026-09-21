@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
     if (!fileName || typeof fileName !== "string") {
       return NextResponse.json({ success: false, error: "fileName이 필요합니다." }, { status: 400 });
     }
-    if (format !== "hwp" && format !== "hwpx") {
-      return NextResponse.json({ success: false, error: "format은 hwp 또는 hwpx여야 합니다." }, { status: 400 });
+    if (format !== "hwp" && format !== "hwpx" && format !== "pdf") {
+      return NextResponse.json({ success: false, error: "format은 hwp, hwpx, pdf 중 하나여야 합니다." }, { status: 400 });
     }
     if (!contentBase64 || typeof contentBase64 !== "string") {
       return NextResponse.json({ success: false, error: "contentBase64가 필요합니다." }, { status: 400 });

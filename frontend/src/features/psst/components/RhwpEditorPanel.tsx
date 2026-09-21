@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, Save, Download, FileText, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, Save, Download, FileText, AlertCircle, CheckCircle2, ExternalLink, FilePlus2 } from "lucide-react";
 import type { RhwpEditor } from "@rhwp/editor";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import { buildDownloadUrl } from "@/lib/documents/download";
@@ -38,6 +38,17 @@ interface RhwpEditorPanelProps {
   savedDocumentId?: string | null;
   onSaved?: (documentId: string) => void;
   getAuthToken: () => Promise<string | null>;
+  /** PDF/DOCX 등 편집기가 못 여는 첨부. 빈 화면일 때 원문 링크로 안내한다. */
+  unopenableDocuments?: { fileName: string; fileUrl: string; entryPath?: string | null }[];
+  /** 열 첨부가 없을 때 "표준 서식으로 새로 시작"에 쓸 정보. */
+  programTitle?: string;
+  programId?: string;
+  /** PDF 서식 위에 직접 입력하는 화면으로 전환. PDF일 때만 노출한다. */
+  onFillPdf?: (doc: { fileName: string; fileUrl: string; entryPath?: string | null }) => void;
+}
+
+function isPdf(fileName: string): boolean {
+  return /\.pdf$/i.test(fileName);
 }
 
 type LoadState = "idle" | "loading" | "ready" | "error";
@@ -49,6 +60,10 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
   savedDocumentId = null,
   onSaved,
   getAuthToken,
+  unopenableDocuments = [],
+  programTitle,
+  programId,
+  onFillPdf,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<RhwpEditor | null>(null);
@@ -58,13 +73,23 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
   const [saveError, setSaveError] = useState("");
   // 다시 저장할 때 같은 Storage 객체에 덮어쓰기 위한 id. 처음 저장하면 서버가 만들어 준 id로 갱신한다.
   const [documentId, setDocumentId] = useState<string | null>(savedDocumentId);
+  // 열 첨부가 없을 때 사용자가 "표준 서식으로 새로 시작"을 직접 눌렀는가.
+  // 예: 공고문 서식이 PDF뿐이라 편집기로는 원본을 못 여는 경우 — 그렇다고
+  // 아무것도 못 쓰게 두면 안 되니, 우리 표준 PSST 구조로 된 빈 문서를 대신 연다.
+  const [blankStarted, setBlankStarted] = useState(false);
+
+  // 부모가 준 source(첨부 원문 또는 AI 완성본)가 우선이고, 그게 없을 때만
+  // 사용자가 직접 시작한 빈 표준 서식을 쓴다. 나중에 AI가 계획서를 완성하면
+  // source 가 채워지면서 자연히 그쪽으로 넘어간다.
+  const effectiveSource: DocumentSource =
+    source ?? (blankStarted ? { kind: "generated", plan: {} as PsstBusinessPlanResult, programTitle, programId } : null);
 
   /** source 를 식별하는 안정적인 키. 참조가 매번 바뀌는 객체라 effect 의존성으로 못 쓴다. */
-  const sourceKey = !source
+  const sourceKey = !effectiveSource
     ? "none"
-    : source.kind === "generated"
-    ? `generated:${source.plan?.overview?.title || ""}`
-    : `attachment:${source.fileUrl}:${source.entryPath || ""}`;
+    : effectiveSource.kind === "generated"
+    ? `generated:${effectiveSource.plan?.overview?.title || ""}:${blankStarted ? "blank" : "ai"}`
+    : `attachment:${effectiveSource.fileUrl}:${effectiveSource.entryPath || ""}`;
 
   // 스튜디오 마운트. source 가 바뀌어도 iframe 은 그대로 두고 loadFile 만 다시 부른다 —
   // README 경고대로 컨테이너를 옮기거나 다시 만들면 편집 상태가 날아간다.
@@ -107,7 +132,7 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
         if (cancelled) return;
       }
       const editor = editorRef.current;
-      if (!editor || !source) return;
+      if (!editor || !effectiveSource) return;
 
       setLoadState("loading");
       setLoadError("");
@@ -115,28 +140,28 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
         let bytes: ArrayBuffer;
         let fileName: string;
 
-        if (source.kind === "generated") {
+        if (effectiveSource.kind === "generated") {
           const res = await fetch("/api/export/hwpx", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              plan: source.plan,
-              programTitle: source.programTitle,
-              programId: source.programId,
+              plan: effectiveSource.plan,
+              programTitle: effectiveSource.programTitle,
+              programId: effectiveSource.programId,
             }),
           });
           if (!res.ok) throw new Error(`문서 조립 실패 (HTTP ${res.status})`);
           bytes = await res.arrayBuffer();
-          fileName = `${source.plan?.overview?.title || "PSST_사업계획서"}.hwpx`;
+          fileName = `${effectiveSource.plan?.overview?.title || "PSST_사업계획서"}.hwpx`;
         } else {
           const proxyUrl = buildDownloadUrl(
-            { fileUrl: source.fileUrl, entryPath: source.entryPath },
-            { view: true, fileName: source.fileName }
+            { fileUrl: effectiveSource.fileUrl, entryPath: effectiveSource.entryPath },
+            { view: true, fileName: effectiveSource.fileName }
           );
           const res = await fetch(proxyUrl);
           if (!res.ok) throw new Error(`파일을 불러오지 못했습니다 (HTTP ${res.status})`);
           bytes = await res.arrayBuffer();
-          fileName = source.fileName;
+          fileName = effectiveSource.fileName;
         }
 
         if (cancelled) return;
@@ -144,7 +169,7 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
         if (cancelled) return;
         setLoadState("ready");
         // 새 문서를 열었으니 이전 문서의 저장 대상 id는 더 이상 유효하지 않다.
-        setDocumentId(source.kind === "generated" ? savedDocumentId : null);
+        setDocumentId(effectiveSource.kind === "generated" ? savedDocumentId : null);
       } catch (err: any) {
         if (!cancelled) {
           setLoadState("error");
@@ -175,10 +200,10 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
 
       const token = await getAuthToken();
       const fileName =
-        source?.kind === "generated"
-          ? `${source.plan?.overview?.title || "PSST_사업계획서"}.hwpx`
-          : source?.kind === "attachment"
-          ? source.fileName.replace(/\.[^.]+$/, ".hwpx")
+        effectiveSource?.kind === "generated"
+          ? `${effectiveSource.plan?.overview?.title || "PSST_사업계획서"}.hwpx`
+          : effectiveSource?.kind === "attachment"
+          ? effectiveSource.fileName.replace(/\.[^.]+$/, ".hwpx")
           : "문서.hwpx";
 
       const res = await fetch("/api/documents/save", {
@@ -192,7 +217,7 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
           format: "hwpx",
           contentBase64,
           id: documentId || undefined,
-          supportProgramId: source?.kind === "generated" ? source.programId : undefined,
+          supportProgramId: effectiveSource?.kind === "generated" ? effectiveSource.programId : undefined,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -209,7 +234,7 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
       setSaveState("error");
       setSaveError(err?.message || "저장하지 못했습니다.");
     }
-  }, [loadState, documentId, source, getAuthToken, onSaved]);
+  }, [loadState, documentId, effectiveSource, getAuthToken, onSaved]);
 
   const handleDownload = useCallback(async () => {
     const editor = editorRef.current;
@@ -220,10 +245,10 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
       // 런타임에서는 Uint8Array 가 그대로 유효한 BlobPart 다.
       const blob = new Blob([bytes as unknown as BlobPart], { type: "application/vnd.hancom.hwpx" });
       const fileName =
-        source?.kind === "generated"
-          ? `${source.plan?.overview?.title || "PSST_사업계획서"}.hwpx`
-          : source?.kind === "attachment"
-          ? source.fileName.replace(/\.[^.]+$/, ".hwpx")
+        effectiveSource?.kind === "generated"
+          ? `${effectiveSource.plan?.overview?.title || "PSST_사업계획서"}.hwpx`
+          : effectiveSource?.kind === "attachment"
+          ? effectiveSource.fileName.replace(/\.[^.]+$/, ".hwpx")
           : "문서.hwpx";
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -237,9 +262,9 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
       setSaveState("error");
       setSaveError(err?.message || "다운로드에 실패했습니다.");
     }
-  }, [loadState, source]);
+  }, [loadState, effectiveSource]);
 
-  const showEmptyState = !source && !isLookingUpSource;
+  const showEmptyState = !effectiveSource && !isLookingUpSource;
   const showLoadingOverlay = isLookingUpSource || loadState === "loading";
 
   return (
@@ -247,9 +272,9 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
       {/* 저장 도구모음. 스튜디오 자체 메뉴·툴바와 별개로, 우리 쪽 영속화(계정 저장소) 액션이다. */}
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-stone-200 bg-stone-50 flex-shrink-0">
         <div className="text-[11px] text-slate-500 truncate">
-          {source?.kind === "generated" && "AI가 작성한 사업계획서"}
-          {source?.kind === "attachment" && `첨부 원본 — ${source.fileName}`}
-          {!source && "문서를 기다리는 중"}
+          {effectiveSource?.kind === "generated" && (blankStarted ? "표준 서식 (직접 작성 중)" : "AI가 작성한 사업계획서")}
+          {effectiveSource?.kind === "attachment" && `첨부 원본 — ${effectiveSource.fileName}`}
+          {!effectiveSource && "문서를 기다리는 중"}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {saveState === "error" && (
@@ -286,6 +311,44 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
         </div>
       </div>
 
+      {/* PDF 등 편집기가 못 여는 첨부. 지금 에디터에 뭐가 열려 있든(HWP 첨부, 표준
+          서식, AI 완성본) 상관없이 항상 보여야 한다 — 빈 화면일 때만 보이게 했더니
+          뭔가 하나라도 열리는 순간 PDF 목록 자체가 사라져 버려서 "PDF는 어디서
+          보냐"는 문의로 이어졌다. */}
+      {unopenableDocuments.length > 0 && (
+        <div className="flex-shrink-0 px-3 py-1.5 border-b border-stone-200 bg-indigo-50/60 flex items-center gap-2 overflow-x-auto">
+          <span className="text-[10px] font-semibold text-indigo-700 flex-shrink-0">공고 원본 (PDF 등)</span>
+          {unopenableDocuments.map((doc) => (
+            <div
+              key={`${doc.fileName}:${doc.entryPath || ""}`}
+              className="flex items-center gap-1 flex-shrink-0 border border-indigo-200 bg-white rounded-lg px-2 py-1"
+            >
+              <span className="max-w-[10rem] truncate text-[11px] font-semibold text-indigo-700" title={doc.fileName}>
+                {doc.fileName}
+              </span>
+              {isPdf(doc.fileName) && onFillPdf && (
+                <button
+                  type="button"
+                  onClick={() => onFillPdf(doc)}
+                  className="flex-shrink-0 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded px-1.5 py-0.5 cursor-pointer"
+                >
+                  직접 입력
+                </button>
+              )}
+              <a
+                href={buildDownloadUrl(doc, { view: true })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-shrink-0 p-0.5 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-100 rounded cursor-pointer"
+                title="새 탭에서 원문 보기"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="absolute inset-0" />
 
@@ -294,9 +357,18 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
             <FileText className="w-10 h-10 text-slate-300 mb-4" />
             <h3 className="text-base font-bold text-slate-700 mb-1.5">아직 열 문서가 없습니다</h3>
             <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-              왼쪽에서 대화를 시작하면 이 공고의 첨부 서식이나, 초안이 만들어진 뒤에는
-              완성된 사업계획서가 여기에 열립니다.
+              {unopenableDocuments.length > 0
+                ? "이 공고의 서식은 편집기가 열 수 없는 형식(PDF 등)으로만 첨부되어 있습니다. 위 목록에서 원문을 확인하거나 직접 입력할 수 있고, 우리 표준 서식으로 바로 작성을 시작할 수도 있습니다."
+                : "왼쪽에서 대화를 시작하면 이 공고의 첨부 서식이나, 초안이 만들어진 뒤에는 완성된 사업계획서가 여기에 열립니다. 또는 아래에서 표준 서식으로 바로 시작할 수도 있습니다."}
             </p>
+            <button
+              type="button"
+              onClick={() => setBlankStarted(true)}
+              className="mt-4 flex items-center gap-1.5 justify-center text-[12px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg px-4 py-2 cursor-pointer"
+            >
+              <FilePlus2 className="w-3.5 h-3.5" />
+              표준 서식으로 바로 시작
+            </button>
           </div>
         )}
 

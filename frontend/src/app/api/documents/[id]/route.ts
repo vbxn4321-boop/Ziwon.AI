@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 const CONTENT_TYPE: Record<string, string> = {
   hwpx: "application/vnd.hancom.hwpx",
   hwp: "application/x-hwp",
+  pdf: "application/pdf",
 };
 
 /**
