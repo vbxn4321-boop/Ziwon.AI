@@ -31,6 +31,9 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
     canvasTheme,
     setCanvasTheme,
     realFormDocument,
+    setRealFormDocument,
+    realFormDocuments,
+    unopenableDocuments,
     isFormSchemaLoading,
     uploadedFileName,
     isUploadingPlan,
@@ -325,6 +328,9 @@ export const PsstPlanGenerator: React.FC<PsstPlanGeneratorProps> = ({
           <PsstDocumentViewer
             canvasTheme="light"
             formDocument={realFormDocument}
+            formDocuments={realFormDocuments}
+            unopenableDocuments={unopenableDocuments}
+            onSelectFormDocument={setRealFormDocument}
             isFormSchemaLoading={isFormSchemaLoading}
             activeSection={activeSection}
             generatedResult={generatedResult}

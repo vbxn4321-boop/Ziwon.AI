@@ -16,6 +16,8 @@ import {
   Eye,
   RefreshCw,
   TrendingUp,
+  Download,
+  FileStack,
 } from "lucide-react";
 import {
   fetchMyPlans,
@@ -54,11 +56,15 @@ export default function SavedPlansModal({
   onOpenBookmarkedProgram,
 }: SavedPlansModalProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"plans" | "bookmarks">("plans");
+  const [activeTab, setActiveTab] = useState<"plans" | "bookmarks" | "documents">("plans");
   const [plans, setPlans] = useState<any[]>([]);
   const [bookmarks, setBookmarks] = useState<any[]>([]);
+  // rhwp 에디터에서 "저장"으로 만든 원본 HWP/HWPX 바이트 문서. 위 plans(텍스트
+  // 기반 PSST 계획서 JSON)와는 완전히 별개의 저장소라 별도 탭으로 둔다.
+  const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [documentActionError, setDocumentActionError] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -67,9 +73,10 @@ export default function SavedPlansModal({
       const token = await getJwtToken();
       if (!token) return;
 
-      const [plansRes, bookmarksRes] = await Promise.allSettled([
+      const [plansRes, bookmarksRes, documentsRes] = await Promise.allSettled([
         fetchMyPlans(token),
         fetchMyBookmarks(token),
+        fetch("/api/documents", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ]);
 
       if (plansRes.status === "fulfilled") {
@@ -77,6 +84,9 @@ export default function SavedPlansModal({
       }
       if (bookmarksRes.status === "fulfilled") {
         setBookmarks(bookmarksRes.value || []);
+      }
+      if (documentsRes.status === "fulfilled" && documentsRes.value?.success) {
+        setDocuments(documentsRes.value.documents || []);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "보관함 데이터를 불러오지 못했습니다.");
@@ -102,6 +112,47 @@ export default function SavedPlansModal({
       setPlans((prev) => prev.filter((p) => p.id !== planId));
     } catch (err: any) {
       alert("삭제 실패: " + err.message);
+    }
+  };
+
+  const handleDownloadDocument = async (doc: any) => {
+    setDocumentActionError(null);
+    try {
+      const token = await getJwtToken();
+      if (!token) return;
+      const res = await fetch(`/api/documents/${doc.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`다운로드 실패 (HTTP ${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setDocumentActionError(err.message || "다운로드하지 못했습니다.");
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (!confirm("정말 이 문서를 삭제하시겠습니까?")) return;
+    setDocumentActionError(null);
+    try {
+      const token = await getJwtToken();
+      if (!token) return;
+      const res = await fetch(`/api/documents/${docId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.error || `삭제 실패 (HTTP ${res.status})`);
+      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+    } catch (err: any) {
+      setDocumentActionError(err.message || "삭제하지 못했습니다.");
     }
   };
 
@@ -209,6 +260,18 @@ export default function SavedPlansModal({
           </button>
 
           <button
+            onClick={() => setActiveTab("documents")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+              activeTab === "documents"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-slate-100 text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <FileStack className="w-4 h-4" />
+            <span>저장한 문서 ({documents.length})</span>
+          </button>
+
+          <button
             onClick={loadData}
             disabled={loading}
             className="ml-auto p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
@@ -223,6 +286,12 @@ export default function SavedPlansModal({
           <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-rose-600" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+        {documentActionError && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-600" />
+            <span>{documentActionError}</span>
           </div>
         )}
 
@@ -291,6 +360,60 @@ export default function SavedPlansModal({
                         )}
                         <button
                           onClick={() => handleDeletePlan(p.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : activeTab === "documents" ? (
+              documents.length === 0 ? (
+                <div className="py-16 text-center text-slate-400 text-xs space-y-2">
+                  <FileStack className="w-10 h-10 mx-auto text-slate-300" />
+                  <p className="text-slate-600 font-medium">아직 저장한 문서가 없습니다.</p>
+                  <p className="text-[11px] text-slate-400">
+                    사업계획서 에디터에서 [저장]을 누르면 원본 HWP/HWPX 파일이 여기 쌓입니다. (위 &quot;저장된 PSST
+                    계획서&quot;와는 다른, 별도 저장소입니다.)
+                  </p>
+                </div>
+              ) : (
+                documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-400 transition-all shadow-2xs"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase">
+                            {doc.format}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {(doc.fileSize / 1024).toFixed(0)}KB
+                          </span>
+                          <span className="text-[11px] text-slate-400 flex items-center space-x-1">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            <span>{new Date(doc.updatedAt).toLocaleDateString("ko-KR")}</span>
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 truncate">{doc.fileName}</h4>
+                      </div>
+
+                      <div className="flex items-center space-x-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => handleDownloadDocument(doc)}
+                          className="px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                          title="다운로드"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>다운로드</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id)}
                           className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                           title="삭제"
                         >

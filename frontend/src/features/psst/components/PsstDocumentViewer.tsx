@@ -1,13 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, FileStack } from "lucide-react";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import { CanvasTheme, PsstFormData, PsstSectionKey } from "../types";
 import { SECTION_LABELS } from "../constants";
 import { PsstEvaluationCard } from "./PsstEvaluationCard";
 import { RhwpEditorPanel } from "./RhwpEditorPanel";
+import { PdfFormFiller } from "./PdfFormFiller";
 import { getJwtToken } from "@/lib/supabase-client";
+
+type FormDocumentCandidate = {
+  fileName: string;
+  fileUrl: string;
+  entryPath?: string | null;
+  extractedText?: string | null;
+};
 
 interface PsstDocumentViewerProps {
   canvasTheme: CanvasTheme;
@@ -18,9 +26,21 @@ interface PsstDocumentViewerProps {
   docScrollRef: React.RefObject<HTMLDivElement | null>;
   sectionRefs: Record<PsstSectionKey, React.RefObject<HTMLDivElement | null>>;
   onScrollToSection: (sec: PsstSectionKey) => void;
-  formDocument?: { fileName: string; fileUrl: string; entryPath?: string | null; extractedText?: string | null } | null;
+  /** 지금 에디터에 열려 있는 첨부 원문. */
+  formDocument?: FormDocumentCandidate | null;
+  /**
+   * 이 공고에서 서식/신청서로 보이는 첨부 전체. 2개 이상이면 화면에 선택
+   * 목록을 띄운다 — 예전엔 첫 번째 것만 골라 나머지를 조용히 버렸는데,
+   * 세부 사업별로 신청서가 완전히 다른 공고(실측 129건)에서 필요한 서식이
+   * 안 보이는 것처럼 보이는 버그였다.
+   */
+  formDocuments?: FormDocumentCandidate[];
+  /** 선택 목록에서 다른 첨부를 고르면 호출된다. */
+  onSelectFormDocument?: (doc: FormDocumentCandidate) => void;
   /** 첨부 서식 조회가 아직 진행 중인가. "못 찾음"과 "조회 중"을 구분하는 데 쓴다. */
   isFormSchemaLoading?: boolean;
+  /** PDF/DOCX 등 편집기가 열 수 없는 첨부. 원문 새 탭 링크로만 안내한다. */
+  unopenableDocuments?: FormDocumentCandidate[];
 }
 
 /** 사업계획서 목차. 사이드바에 있던 '페이지' 목록을 문서 영역으로 옮긴 것이다. */
@@ -43,12 +63,18 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
   sectionRefs,
   onScrollToSection,
   formDocument = null,
+  formDocuments = [],
+  onSelectFormDocument,
   isFormSchemaLoading = false,
+  unopenableDocuments = [],
 }) => {
   const [viewMode, setViewMode] = useState<"a4" | "cards">("a4");
   // rhwp 에디터에서 "저장"을 한 번이라도 누르면 그 문서의 Storage 객체 id를 여기 담아둔다.
   // 같은 문서를 다시 저장할 때 새로 만들지 않고 같은 자리에 덮어쓰기 위해서다.
   const [savedDocumentId, setSavedDocumentId] = useState<string | null>(null);
+  // PDF 서식은 rhwp가 못 여니, 이 값이 채워지면 편집기 대신 PDF 오버레이
+  // 입력기(PdfFormFiller)를 그 자리에 대신 렌더링한다.
+  const [pdfFillTarget, setPdfFillTarget] = useState<FormDocumentCandidate | null>(null);
 
   const hasValidPlan = !!(generatedResult && generatedResult.overview && generatedResult.overview.title);
 
@@ -643,29 +669,72 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
           </div>
         </div>
       ) : (
-        <RhwpEditorPanel
-          source={
-            hasValidPlan && generatedResult
-              ? {
-                  kind: "generated",
-                  plan: generatedResult,
-                  programTitle: formData.targetProgramTitle,
-                  programId: formData.programId,
-                }
-              : formDocument
-              ? {
-                  kind: "attachment",
-                  fileName: formDocument.fileName,
-                  fileUrl: formDocument.fileUrl,
-                  entryPath: formDocument.entryPath,
-                }
-              : null
-          }
-          isLookingUpSource={!hasValidPlan && isFormSchemaLoading}
-          savedDocumentId={savedDocumentId}
-          onSaved={setSavedDocumentId}
-          getAuthToken={getJwtToken}
-        />
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* 신청서·사업계획서로 보이는 첨부가 2개 이상일 때만 뜬다. 세부
+              사업별로 신청서가 완전히 다른 공고에서, 뭘 열어서 편집 중인지
+              알려주고 다른 첨부로 바꿔 열 수 있게 한다. */}
+          {!hasValidPlan && formDocuments.length > 1 && (
+            <div className="flex-shrink-0 px-4 py-2 border-b border-stone-200 bg-amber-50/60 flex items-center gap-2 overflow-x-auto">
+              <FileStack className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+              <span className="text-[11px] font-semibold text-amber-700 flex-shrink-0">
+                첨부 {formDocuments.length}개 중 편집할 문서
+              </span>
+              <select
+                className="text-[11px] bg-white border border-amber-200 rounded-lg px-2 py-1 text-slate-700 max-w-xs truncate cursor-pointer focus:outline-none focus:border-amber-400"
+                value={formDocument?.fileName || ""}
+                onChange={(e) => {
+                  const next = formDocuments.find((d) => d.fileName === e.target.value);
+                  if (next) onSelectFormDocument?.(next);
+                }}
+              >
+                {formDocuments.map((doc) => (
+                  <option key={doc.fileName} value={doc.fileName}>
+                    {doc.fileName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {pdfFillTarget ? (
+            <PdfFormFiller
+              fileUrl={pdfFillTarget.fileUrl}
+              entryPath={pdfFillTarget.entryPath}
+              fileName={pdfFillTarget.fileName}
+              supportProgramId={formData.programId}
+              onClose={() => setPdfFillTarget(null)}
+              getAuthToken={getJwtToken}
+            />
+          ) : (
+            <RhwpEditorPanel
+              source={
+                hasValidPlan && generatedResult
+                  ? {
+                      kind: "generated",
+                      plan: generatedResult,
+                      programTitle: formData.targetProgramTitle,
+                      programId: formData.programId,
+                    }
+                  : formDocument
+                  ? {
+                      kind: "attachment",
+                      fileName: formDocument.fileName,
+                      fileUrl: formDocument.fileUrl,
+                      entryPath: formDocument.entryPath,
+                    }
+                  : null
+              }
+              isLookingUpSource={!hasValidPlan && isFormSchemaLoading}
+              unopenableDocuments={!hasValidPlan ? unopenableDocuments : []}
+              programTitle={formData.targetProgramTitle}
+              programId={formData.programId}
+              savedDocumentId={savedDocumentId}
+              onSaved={setSavedDocumentId}
+              getAuthToken={getJwtToken}
+              onFillPdf={setPdfFillTarget}
+            />
+          )}
+        </div>
       )}
 
       {/* ── Floating Right Index Anchor Nav (Cards View only) ── */}

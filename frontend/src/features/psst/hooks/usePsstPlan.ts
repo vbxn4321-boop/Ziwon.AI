@@ -28,6 +28,12 @@ export function usePsstPlan(
   const [canvasTheme, setCanvasTheme] = useState<CanvasTheme>("light");
   const [realFormSchema, setRealFormSchema] = useState<FormSchema | null>(null);
   const [realFormDocument, setRealFormDocument] = useState<any>(null);
+  // 첨부가 여러 개인 공고에서 고를 수 있는 전체 후보. realFormDocument 는
+  // "지금 에디터에 열려 있는 것" 하나고, 이건 그중에서 고를 수 있는 목록이다.
+  const [realFormDocuments, setRealFormDocuments] = useState<any[]>([]);
+  // 에디터로는 못 여는 첨부(PDF/DOCX 등). 후보에서는 빠지지만, 원문 자체는
+  // 새 탭에서 볼 수 있게 링크로 안내한다 — 아무 안내 없이 사라지면 안 되니까.
+  const [unopenableDocuments, setUnopenableDocuments] = useState<any[]>([]);
   // 첨부 서식 조회가 실제로 진행 중인지. 이게 없으면 "찾음/못 찾음/조회 중"을
   // 구분할 방법이 없어서, 못 찾은 확정 상태를 화면이 영원히 "불러오는 중"으로
   // 잘못 표시하는 버그가 있었다.
@@ -115,6 +121,8 @@ export function usePsstPlan(
         if (!cancelled && json?.success) {
           setRealFormSchema(json.schema || null);
           setRealFormDocument(json.formDocument || null);
+          setRealFormDocuments(json.formDocuments || []);
+          setUnopenableDocuments(json.unopenableDocuments || []);
         }
       } catch {
         // 조회 실패는 표준 서식 폴백으로 이어진다 — 화면이 멈추지 않게 조용히 넘긴다.
@@ -867,6 +875,9 @@ export function usePsstPlan(
     setCanvasTheme,
     realFormSchema,
     realFormDocument,
+    setRealFormDocument,
+    realFormDocuments,
+    unopenableDocuments,
     isFormSchemaLoading,
     importedPlanText,
     setImportedPlanText,
