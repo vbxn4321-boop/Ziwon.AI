@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { X, Loader2, AlertCircle, Download, Save, GripVertical, Trash2, CheckCircle2 } from "lucide-react";
+import { X, Loader2, AlertCircle, Download, Save, GripVertical, Trash2, CheckCircle2, HelpCircle } from "lucide-react";
 import { buildDownloadUrl } from "@/lib/documents/download";
 
 /**
@@ -35,12 +35,16 @@ interface TextBox {
 
 type LoadState = "loading" | "ready" | "error";
 
-let pdfjsPromise: Promise<typeof import("pdfjs-dist")> | null = null;
+// 압축 안 된 "pdfjs-dist"(legacy/build/pdf.mjs 포함)를 그대로 import 하면 이
+// 프로젝트의 Next.js 개발 서버 웹팩 번들에서 "Object.defineProperty called on
+// non-object" 에러로 로드 자체가 실패한다(실측: 헤드리스 브라우저로 재현·확인).
+// 압축본(pdf.min.mjs)은 같은 문제가 없어 이걸 명시적으로 import 한다.
+let pdfjsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.min.mjs")> | null = null;
 function loadPdfJs() {
   if (!pdfjsPromise) {
-    pdfjsPromise = import("pdfjs-dist").then((mod) => {
+    pdfjsPromise = import("pdfjs-dist/legacy/build/pdf.min.mjs").then((mod) => {
       mod.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/build/pdf.worker.min.mjs",
+        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
         import.meta.url
       ).toString();
       return mod;
@@ -66,6 +70,20 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [exportState, setExportState] = useState<"idle" | "downloading" | "saving" | "saved" | "error">("idle");
   const [exportError, setExportError] = useState("");
+  // 처음 쓰는 사람은 클릭·드래그로 채우는 방식 자체가 낯설 수 있어서, 이 기능을
+  // 처음 열 때 한 번 사용법을 보여준다. "?" 버튼으로 언제든 다시 볼 수 있다.
+  const [showGuide, setShowGuide] = useState(false);
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem("pdfFormFiller.guideSeen")) setShowGuide(true);
+    } catch {}
+  }, []);
+  const dismissGuide = () => {
+    setShowGuide(false);
+    try {
+      localStorage.setItem("pdfFormFiller.guideSeen", "1");
+    } catch {}
+  };
 
   const pdfDocRef = useRef<any>(null);
   const pageDimsRef = useRef<{ width: number; height: number }[]>([]);
@@ -73,6 +91,51 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
   const canvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
   const dragRef = useRef<{ id: string; rectLeft: number; rectTop: number; offsetX: number; offsetY: number } | null>(null);
   const nextIdRef = useRef(1);
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+
+  // 칸을 클릭해서 새로 만들거나 이미 써 둔 칸을 다시 클릭했을 때, 커서가 바로
+  // 그 칸에 들어가야 "일반 에디터처럼" 한 번의 클릭으로 바로 타이핑할 수 있다.
+  // 전에는 이게 없어서 칸이 생겨도 실제로 글자를 치려면 한 번 더 눌러야 했다.
+  useEffect(() => {
+    if (!selectedId) return;
+    const el = textareaRefs.current[selectedId];
+    if (!el) return;
+    el.focus();
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }, [selectedId]);
+  // 글자 너비를 재는 데만 쓰는 숨김 요소. 칸을 입력한 글자 길이에 딱 맞게
+  // 그려야(포스트잇처럼 고정 크기 상자로 안 보이게) 매 렌더마다 이걸로 잰다.
+  const measureRef = useRef<HTMLSpanElement>(null);
+  // 선택이 다른 칸으로 넘어갈 때, 방금까지 선택돼 있던 칸이 빈 채로 남았으면
+  // 지운다 — 클릭만 하고 아무것도 안 쓴 빈 칸이 문서 위에 계속 남는 걸 막는다.
+  const prevSelectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prevId = prevSelectedRef.current;
+    if (prevId && prevId !== selectedId) {
+      setBoxes((prev) => {
+        const prevBox = prev.find((b) => b.id === prevId);
+        if (prevBox && !prevBox.text.trim()) {
+          delete textareaRefs.current[prevId];
+          return prev.filter((b) => b.id !== prevId);
+        }
+        return prev;
+      });
+    }
+    prevSelectedRef.current = selectedId;
+  }, [selectedId]);
+
+  const measureTextWidth = (text: string, fontSizePt: number): number => {
+    const span = measureRef.current;
+    if (!span) return 60;
+    span.style.fontSize = `${fontSizePt}px`;
+    let max = 24;
+    for (const line of text.split("\n")) {
+      span.textContent = line || " ";
+      max = Math.max(max, span.offsetWidth);
+    }
+    return max + 6;
+  };
 
   // PDF 로드
   useEffect(() => {
@@ -158,6 +221,7 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
 
   const handlePageClick = useCallback((e: React.MouseEvent<HTMLDivElement>, pageIndex: number) => {
     if ((e.target as HTMLElement).closest("[data-textbox]")) return;
+    e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     const id = `box_${nextIdRef.current++}`;
     const newBox: TextBox = {
@@ -195,6 +259,7 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
   const deleteBox = (id: string) => {
     setBoxes((prev) => prev.filter((b) => b.id !== id));
     setSelectedId((cur) => (cur === id ? null : cur));
+    delete textareaRefs.current[id];
   };
 
   const buildPayload = () => {
@@ -297,6 +362,14 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
             <X className="w-4 h-4" />
           </button>
           <span className="text-[11px] text-slate-500 truncate">PDF 서식 직접 입력 — {fileName}</span>
+          <button
+            type="button"
+            onClick={() => setShowGuide(true)}
+            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg cursor-pointer flex-shrink-0"
+            title="사용법 보기"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {exportState === "error" && (
@@ -330,7 +403,14 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
         </div>
       </div>
 
-      <div className="relative flex-1 min-h-0 overflow-auto bg-slate-100 px-4 py-4">
+      {/* 글자 너비 측정용 숨김 요소. 화면에 안 보이지만 레이아웃 계산은 실제로 해야 하니
+          visibility:hidden(공간은 차지)이 아니라 위치를 화면 밖으로 빼는 쪽을 쓴다. */}
+      <span
+        ref={measureRef}
+        style={{ position: "fixed", top: -9999, left: -9999, whiteSpace: "pre", visibility: "hidden" }}
+      />
+
+      <div className="relative flex-1 min-h-0 overflow-auto bg-slate-100 px-4 py-4" onClick={() => setSelectedId(null)}>
         {loadState === "loading" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80">
             <Loader2 className="w-6 h-6 text-indigo-500 animate-spin mb-3" />
@@ -348,7 +428,8 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
         {loadState === "ready" && (
           <>
             <p className="text-[11px] text-slate-400 text-center mb-3">
-              빈 곳을 클릭하면 입력 칸이 생깁니다. 칸의 손잡이(⠿)를 드래그해서 원하는 위치로 옮기세요.
+              빈 곳을 클릭하면 그 자리에 바로 글자를 쓸 수 있습니다. 써 놓은 글자를 다시 클릭하면 고치거나
+              옮길 수 있습니다.
             </p>
             {Array.from({ length: numPages }).map((_, pageIndex) => (
               <div
@@ -368,56 +449,105 @@ export const PdfFormFiller: React.FC<PdfFormFillerProps> = ({
                 />
                 {boxes
                   .filter((b) => b.page === pageIndex)
-                  .map((box) => (
-                    <div
-                      key={box.id}
-                      data-textbox
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                      className={`absolute bg-white/90 border-2 rounded shadow-sm ${
-                        selectedId === box.id ? "border-indigo-500" : "border-indigo-300/70"
-                      }`}
-                      style={{ left: box.xPx, top: box.yPx, minWidth: 120 }}
-                    >
+                  .map((box) => {
+                    const isSelected = selectedId === box.id;
+                    const lineCount = Math.max(1, box.text.split("\n").length);
+                    return (
                       <div
-                        onMouseDown={(e) => startDrag(e, box)}
-                        className="flex items-center gap-1 px-1 py-0.5 bg-indigo-500 text-white rounded-t cursor-move select-none"
+                        key={box.id}
+                        data-textbox
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedId(box.id);
+                        }}
+                        className="absolute"
+                        style={{ left: box.xPx, top: box.yPx }}
                       >
-                        <GripVertical className="w-3 h-3" />
-                        <input
-                          type="number"
-                          min={6}
-                          max={72}
-                          value={box.fontSizePt}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onChange={(e) => updateBox(box.id, { fontSizePt: Number(e.target.value) || 11 })}
-                          className="w-10 text-[10px] text-slate-900 rounded px-1 py-px"
-                          title="글자 크기(pt)"
+                        {/* 선택했을 때만 손잡이·글자크기·삭제 도구를 칸 위쪽에 살짝 띄운다.
+                            평소엔 아무 테두리도 없어서 문서 위에 그냥 글자를 쓴 것처럼 보인다 —
+                            선택 안 한 칸까지 포스트잇처럼 상자·손잡이가 늘 보이던 걸 없앴다. */}
+                        {isSelected && (
+                          <div
+                            onMouseDown={(e) => startDrag(e, box)}
+                            className="absolute -top-6 left-0 flex items-center gap-1 px-1 py-0.5 bg-indigo-600 text-white rounded cursor-move select-none whitespace-nowrap shadow-sm z-10"
+                          >
+                            <GripVertical className="w-3 h-3" />
+                            <input
+                              type="number"
+                              min={6}
+                              max={72}
+                              value={box.fontSizePt}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onChange={(e) => updateBox(box.id, { fontSizePt: Number(e.target.value) || 11 })}
+                              className="w-9 text-[10px] text-slate-900 rounded px-1 py-px"
+                              title="글자 크기(pt)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => deleteBox(box.id)}
+                              className="p-0.5 hover:bg-indigo-700 rounded cursor-pointer"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                        <textarea
+                          ref={(el) => {
+                            textareaRefs.current[box.id] = el;
+                          }}
+                          value={box.text}
+                          onChange={(e) => updateBox(box.id, { text: e.target.value })}
+                          onFocus={() => setSelectedId(box.id)}
+                          placeholder={isSelected ? "입력" : ""}
+                          rows={lineCount}
+                          style={{
+                            fontSize: box.fontSizePt,
+                            lineHeight: 1.3,
+                            width: measureTextWidth(box.text, box.fontSizePt),
+                          }}
+                          className={`block bg-transparent outline-none resize-none text-slate-900 p-0 ${
+                            isSelected
+                              ? "border border-dashed border-indigo-400"
+                              : "border border-transparent hover:border-dashed hover:border-slate-300"
+                          }`}
                         />
-                        <button
-                          type="button"
-                          onClick={() => deleteBox(box.id)}
-                          className="ml-auto p-0.5 hover:bg-indigo-600 rounded cursor-pointer"
-                          title="삭제"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
                       </div>
-                      <textarea
-                        value={box.text}
-                        onChange={(e) => updateBox(box.id, { text: e.target.value })}
-                        onFocus={() => setSelectedId(box.id)}
-                        placeholder="입력..."
-                        style={{ fontSize: box.fontSizePt, resize: "both" }}
-                        className="block w-40 h-9 px-1.5 py-1 text-slate-900 outline-none rounded-b"
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             ))}
           </>
         )}
       </div>
+
+      {showGuide && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/40 px-6">
+          <div className="max-w-sm w-full bg-white rounded-2xl shadow-xl p-5">
+            <h3 className="text-sm font-bold text-slate-800 mb-3">PDF 서식 사용법</h3>
+            <ol className="space-y-2 text-xs text-slate-600 list-decimal list-inside">
+              <li>빈 곳을 클릭하면 그 자리에 바로 입력 칸이 생기고 커서가 들어갑니다. 바로 타이핑하세요.</li>
+              <li>이미 써 놓은 글자를 클릭하면 다시 고치거나 이어 쓸 수 있습니다.</li>
+              <li>칸을 선택하면 위에 뜨는 손잡이(⠿)를 드래그해서 위치를 옮길 수 있습니다.</li>
+              <li>같은 자리의 숫자 입력으로 글자 크기(pt)를 바꿀 수 있습니다.</li>
+              <li>휴지통 아이콘을 누르면 그 칸이 삭제됩니다.</li>
+              <li>다 채웠으면 위쪽 "PDF 다운로드"로 받거나 "내 저장소에 저장"으로 보관하세요.</li>
+            </ol>
+            <p className="mt-3 text-[11px] text-slate-400 leading-relaxed">
+              이 방식은 원본 PDF 위에 새 글자를 얹는 것이라, PDF에 원래 인쇄돼 있던 글자 자체를 고칠 수는
+              없습니다. 신청서의 빈 칸을 채우는 용도로 써 주세요.
+            </p>
+            <button
+              type="button"
+              onClick={dismissGuide}
+              className="mt-4 w-full py-2 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 cursor-pointer"
+            >
+              확인했어요
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
