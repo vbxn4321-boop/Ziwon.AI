@@ -116,13 +116,30 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
     let cancelled = false;
 
     const load = async () => {
-      // 스튜디오 마운트가 아직 안 끝났으면 잠깐 기다렸다 재시도한다.
-      if (!editorRef.current) {
-        await new Promise((r) => setTimeout(r, 150));
+      // 스튜디오 마운트(WASM 초기화 + 폰트 로딩)가 끝날 때까지 기다린다. 예전엔
+      // 150ms 한 번만 기다리고 포기했는데, 실제 브라우저로 재보니 그 초기화
+      // 자체가 종종 150ms보다 오래 걸려서 editorRef 가 여전히 비어 있으면 그냥
+      // 조용히 포기해 버렸다 — loadState 가 "loading"/"error" 어느 쪽으로도
+      // 안 바뀌니 화면엔 스튜디오의 빈 새 문서만 남고 아무 안내도 없이 멈춰
+      // 있는, 사용자 입장에서 원인을 알 수 없는 실패였다. 최대 10초까지 폴링하고,
+      // 그래도 안 되면 에러로 명시한다.
+      const maxWaitMs = 10000;
+      const stepMs = 150;
+      let waited = 0;
+      while (!editorRef.current && waited < maxWaitMs) {
+        await new Promise((r) => setTimeout(r, stepMs));
         if (cancelled) return;
+        waited += stepMs;
       }
       const editor = editorRef.current;
-      if (!editor || !effectiveSource) return;
+      if (!editor) {
+        if (!cancelled) {
+          setLoadState("error");
+          setLoadError("편집기 초기화가 오래 걸립니다. 새로고침 후 다시 시도해 주세요.");
+        }
+        return;
+      }
+      if (!effectiveSource) return;
 
       setLoadState("loading");
       setLoadError("");
