@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, Save, Download, FileText, AlertCircle, CheckCircle2, ExternalLink, FilePlus2 } from "lucide-react";
+import { Loader2, Save, Download, FileText, AlertCircle, CheckCircle2, FilePlus2 } from "lucide-react";
 import type { RhwpEditor } from "@rhwp/editor";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import { buildDownloadUrl } from "@/lib/documents/download";
@@ -38,17 +38,9 @@ interface RhwpEditorPanelProps {
   savedDocumentId?: string | null;
   onSaved?: (documentId: string) => void;
   getAuthToken: () => Promise<string | null>;
-  /** PDF/DOCX 등 편집기가 못 여는 첨부. 빈 화면일 때 원문 링크로 안내한다. */
-  unopenableDocuments?: { fileName: string; fileUrl: string; entryPath?: string | null }[];
   /** 열 첨부가 없을 때 "표준 서식으로 새로 시작"에 쓸 정보. */
   programTitle?: string;
   programId?: string;
-  /** PDF 서식 위에 직접 입력하는 화면으로 전환. PDF일 때만 노출한다. */
-  onFillPdf?: (doc: { fileName: string; fileUrl: string; entryPath?: string | null }) => void;
-}
-
-function isPdf(fileName: string): boolean {
-  return /\.pdf$/i.test(fileName);
 }
 
 type LoadState = "idle" | "loading" | "ready" | "error";
@@ -60,10 +52,8 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
   savedDocumentId = null,
   onSaved,
   getAuthToken,
-  unopenableDocuments = [],
   programTitle,
   programId,
-  onFillPdf,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<RhwpEditor | null>(null);
@@ -126,13 +116,30 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
     let cancelled = false;
 
     const load = async () => {
-      // 스튜디오 마운트가 아직 안 끝났으면 잠깐 기다렸다 재시도한다.
-      if (!editorRef.current) {
-        await new Promise((r) => setTimeout(r, 150));
+      // 스튜디오 마운트(WASM 초기화 + 폰트 로딩)가 끝날 때까지 기다린다. 예전엔
+      // 150ms 한 번만 기다리고 포기했는데, 실제 브라우저로 재보니 그 초기화
+      // 자체가 종종 150ms보다 오래 걸려서 editorRef 가 여전히 비어 있으면 그냥
+      // 조용히 포기해 버렸다 — loadState 가 "loading"/"error" 어느 쪽으로도
+      // 안 바뀌니 화면엔 스튜디오의 빈 새 문서만 남고 아무 안내도 없이 멈춰
+      // 있는, 사용자 입장에서 원인을 알 수 없는 실패였다. 최대 10초까지 폴링하고,
+      // 그래도 안 되면 에러로 명시한다.
+      const maxWaitMs = 10000;
+      const stepMs = 150;
+      let waited = 0;
+      while (!editorRef.current && waited < maxWaitMs) {
+        await new Promise((r) => setTimeout(r, stepMs));
         if (cancelled) return;
+        waited += stepMs;
       }
       const editor = editorRef.current;
-      if (!editor || !effectiveSource) return;
+      if (!editor) {
+        if (!cancelled) {
+          setLoadState("error");
+          setLoadError("편집기 초기화가 오래 걸립니다. 새로고침 후 다시 시도해 주세요.");
+        }
+        return;
+      }
+      if (!effectiveSource) return;
 
       setLoadState("loading");
       setLoadError("");
@@ -311,44 +318,6 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
         </div>
       </div>
 
-      {/* PDF 등 편집기가 못 여는 첨부. 지금 에디터에 뭐가 열려 있든(HWP 첨부, 표준
-          서식, AI 완성본) 상관없이 항상 보여야 한다 — 빈 화면일 때만 보이게 했더니
-          뭔가 하나라도 열리는 순간 PDF 목록 자체가 사라져 버려서 "PDF는 어디서
-          보냐"는 문의로 이어졌다. */}
-      {unopenableDocuments.length > 0 && (
-        <div className="flex-shrink-0 px-3 py-1.5 border-b border-stone-200 bg-indigo-50/60 flex items-center gap-2 overflow-x-auto">
-          <span className="text-[10px] font-semibold text-indigo-700 flex-shrink-0">공고 원본 (PDF 등)</span>
-          {unopenableDocuments.map((doc) => (
-            <div
-              key={`${doc.fileName}:${doc.entryPath || ""}`}
-              className="flex items-center gap-1 flex-shrink-0 border border-indigo-200 bg-white rounded-lg px-2 py-1"
-            >
-              <span className="max-w-[10rem] truncate text-[11px] font-semibold text-indigo-700" title={doc.fileName}>
-                {doc.fileName}
-              </span>
-              {isPdf(doc.fileName) && onFillPdf && (
-                <button
-                  type="button"
-                  onClick={() => onFillPdf(doc)}
-                  className="flex-shrink-0 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded px-1.5 py-0.5 cursor-pointer"
-                >
-                  직접 입력
-                </button>
-              )}
-              <a
-                href={buildDownloadUrl(doc, { view: true })}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-shrink-0 p-0.5 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-100 rounded cursor-pointer"
-                title="새 탭에서 원문 보기"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="absolute inset-0" />
 
@@ -357,9 +326,9 @@ export const RhwpEditorPanel: React.FC<RhwpEditorPanelProps> = ({
             <FileText className="w-10 h-10 text-slate-300 mb-4" />
             <h3 className="text-base font-bold text-slate-700 mb-1.5">아직 열 문서가 없습니다</h3>
             <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-              {unopenableDocuments.length > 0
-                ? "이 공고의 서식은 편집기가 열 수 없는 형식(PDF 등)으로만 첨부되어 있습니다. 위 목록에서 원문을 확인하거나 직접 입력할 수 있고, 우리 표준 서식으로 바로 작성을 시작할 수도 있습니다."
-                : "왼쪽에서 대화를 시작하면 이 공고의 첨부 서식이나, 초안이 만들어진 뒤에는 완성된 사업계획서가 여기에 열립니다. 또는 아래에서 표준 서식으로 바로 시작할 수도 있습니다."}
+              위쪽 선택 목록에 PDF 등 편집기가 못 여는 서식이 있다면 골라서 직접 입력할 수 있습니다. 왼쪽에서 대화를
+              시작하면 초안이 만들어진 뒤 완성된 사업계획서가 여기에 열리고, 아래에서 표준 서식으로 바로 시작할
+              수도 있습니다.
             </p>
             <button
               type="button"

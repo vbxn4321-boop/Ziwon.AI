@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sparkles, Loader2, FileStack } from "lucide-react";
+import { Sparkles, Loader2, FileStack, ExternalLink } from "lucide-react";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import { CanvasTheme, PsstFormData, PsstSectionKey } from "../types";
 import { SECTION_LABELS } from "../constants";
@@ -9,6 +9,9 @@ import { PsstEvaluationCard } from "./PsstEvaluationCard";
 import { RhwpEditorPanel } from "./RhwpEditorPanel";
 import { PdfFormFiller } from "./PdfFormFiller";
 import { getJwtToken } from "@/lib/supabase-client";
+import { buildDownloadUrl } from "@/lib/documents/download";
+
+const isPdfFile = (fileName: string) => /\.pdf$/i.test(fileName);
 
 type FormDocumentCandidate = {
   fileName: string;
@@ -39,7 +42,10 @@ interface PsstDocumentViewerProps {
   onSelectFormDocument?: (doc: FormDocumentCandidate) => void;
   /** 첨부 서식 조회가 아직 진행 중인가. "못 찾음"과 "조회 중"을 구분하는 데 쓴다. */
   isFormSchemaLoading?: boolean;
-  /** PDF/DOCX 등 편집기가 열 수 없는 첨부. 원문 새 탭 링크로만 안내한다. */
+  /**
+   * PDF/DOCX 등 편집기(rhwp)가 못 여는 첨부. formDocuments 와 한 선택 목록에
+   * 같이 뜬다 — PDF를 고르면 편집기 대신 PdfFormFiller(직접 입력 화면)를 연다.
+   */
   unopenableDocuments?: FormDocumentCandidate[];
 }
 
@@ -670,29 +676,57 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col">
-          {/* 신청서·사업계획서로 보이는 첨부가 2개 이상일 때만 뜬다. 세부
-              사업별로 신청서가 완전히 다른 공고에서, 뭘 열어서 편집 중인지
-              알려주고 다른 첨부로 바꿔 열 수 있게 한다. */}
-          {!hasValidPlan && formDocuments.length > 1 && (
+          {/* 첨부 전체(HWP·PDF 등)를 한 목록에서 고른다. 예전엔 HWP 선택 드롭다운과
+              PDF 원문 줄을 따로(위아래로) 그렸는데, 한 공고 안에서 "어떤 첨부로
+              작업할지"는 형식과 무관하게 하나의 선택이라 같은 줄에 합쳤다. HWP를
+              고르면 에디터가, PDF를 고르면 PDF 직접 입력 화면이 열린다. */}
+          {!hasValidPlan && (formDocuments.length > 1 || unopenableDocuments.length > 0) && (
             <div className="flex-shrink-0 px-4 py-2 border-b border-stone-200 bg-amber-50/60 flex items-center gap-2 overflow-x-auto">
               <FileStack className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
               <span className="text-[11px] font-semibold text-amber-700 flex-shrink-0">
-                첨부 {formDocuments.length}개 중 편집할 문서
+                첨부 {formDocuments.length + unopenableDocuments.length}개 중 작업할 문서
               </span>
               <select
                 className="text-[11px] bg-white border border-amber-200 rounded-lg px-2 py-1 text-slate-700 max-w-xs truncate cursor-pointer focus:outline-none focus:border-amber-400"
-                value={formDocument?.fileName || ""}
+                value={pdfFillTarget?.fileName || formDocument?.fileName || ""}
                 onChange={(e) => {
-                  const next = formDocuments.find((d) => d.fileName === e.target.value);
-                  if (next) onSelectFormDocument?.(next);
+                  const hwpDoc = formDocuments.find((d) => d.fileName === e.target.value);
+                  if (hwpDoc) {
+                    setPdfFillTarget(null);
+                    onSelectFormDocument?.(hwpDoc);
+                    return;
+                  }
+                  const otherDoc = unopenableDocuments.find((d) => d.fileName === e.target.value);
+                  if (!otherDoc) return;
+                  if (isPdfFile(otherDoc.fileName)) {
+                    setPdfFillTarget(otherDoc);
+                  } else {
+                    window.open(buildDownloadUrl(otherDoc, { view: true }), "_blank", "noopener,noreferrer");
+                  }
                 }}
               >
                 {formDocuments.map((doc) => (
                   <option key={doc.fileName} value={doc.fileName}>
-                    {doc.fileName}
+                    [HWP] {doc.fileName}
+                  </option>
+                ))}
+                {unopenableDocuments.map((doc) => (
+                  <option key={doc.fileName} value={doc.fileName}>
+                    [{isPdfFile(doc.fileName) ? "PDF" : "원문"}] {doc.fileName}
                   </option>
                 ))}
               </select>
+              {(pdfFillTarget || formDocument) && (
+                <a
+                  href={buildDownloadUrl(pdfFillTarget || formDocument!, { view: true })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-md cursor-pointer"
+                  title="새 탭에서 원문 보기"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
             </div>
           )}
 
@@ -725,13 +759,11 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                   : null
               }
               isLookingUpSource={!hasValidPlan && isFormSchemaLoading}
-              unopenableDocuments={!hasValidPlan ? unopenableDocuments : []}
               programTitle={formData.targetProgramTitle}
               programId={formData.programId}
               savedDocumentId={savedDocumentId}
               onSaved={setSavedDocumentId}
               getAuthToken={getJwtToken}
-              onFillPdf={setPdfFillTarget}
             />
           )}
         </div>

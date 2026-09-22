@@ -259,26 +259,33 @@ class CrawlerService:
                     }
                 )
 
-                # Attachments
-                file_nm = item.get("fileNm")
-                if file_nm:
-                    for fname in str(file_nm).split("@"):
-                        fname = fname.strip()
-                        if fname:
-                            ext = fname.split(".")[-1].upper() if "." in fname else "FILE"
-                            db.execute(
-                                text("""
-                                INSERT INTO "SupportDocument" ("id", "supportProgramId", "fileName", "fileUrl", "fileType", "status", "createdAt", "updatedAt")
-                                VALUES (:id, :prog_id, :fileName, :fileUrl, :fileType, 'PENDING', NOW(), NOW())
-                                """),
-                                {
-                                    "id": str(uuid.uuid4()),
-                                    "prog_id": prog_id,
-                                    "fileName": fname,
-                                    "fileUrl": source_url,
-                                    "fileType": ext,
-                                }
-                            )
+                # Attachments — 기업마당 API는 파일명(fileNm)과 실제 다운로드 주소
+                # (flpthNm)를 "@" 로 구분된, 서로 순서가 맞는 병렬 리스트로 준다.
+                # printFileNm/printFlpthNm 은 별도의 "공고문 PDF" 첨부 한 쌍이다.
+                # 예전엔 flpthNm 을 안 읽고 fileUrl 에 공고 페이지 주소(source_url)를
+                # 그대로 넣어서, 첨부 다운로드가 전부 실패했다(실측 2,093건).
+                for name_field, url_field in (("fileNm", "flpthNm"), ("printFileNm", "printFlpthNm")):
+                    file_nm = item.get(name_field)
+                    if not file_nm:
+                        continue
+                    names = [n.strip() for n in str(file_nm).split("@") if n.strip()]
+                    file_urls = [u.strip() for u in str(item.get(url_field) or "").split("@") if u.strip()]
+                    for idx, fname in enumerate(names):
+                        ext = fname.split(".")[-1].upper() if "." in fname else "FILE"
+                        real_url = file_urls[idx] if idx < len(file_urls) else source_url
+                        db.execute(
+                            text("""
+                            INSERT INTO "SupportDocument" ("id", "supportProgramId", "fileName", "fileUrl", "fileType", "status", "createdAt", "updatedAt")
+                            VALUES (:id, :prog_id, :fileName, :fileUrl, :fileType, 'PENDING', NOW(), NOW())
+                            """),
+                            {
+                                "id": str(uuid.uuid4()),
+                                "prog_id": prog_id,
+                                "fileName": fname,
+                                "fileUrl": real_url,
+                                "fileType": ext,
+                            }
+                        )
 
                 existing_ids.add(ext_id)
                 new_count += 1
