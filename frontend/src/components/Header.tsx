@@ -140,9 +140,9 @@ export const Header: React.FC<HeaderProps> = ({
     "대표자";
 
   const navLinks = [
-    { href: "/explore", label: "🌱 초간편 탐색", icon: Sparkles, id: "explore" },
-    { href: "/dashboard", label: "🏢 맞춤 대시보드", icon: Building2, id: "dashboard" },
-    { href: "/consultant", label: "💼 PSST 전문가", icon: BriefcaseBusiness, id: "consultant" },
+    { href: "/explore", label: "초간편 탐색", icon: Sparkles, id: "explore" },
+    { href: "/dashboard", label: "맞춤 대시보드", icon: Building2, id: "dashboard" },
+    { href: "/consultant", label: "PSST 전문가", icon: BriefcaseBusiness, id: "consultant" },
   ];
 
   const handleNavClick = async (e: React.MouseEvent, item: (typeof navLinks)[0]) => {
@@ -211,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 text-[11px] font-bold transition-all flex items-center space-x-1 shadow-xs"
                   title="운영 관리자 센터 (관리자 전용)"
                 >
-                  <span>⚙️ 관리자</span>
+                  <span>관리자</span>
                 </Link>
               )}
             {mounted && sessionUser ? (

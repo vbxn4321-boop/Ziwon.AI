@@ -29,7 +29,7 @@ export const LoginPromptModal: React.FC<LoginPromptModalProps> = ({
   title = "AI 심층 합격 전략은 회원 전용 혜택이에요",
   subtitle = "3초 간편 로그인 후 이 공고의 HWP 첨부 서식 분석과 3-Step 합격 공략 리포트를 바로 확인해 보세요.",
   redirectUrl = "/",
-  featureBadge = "✨ AI 핵심 합격 분석",
+  featureBadge = "AI 핵심 합격 분석",
 }) => {
   const router = useRouter();
 
@@ -116,7 +116,7 @@ export const LoginPromptModal: React.FC<LoginPromptModalProps> = ({
             onClick={handleGoToLogin}
             className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-md shadow-blue-600/25 flex items-center justify-center space-x-2 transition-all cursor-pointer transform hover:-translate-y-0.5"
           >
-            <span>⚡ 3초 간편 로그인 / 회원가입</span>
+            <span>3초 간편 로그인 / 회원가입</span>
             <ArrowRight className="w-4 h-4" />
           </button>
 

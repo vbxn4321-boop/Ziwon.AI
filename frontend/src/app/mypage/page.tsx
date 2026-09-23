@@ -719,7 +719,7 @@ export default function MyPage() {
                       <BadgeCheck className={`w-5 h-5 ${hasPatents ? "text-amber-600" : "text-slate-400"}`} />
                       <div>
                         <span className="font-bold text-slate-900 block">특허 / IP 지식재산권</span>
-                        <span className="text-[11px]">{hasPatents ? "보유 (기술성 가점 충족 🟢)" : "미보유"}</span>
+                        <span className="text-[11px]">{hasPatents ? "보유 (기술성 가점 충족)" : "미보유"}</span>
                       </div>
                     </div>
 
@@ -729,7 +729,7 @@ export default function MyPage() {
                       <BadgeCheck className={`w-5 h-5 ${hasCertifications ? "text-amber-600" : "text-slate-400"}`} />
                       <div>
                         <span className="font-bold text-slate-900 block">벤처기업 / 이노비즈 인증</span>
-                        <span className="text-[11px]">{hasCertifications ? "보유 (공식 인증 충족 🟢)" : "미보유"}</span>
+                        <span className="text-[11px]">{hasCertifications ? "보유 (공식 인증 충족)" : "미보유"}</span>
                       </div>
                     </div>
 
@@ -739,7 +739,7 @@ export default function MyPage() {
                       <BadgeCheck className={`w-5 h-5 ${isExporting ? "text-amber-600" : "text-slate-400"}`} />
                       <div>
                         <span className="font-bold text-slate-900 block">글로벌 수출 실적</span>
-                        <span className="text-[11px]">{isExporting ? "보유 (글로벌 바우처 우대 🟢)" : "미보유"}</span>
+                        <span className="text-[11px]">{isExporting ? "보유 (글로벌 바우처 우대)" : "미보유"}</span>
                       </div>
                     </div>
                   </div>

@@ -263,7 +263,6 @@ export default function SignupPage() {
                 </>
               ) : (
                 <>
-                  <span className="font-extrabold text-sm">💬</span>
                   <span>카카오로 3초 만에 시작하기</span>
                 </>
               )}

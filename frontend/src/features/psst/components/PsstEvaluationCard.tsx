@@ -208,7 +208,7 @@ export const PsstEvaluationCard: React.FC<PsstEvaluationCardProps> = ({
       {/* Q&A */}
       <div className="space-y-3 pt-2">
         <h3 className="text-xs font-bold text-slate-200">
-          💡 심사위원 대면 면접 예상 질문 & 추천 방어 논리
+          심사위원 대면 면접 예상 질문 & 추천 방어 논리
         </h3>
         <div className="space-y-2.5">
           {evaluationReport.expectedQuestions.map((qa, idx) => (
@@ -232,7 +232,7 @@ export const PsstEvaluationCard: React.FC<PsstEvaluationCardProps> = ({
                 }`}
               >
                 <div className="font-semibold text-blue-300">
-                  🛡️ 추천 답변 (의도: {qa.evaluationIntent})
+                  추천 답변 (의도: {qa.evaluationIntent})
                 </div>
                 <p className="leading-relaxed text-slate-300">{qa.recommendedDefense}</p>
               </div>

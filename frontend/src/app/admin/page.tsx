@@ -423,7 +423,7 @@ export default function AdminDashboardPage() {
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-black text-lg shadow-lg">
-            ⚡
+            
           </div>
           <div>
             <div className="flex items-center space-x-2">
@@ -816,11 +816,11 @@ export default function AdminDashboardPage() {
                             className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium"
                             title="원문 웹페이지에 서식 파일이 없고 URL 링크만 있는 공고"
                           >
-                            ⚠ 원문 파일 미제공 (URL접수형)
+                            원문 파일 미제공 (URL접수형)
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">
-                            ✕ 실패
+                            실패
                           </span>
                         )}
                       </div>
@@ -864,11 +864,11 @@ export default function AdminDashboardPage() {
                           </span>
                         ) : r.status === "NO_ATTACHMENTS_FOUND" ? (
                           <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
-                            ⚠ 원문 파일 없음
+                            원문 파일 없음
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">
-                            ✕ 실패
+                            실패
                           </span>
                         )}
                       </div>
@@ -921,7 +921,7 @@ export default function AdminDashboardPage() {
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              🔗 기업마당 & K-Startup 통합 공고 목록 ({stats?.dualSourcePrograms.length || 0}건)
+              기업마당 & K-Startup 통합 공고 목록 ({stats?.dualSourcePrograms.length || 0}건)
             </button>
             <button
               onClick={() => setActiveTab("logs")}
@@ -931,7 +931,7 @@ export default function AdminDashboardPage() {
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              📜 크롤러 수집 파이프라인 로그 ({stats?.crawlLogs.length || 0}건)
+              크롤러 수집 파이프라인 로그 ({stats?.crawlLogs.length || 0}건)
             </button>
             <button
               onClick={() => { setActiveTab("system"); if (!systemCheck) void runSystemCheck(); }}
@@ -939,7 +939,7 @@ export default function AdminDashboardPage() {
                 activeTab === "system" ? "text-emerald-400 border-b-2 border-emerald-500" : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              🩺 시스템 빠른 점검
+              시스템 빠른 점검
             </button>
           </div>
 

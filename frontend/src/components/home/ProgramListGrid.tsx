@@ -71,27 +71,27 @@ export const ProgramListGrid: React.FC<ProgramListGridProps> = ({
           {onlyClosed ? (
             <>
               <Clock className="w-4 h-4 text-rose-600" />
-              <span>🔴 마감 완료된 공고 목록</span>
+              <span>마감 완료된 공고 목록</span>
             </>
           ) : timeFilter === "today" ? (
             <>
               <Flame className="w-4 h-4 text-blue-600 animate-pulse" />
-              <span>🔥 오늘 새로 수집된 신규 지원사업</span>
+              <span>오늘 새로 수집된 신규 지원사업</span>
             </>
           ) : timeFilter === "recent" ? (
             <>
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              <span>✨ 최근 3일간 수집된 신규 지원사업</span>
+              <span>최근 3일간 수집된 신규 지원사업</span>
             </>
           ) : timeFilter === "urgent" ? (
             <>
               <AlertTriangle className="w-4 h-4 text-rose-600" />
-              <span>🚨 마감 7일 이내 임박 지원사업</span>
+              <span>마감 7일 이내 임박 지원사업</span>
             </>
           ) : (
             <>
               <Layers className="w-4 h-4 text-emerald-600" />
-              <span>⚡ 전체 진행 중 지원사업 목록</span>
+              <span>전체 진행 중 지원사업 목록</span>
             </>
           )}
           <span className="text-xs font-normal text-slate-500 ml-2">

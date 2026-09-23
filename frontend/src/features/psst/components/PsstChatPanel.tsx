@@ -175,7 +175,7 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
       {/* Upload Error Banner */}
       {uploadError && (
         <div className="px-4 py-2 bg-rose-50 border-b border-rose-200 text-rose-700 text-[11px] flex items-center justify-between">
-          <span>⚠️ {uploadError}</span>
+          <span>{uploadError}</span>
         </div>
       )}
 
@@ -276,7 +276,7 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
       <div className="px-3 py-2 bg-white border-t border-slate-200 flex items-center justify-between overflow-x-auto gap-2">
         <span className="text-[10px] text-slate-400 font-medium flex items-center space-x-1 flex-shrink-0">
           <Flame className="w-3 h-3 text-amber-400" />
-          <span>{generatedResult ? "✏️ 실시간 수정 추천:" : "💡 원클릭 빠른 답변:"}</span>
+          <span>{generatedResult ? "실시간 수정 추천:" : "원클릭 빠른 답변:"}</span>
         </span>
 
         <div className="flex items-center space-x-1.5 overflow-x-auto">
@@ -287,21 +287,21 @@ export const PsstChatPanel: React.FC<PsstChatPanelProps> = ({
                 onClick={() => onQuickSuggestion("2-1 핵심 기술 사양과 특허 차별성을 좀 더 전문적으로 보강해줘")}
                 className="px-2 py-1 rounded-lg bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 text-[10px] whitespace-nowrap transition-colors border border-slate-200 cursor-pointer"
               >
-                🔧 기술 사양 보강
+                기술 사양 보강
               </button>
               <button
                 type="button"
                 onClick={() => onQuickSuggestion("3-1 과금 모델을 월 39,000원 구독형 SaaS로 수정해줘")}
                 className="px-2 py-1 rounded-lg bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 text-[10px] whitespace-nowrap transition-colors border border-slate-200 cursor-pointer"
               >
-                💰 BM/가격 수정
+                BM/가격 수정
               </button>
               <button
                 type="button"
                 onClick={() => onQuickSuggestion("3-3 예산 계획표에서 인건비와 시제품 제작비 비중을 조정해줘")}
                 className="px-2 py-1 rounded-lg bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 text-[10px] whitespace-nowrap transition-colors border border-slate-200 cursor-pointer"
               >
-                📊 예산표 조정
+                예산표 조정
               </button>
             </>
           ) : (

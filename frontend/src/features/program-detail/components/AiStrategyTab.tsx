@@ -86,7 +86,7 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
           </div>
         </div>
       ) : !isLoggedIn ? (
-        /* 🔒 Blind/Blur Teaser State for Unauthenticated Users */
+        /* Blind/Blur Teaser State for Unauthenticated Users */
         <div className="relative rounded-3xl overflow-hidden border border-blue-200/80 bg-gradient-to-b from-blue-50/30 to-slate-100/60 p-6 sm:p-8 space-y-6">
           {/* Glassmorphism Centered Lock Banner */}
           <div className="relative z-20 max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-blue-200 shadow-2xl text-center space-y-4">
@@ -113,7 +113,7 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
                 onClick={onPromptLogin}
                 className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-md shadow-blue-600/30 transition-all cursor-pointer transform hover:-translate-y-0.5"
               >
-                ⚡ 3초 간편 로그인하고 전체 리포트 열람하기
+                3초 간편 로그인하고 전체 리포트 열람하기
               </button>
               <p className="text-[11px] text-slate-400">
                 카카오 · 구글 · 이메일로 3초 만에 무료 열람 가능합니다
@@ -209,7 +209,7 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
               </div>
               {matchingResult.recommendation && (
                 <p className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed">
-                  💡 {matchingResult.recommendation}
+                  {matchingResult.recommendation}
                 </p>
               )}
             </div>
@@ -232,13 +232,13 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div className="bg-blue-50/40 p-4 rounded-xl border border-blue-100 space-y-1.5">
-                  <span className="text-blue-800 font-bold block text-[11px]">🎯 기관 핵심 요구 성과지표 (KPI)</span>
+                  <span className="text-blue-800 font-bold block text-[11px]">기관 핵심 요구 성과지표 (KPI)</span>
                   <p className="text-slate-800 leading-relaxed font-medium">
                     {aiData.organizerStrategy.coreObjective || "사업화 실적 및 고용/매출 증대 목표 명확화"}
                   </p>
                 </div>
                 <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-100 space-y-1.5">
-                  <span className="text-amber-800 font-bold block text-[11px]">💡 심사위원 관점 제안서 작성 방향</span>
+                  <span className="text-amber-800 font-bold block text-[11px]">심사위원 관점 제안서 작성 방향</span>
                   <p className="text-slate-800 leading-relaxed font-medium">
                     {aiData.organizerStrategy.strategyTip || "주관기관의 설립 목적에 부합하는 문제 해결형 제안 구성"}
                   </p>
@@ -319,13 +319,13 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
                         </div>
                         {focus && (
                           <div className="text-[11px] text-slate-700 space-y-1">
-                            <strong className="text-amber-800 font-bold block text-[10px]">🎯 심사위원 착안점</strong>
+                            <strong className="text-amber-800 font-bold block text-[10px]">심사위원 착안점</strong>
                             <p className="leading-relaxed">{focus}</p>
                           </div>
                         )}
                         {strategy && (
                           <div className="text-[11px] text-slate-800 bg-white p-2.5 rounded-lg border border-indigo-200 space-y-0.5">
-                            <strong className="text-indigo-700 font-bold block text-[10px]">✍️ 고득점 작성 전략</strong>
+                            <strong className="text-indigo-700 font-bold block text-[10px]">고득점 작성 전략</strong>
                             <p className="leading-relaxed">{strategy}</p>
                           </div>
                         )}
@@ -349,7 +349,7 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
                 <div className="space-y-2">
                   {aiData.extraPoints.items.map((pt: string, pIdx: number) => (
                     <div key={pIdx} className="bg-amber-50/50 p-3 rounded-xl border border-amber-200 flex items-start space-x-2 text-xs">
-                      <span className="text-amber-600 font-bold">★</span>
+                      <span className="text-amber-600 font-bold">·</span>
                       <span className="text-slate-800 leading-tight">{pt}</span>
                     </div>
                   ))}
@@ -367,7 +367,7 @@ export const AiStrategyTab: React.FC<AiStrategyTabProps> = ({
                 <div className="space-y-2">
                   {aiData.excludedConditions.items.map((ex: string, eIdx: number) => (
                     <div key={eIdx} className="bg-rose-50/50 p-3 rounded-xl border border-rose-200 flex items-start space-x-2 text-xs">
-                      <span className="text-rose-600 font-bold">✕</span>
+                      <span className="text-rose-600 font-bold">·</span>
                       <span className="text-slate-800 leading-tight">{ex}</span>
                     </div>
                   ))}

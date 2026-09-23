@@ -34,7 +34,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ sortedDocs, programT
         <div>
           <h3 className="font-extrabold text-slate-900 text-sm">공식 첨부 서류 다운로드 및 지능형 뷰어</h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            💡 정부 표준 A4 규격 뷰어로 공고문과 서식을 한컴 한글(HWP) 스타일로 즉시 열람하고 검색할 수 있습니다.
+            정부 표준 A4 규격 뷰어로 공고문과 서식을 한컴 한글(HWP) 스타일로 즉시 열람하고 검색할 수 있습니다.
           </p>
         </div>
 

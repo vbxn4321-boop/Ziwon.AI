@@ -102,7 +102,7 @@ export const BentoHeroSection: React.FC<BentoHeroSectionProps> = ({
         </div>
       </div>
 
-      {/* 🍱 Modern Bento Grid Section */}
+      {/* Modern Bento Grid Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3.5 max-w-6xl mx-auto pt-2">
         {/* Bento Item 1 (Wide: 2 Cols) - 4 Live Curation Toggles */}
         <div className="md:col-span-3 lg:col-span-2 bg-gradient-to-br from-white via-slate-50/50 to-blue-50/30 border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col justify-between space-y-3 relative overflow-hidden">

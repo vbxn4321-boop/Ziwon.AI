@@ -93,7 +93,7 @@ export const PsstMappingModal: React.FC<PsstMappingModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
           <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-center justify-between">
             <span className="text-indigo-950 font-medium">
-              💡 기존에 직접 입력하신 내용은 안전하게 보존됩니다.
+              기존에 직접 입력하신 내용은 안전하게 보존됩니다.
             </span>
             <label className="flex items-center space-x-1.5 text-slate-700 cursor-pointer select-none">
               <input

@@ -183,13 +183,13 @@ export default function HomePage() {
                 href="/explore"
                 className="px-6 py-3.5 rounded-2xl bg-white text-slate-900 hover:bg-slate-100 font-extrabold text-xs sm:text-sm shadow-md transition-all text-center"
               >
-                🌱 처음 이용자 3초 매칭 시작
+                처음 이용자 3초 매칭 시작
               </Link>
               <Link
                 href="/dashboard"
                 className="px-6 py-3.5 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-extrabold text-xs sm:text-sm transition-all text-center"
               >
-                🏢 실시간 맞춤 대시보드
+                실시간 맞춤 대시보드
               </Link>
             </div>
           </div>

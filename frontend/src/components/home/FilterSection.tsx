@@ -295,7 +295,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <span>🏛️ 중앙부처 · 지자체 · 공공기관</span>
+                <span>중앙부처 · 지자체 · 공공기관</span>
               </button>
               <button
                 type="button"
@@ -306,7 +306,7 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <span>🎓 민간기관 · 교육기관</span>
+                <span>민간기관 · 교육기관</span>
               </button>
             </div>
 
