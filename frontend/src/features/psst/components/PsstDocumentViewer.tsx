@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sparkles, Loader2, FileStack, ExternalLink } from "lucide-react";
 import { PsstBusinessPlanResult } from "@/lib/ai/psst-generator";
 import { CanvasTheme, PsstFormData, PsstSectionKey } from "../types";
@@ -81,6 +81,19 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
   // PDF 서식은 rhwp가 못 여니, 이 값이 채워지면 편집기 대신 PDF 오버레이
   // 입력기(PdfFormFiller)를 그 자리에 대신 렌더링한다.
   const [pdfFillTarget, setPdfFillTarget] = useState<FormDocumentCandidate | null>(null);
+
+  // HWP 후보가 하나도 없고 PDF만 있는 공고는 formDocument 가 계속 null이라, 위
+  // 선택 목록의 <select value="">가 그 어떤 option과도 안 맞는다. 그러면
+  // 브라우저는 그냥 목록의 첫 항목(그 PDF)을 겉보기로만 보여주는데, 실제로는
+  // 아무것도 선택된 게 아니라서(pdfFillTarget 은 여전히 null) 편집 화면은 계속
+  // "열 문서가 없습니다"로 멈춰 있었다 — 드롭다운엔 PDF가 떠 있는데 화면은 안
+  // 열리는 것처럼 보이는 버그였다. HWP가 하나도 없으면 첫 PDF를 자동으로 연다.
+  useEffect(() => {
+    if (!formDocument && !pdfFillTarget && formDocuments.length === 0 && unopenableDocuments.length > 0) {
+      setPdfFillTarget(unopenableDocuments[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formDocument, formDocuments, unopenableDocuments]);
 
   const hasValidPlan = !!(generatedResult && generatedResult.overview && generatedResult.overview.title);
 
