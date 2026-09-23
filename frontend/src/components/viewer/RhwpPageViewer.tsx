@@ -130,7 +130,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-              <span>🏛️ 정품 한글 뷰어 (RHWP 엔진)</span>
+              <span>정품 한글 뷰어 (RHWP 엔진)</span>
             </button>
             {extractedText && (
               <button
@@ -142,7 +142,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
                 }`}
               >
                 <FileCode className="w-3.5 h-3.5" />
-                <span>📝 서식 텍스트 뷰</span>
+                <span>서식 텍스트 뷰</span>
               </button>
             )}
           </div>
@@ -305,7 +305,7 @@ export const RhwpPageViewer: React.FC<RhwpPageViewerProps> = ({
                   {/* Page header tag */}
                   <div className="self-start mb-1 text-[11px] font-bold text-slate-400 flex items-center space-x-2 select-none">
                     <span className="bg-slate-800 border border-slate-700 px-2 py-0.5 rounded">
-                      📄 {idx + 1} / {renderResult.pageCount} 쪽
+                      {idx + 1} / {renderResult.pageCount} 쪽
                     </span>
                   </div>
 

@@ -86,7 +86,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold text-xs border border-amber-300">
-                🚀 K-Startup 창업 지원사업
+                K-Startup 창업 지원사업
               </span>
               <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200">
                 {program.category || "일반창업"}
@@ -154,7 +154,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
         {cleanHtml(kst(["공고소개", "사업개요"])) && (
           <div className="text-xs bg-amber-50/40 p-4 rounded-xl border border-amber-200/70 text-slate-800 leading-relaxed space-y-1">
             <strong className="text-amber-950 font-extrabold block text-xs flex items-center space-x-1">
-              <span>💡 공고 개요 및 추진 배경</span>
+              <span>공고 개요 및 추진 배경</span>
             </strong>
             <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
               {renderAutoLinkedText(kst(["공고소개", "사업개요"]))}
@@ -166,7 +166,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
         {(cleanHtml(kst(["지원내용", "supt_amt", "supt_scale", "지원규모"])) || program.budget) && (
           <div className="text-xs bg-emerald-50/50 p-4 rounded-xl border border-emerald-200/70 text-slate-800 leading-relaxed space-y-1.5">
             <strong className="text-emerald-900 font-extrabold block text-xs flex items-center space-x-1">
-              <span>💰 지원 내용 및 선발 혜택</span>
+              <span>지원 내용 및 선발 혜택</span>
             </strong>
             <p className="text-slate-800 font-semibold whitespace-pre-wrap leading-relaxed">
               {renderAutoLinkedText(cleanHtml(kst(["지원내용", "supt_amt", "supt_scale", "지원규모"])) || program.budget)}
@@ -179,7 +179,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
           {cleanHtml(kst(["aply_trgt_ctnt", "신청대상", "지원대상"])) && (
             <div className="text-xs bg-slate-50/80 p-4 rounded-xl border border-slate-200 text-slate-800 leading-relaxed space-y-1.5">
               <strong className="text-emerald-800 font-extrabold block text-xs flex items-center space-x-1">
-                <span>🎯 신청 대상 상세</span>
+                <span>신청 대상 상세</span>
               </strong>
               <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
                 {renderAutoLinkedText(kst(["aply_trgt_ctnt", "신청대상", "지원대상"]))}
@@ -189,7 +189,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
           {cleanHtml(kst(["aply_excl_trgt_ctnt", "excl_trgt_ctnt", "제외대상", "결격요건"])) && (
             <div className="text-xs bg-slate-50/80 p-4 rounded-xl border border-slate-200 text-slate-800 leading-relaxed space-y-1.5">
               <strong className="text-rose-800 font-extrabold block text-xs flex items-center space-x-1">
-                <span>🚫 신청 제외 대상 (결격 요건)</span>
+                <span>신청 제외 대상 (결격 요건)</span>
               </strong>
               <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
                 {renderAutoLinkedText(kst(["aply_excl_trgt_ctnt", "excl_trgt_ctnt", "제외대상", "결격요건"]))}
@@ -202,7 +202,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
         {cleanHtml(kst(["제출서류", "제출서류목록"])) && (
           <div className="text-xs bg-blue-50/60 p-4 rounded-xl border border-blue-200/80 text-slate-800 leading-relaxed space-y-1.5">
             <strong className="text-blue-900 font-extrabold block text-xs flex items-center space-x-1">
-              <span>📋 필수 제출 서류 목록 (체크리스트)</span>
+              <span>필수 제출 서류 목록 (체크리스트)</span>
             </strong>
             <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed font-sans">
               {renderAutoLinkedText(kst(["제출서류", "제출서류목록"]))}
@@ -216,7 +216,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
             {cleanHtml(kst(["slctn_mthd_ctnt", "선정절차", "평가방법"])) && (
               <div className="text-xs bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 text-slate-800 leading-relaxed space-y-1.5">
                 <strong className="text-indigo-900 font-extrabold block text-xs flex items-center space-x-1">
-                  <span>⚖️ 선정 절차 및 평가 일정</span>
+                  <span>선정 절차 및 평가 일정</span>
                 </strong>
                 <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
                   {renderAutoLinkedText(kst(["slctn_mthd_ctnt", "선정절차", "평가방법"]))}
@@ -226,7 +226,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
             {cleanHtml(kst(["aply_mthd_onli_rcpt_istc", "신청방법"])) && (
               <div className="text-xs bg-amber-50/50 p-4 rounded-xl border border-amber-200/70 text-slate-800 leading-relaxed space-y-1.5">
                 <strong className="text-amber-900 font-extrabold block text-xs flex items-center space-x-1">
-                  <span>📮 신청 방법 및 접수처 안내</span>
+                  <span>신청 방법 및 접수처 안내</span>
                 </strong>
                 <p className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
                   {renderAutoLinkedText(kst(["aply_mthd_onli_rcpt_istc", "신청방법"]))}
@@ -267,7 +267,7 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
         <div className="space-y-2 flex-1 min-w-0">
           <div className="flex items-center space-x-2 flex-wrap gap-y-1">
             <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-xs border border-blue-200">
-              🏢 기업마당 정책 지원사업
+              기업마당 정책 지원사업
             </span>
             <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200">
               {program.category || "중소기업지원"}
@@ -305,13 +305,13 @@ export const ProgramSummaryCard: React.FC<ProgramSummaryCardProps> = ({
       {/* 2-Column Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
         <div className="bg-blue-50/40 p-4 rounded-xl border border-blue-100 space-y-2">
-          <span className="text-[11px] text-blue-800 font-bold block">🎯 지원대상</span>
+          <span className="text-[11px] text-blue-800 font-bold block">지원대상</span>
           <p className="font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">
             {renderAutoLinkedText(cleanHtml(biz(["trgetNm", "지원대상"])) || program.targetDescription || "공고문 참조")}
           </p>
         </div>
         <div className="bg-blue-50/40 p-4 rounded-xl border border-blue-100 space-y-2">
-          <span className="text-[11px] text-blue-800 font-bold block">📋 사업 개요</span>
+          <span className="text-[11px] text-blue-800 font-bold block">사업 개요</span>
           <div className="font-medium text-slate-800 leading-relaxed whitespace-pre-wrap max-h-[140px] overflow-y-auto custom-scrollbar">
             {renderAutoLinkedText(cleanHtml(biz(["bsnsSumryCn", "사업요약"])) || "공고문 전문을 참조해 주세요.")}
           </div>

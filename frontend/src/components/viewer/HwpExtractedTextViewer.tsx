@@ -369,7 +369,7 @@ export const HwpExtractedTextViewer: React.FC<HwpExtractedTextViewerProps> = ({
               </h4>
             </div>
             <p className="text-xs text-indigo-200/90 leading-relaxed">
-              📌 <b>공문서 양식 뷰어:</b> 정부 공고문 및 신청 서식을 실제 공문서 구조로 복원한 <b>[열람용 뷰어]</b>입니다. 공식 접수는 원본 <b>[한글 서식 다운로드]</b>를 이용해 작성하십시오.
+              <b>공문서 양식 뷰어:</b> 정부 공고문 및 신청 서식을 실제 공문서 구조로 복원한 <b>[열람용 뷰어]</b>입니다. 공식 접수는 원본 <b>[한글 서식 다운로드]</b>를 이용해 작성하십시오.
             </p>
           </div>
 
@@ -420,7 +420,7 @@ export const HwpExtractedTextViewer: React.FC<HwpExtractedTextViewerProps> = ({
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>📑 공문서 서식 뷰 (원본 복원)</span>
+              <span>공문서 서식 뷰 (원본 복원)</span>
             </button>
             <button
               type="button"
@@ -432,7 +432,7 @@ export const HwpExtractedTextViewer: React.FC<HwpExtractedTextViewerProps> = ({
               }`}
             >
               <AlignLeft className="w-3.5 h-3.5" />
-              <span>📝 원문 텍스트</span>
+              <span>원문 텍스트</span>
             </button>
           </div>
 

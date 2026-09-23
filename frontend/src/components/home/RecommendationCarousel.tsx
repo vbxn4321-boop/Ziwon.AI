@@ -121,7 +121,7 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
               <div>
                 <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                   <h3 className="font-extrabold text-base sm:text-lg text-slate-900">
-                    🎯{" "}
+                    {" "}
                     {myCompany.isGuest ? (
                       <span className="text-blue-700">3초 맞춤 설정</span>
                     ) : (
@@ -136,7 +136,7 @@ export const RecommendationCarousel: React.FC<RecommendationCarouselProps> = ({
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  🏢 {myCompany.industry || "전체 업종"} • 📍 {myCompany.region || "전국"} 소재 기업 조건 맞춤 알고리즘 매칭
+                  {myCompany.industry || "전체 업종"} • {myCompany.region || "전국"} 소재 기업 조건 맞춤 알고리즘 매칭
                   {myCompany.isGuest && " (비로그인 체험 모드)"}
                 </p>
               </div>

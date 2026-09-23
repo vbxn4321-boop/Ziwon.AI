@@ -171,7 +171,7 @@ const CommonNoticeHeader: React.FC<{
         <div className="flex items-start justify-between flex-wrap gap-2 border-b border-amber-500/20 pb-3">
           <div className="flex items-start space-x-2 min-w-0 flex-1">
             <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30 flex-shrink-0 mt-0.5">
-              🚀 K-Startup 창업 지원사업
+              K-Startup 창업 지원사업
             </span>
             <span className="text-xs font-bold text-slate-200 break-words leading-snug">
               {cleanHtml(kst(["biz_pbanc_nm", "intg_pbanc_biz_nm", "detl_pg_title", "공고명"])) || selectedProgram.title}
@@ -217,19 +217,19 @@ const CommonNoticeHeader: React.FC<{
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
             {targetContent && (
               <div className="text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-slate-300 break-words whitespace-pre-wrap leading-relaxed space-y-1">
-                <strong className="text-emerald-400 font-bold block text-[11px]">🎯 지원 대상 상세</strong>
+                <strong className="text-emerald-400 font-bold block text-[11px]">지원 대상 상세</strong>
                 <p className="text-slate-200">{targetContent}</p>
               </div>
             )}
             {excludeContent && (
               <div className="text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-slate-300 break-words whitespace-pre-wrap leading-relaxed space-y-1">
-                <strong className="text-rose-400 font-bold block text-[11px]">🚫 지원 제외 대상</strong>
+                <strong className="text-rose-400 font-bold block text-[11px]">지원 제외 대상</strong>
                 <p className="text-slate-300">{excludeContent}</p>
               </div>
             )}
             {preferContent && (
               <div className="text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-slate-300 break-words whitespace-pre-wrap leading-relaxed space-y-1 md:col-span-2">
-                <strong className="text-blue-400 font-bold block text-[11px]">⭐ 가점 및 우대사항</strong>
+                <strong className="text-blue-400 font-bold block text-[11px]">가점 및 우대사항</strong>
                 <p className="text-slate-300">{preferContent}</p>
               </div>
             )}
@@ -270,7 +270,7 @@ const CommonNoticeHeader: React.FC<{
         <div className="flex items-start justify-between flex-wrap gap-2 border-b border-teal-500/20 pb-3">
           <div className="flex items-start space-x-2 min-w-0 flex-1">
             <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold text-xs border border-teal-500/30 flex-shrink-0 mt-0.5">
-              🏢 기업마당 정책 지원사업
+              기업마당 정책 지원사업
             </span>
             <span className="text-xs font-bold text-slate-200 break-words leading-snug">
               {cleanHtml(biz(["pblancNm", "사업명"])) || selectedProgram.title}
@@ -295,14 +295,14 @@ const CommonNoticeHeader: React.FC<{
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div className="space-y-3 flex flex-col">
             <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2 flex-1">
-              <span className="text-[11px] text-teal-400 font-bold block">🎯 지원대상 (trgetNm)</span>
+              <span className="text-[11px] text-teal-400 font-bold block">지원대상 (trgetNm)</span>
               <p className="font-medium text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{targetDesc}</p>
             </div>
           </div>
 
           <div className="space-y-3 flex flex-col">
             <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2 flex-1 flex flex-col">
-              <span className="text-[11px] text-teal-400 font-bold block">📋 사업 요약 (bsnsSumryCn)</span>
+              <span className="text-[11px] text-teal-400 font-bold block">사업 요약 (bsnsSumryCn)</span>
               <div className="font-medium text-slate-300 leading-relaxed whitespace-pre-wrap break-words flex-1 max-h-[160px] overflow-y-auto custom-scrollbar pr-1 text-xs">
                 {cleanedSummary}
               </div>
@@ -1007,7 +1007,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       {matchingResult.recommendation && (
                         <div className="bg-indigo-950/30 border border-indigo-500/20 p-3.5 rounded-xl space-y-1">
                           <span className="text-indigo-300 font-bold text-xs flex items-center space-x-1">
-                            <span>💡</span>
+                            <span></span>
                             <span>심사위원 AI 추천 총평</span>
                           </span>
                           <p className="text-slate-200 text-xs leading-relaxed">{matchingResult.recommendation}</p>
@@ -1018,7 +1018,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         {matchingResult.keyStrengths && matchingResult.keyStrengths.length > 0 && (
                           <div className="bg-emerald-950/20 border border-emerald-500/20 p-3 rounded-xl space-y-1.5">
-                            <span className="text-emerald-400 font-bold text-xs">✅ 핵심 지원 강점</span>
+                            <span className="text-emerald-400 font-bold text-xs">핵심 지원 강점</span>
                             <ul className="list-disc list-inside text-[11px] text-emerald-200/90 space-y-0.5">
                               {matchingResult.keyStrengths.map((str: string, sIdx: number) => (
                                 <li key={sIdx}>{str}</li>
@@ -1029,7 +1029,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
 
                         {matchingResult.keyRisks && matchingResult.keyRisks.length > 0 && (
                           <div className="bg-rose-950/20 border border-rose-500/20 p-3 rounded-xl space-y-1.5">
-                            <span className="text-rose-400 font-bold text-xs">⚠️ 주의 요건 & 리스크</span>
+                            <span className="text-rose-400 font-bold text-xs">주의 요건 & 리스크</span>
                             <ul className="list-disc list-inside text-[11px] text-rose-200/90 space-y-0.5">
                               {matchingResult.keyRisks.map((risk: string, rIdx: number) => (
                                 <li key={rIdx}>{risk}</li>
@@ -1063,7 +1063,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-1.5">
                       <span className="text-slate-400 font-semibold flex items-center space-x-1">
-                        <span>🎯</span>
+                        <span></span>
                         <span>지원 자격 요건</span>
                       </span>
                       <p className="text-slate-200 text-xs leading-relaxed">
@@ -1073,7 +1073,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
 
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-1.5">
                       <span className="text-slate-400 font-semibold flex items-center space-x-1">
-                        <span>💰</span>
+                        <span></span>
                         <span>지원 규모 및 자부담 비율</span>
                       </span>
                       <p className="text-blue-300 font-semibold text-xs leading-relaxed">
@@ -1151,7 +1151,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                       )}
                       {aiData.extraPoints?.summary && aiData.extraPoints.items?.length > 0 && (
                         <p className="text-[11px] text-emerald-400/80 border-t border-emerald-500/20 pt-1.5">
-                          💡 {aiData.extraPoints.summary}
+                          {aiData.extraPoints.summary}
                         </p>
                       )}
                     </div>
@@ -1734,7 +1734,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   {/* 지원규모 및 혜택 */}
                   {(kst(["supt_amt", "supt_scale", "budget", "지원규모"]) || selectedProgram.budget) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
-                      <p className="text-[10px] font-bold text-amber-400/80">💰 지원 규모 및 선발 혜택</p>
+                      <p className="text-[10px] font-bold text-amber-400/80">지원 규모 및 선발 혜택</p>
                       <p className="text-xs text-slate-200 font-semibold leading-relaxed">
                         {kst(["supt_amt", "supt_scale", "지원규모"]) || selectedProgram.budget}
                       </p>
@@ -1744,7 +1744,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   {/* 지원대상 상세 */}
                   {kst(["aply_trgt_ctnt", "지원대상", "신청대상"]) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
-                      <p className="text-[10px] font-bold text-amber-400/80">🎯 지원대상 상세</p>
+                      <p className="text-[10px] font-bold text-amber-400/80">지원대상 상세</p>
                       <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
                         {kst(["aply_trgt_ctnt", "지원대상", "신청대상"])}
                       </p>
@@ -1754,7 +1754,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   {/* 신청 제외대상 / 결격 요건 */}
                   {kst(["aply_excl_trgt_ctnt", "excl_trgt_ctnt", "제외대상", "결격요건"]) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-rose-900/40 space-y-1">
-                      <p className="text-[10px] font-bold text-rose-400">🚫 신청 제외 대상 (결격 요건)</p>
+                      <p className="text-[10px] font-bold text-rose-400">신청 제외 대상 (결격 요건)</p>
                       <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
                         {kst(["aply_excl_trgt_ctnt", "excl_trgt_ctnt", "제외대상", "결격요건"])}
                       </p>
@@ -1764,7 +1764,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   {/* 선정절차 */}
                   {kst(["slctn_mthd_ctnt", "선정절차", "평가방법"]) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
-                      <p className="text-[10px] font-bold text-indigo-400">⚖️ 선정절차 및 평가방법</p>
+                      <p className="text-[10px] font-bold text-indigo-400">선정절차 및 평가방법</p>
                       <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
                         {kst(["slctn_mthd_ctnt", "선정절차", "평가방법"])}
                       </p>
@@ -1774,7 +1774,7 @@ export const ProgramDetailModal: React.FC<ProgramDetailModalProps> = ({
                   {/* 신청방법 */}
                   {kst(["aply_mthd_onli_rcpt_istc", "신청방법"]) && (
                     <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-800 space-y-1">
-                      <p className="text-[10px] font-bold text-amber-400/80">📋 신청방법 및 접수처 안내</p>
+                      <p className="text-[10px] font-bold text-amber-400/80">신청방법 및 접수처 안내</p>
                       <p className="text-xs text-slate-300 leading-relaxed">
                         {kst(["aply_mthd_onli_rcpt_istc", "신청방법"])}
                       </p>

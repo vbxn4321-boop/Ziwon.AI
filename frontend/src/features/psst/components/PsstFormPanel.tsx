@@ -200,7 +200,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
           {/* Evaluation Criteria Score Bars */}
           {(formData.programAnalysis.evaluationCriteria?.items?.length || 0) > 0 && (
             <div className="space-y-1.5">
-              <span className="text-[10.5px] font-bold text-slate-400 block">📊 심사 배점 기준 (AI가 이 비중으로 작성)</span>
+              <span className="text-[10.5px] font-bold text-slate-400 block">심사 배점 기준 (AI가 이 비중으로 작성)</span>
               {formData.programAnalysis.evaluationCriteria!.items!.slice(0, 4).map((item, i) => (
                 <div key={i} className="flex items-center gap-2 text-[10.5px]">
                   <span className="text-slate-300 min-w-0 flex-1 truncate" title={item.category}>{item.category}</span>
@@ -252,7 +252,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
 
         <div className="space-y-1">
           <label className="text-slate-400 font-semibold flex items-center space-x-1">
-            <span>👤 대표자 / 기업명</span>
+            <span>대표자 / 기업명</span>
             <span className="text-rose-400">*</span>
           </label>
           <input
@@ -267,7 +267,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
 
           <div className="space-y-1">
             <label className="text-slate-400 font-semibold flex items-center space-x-1">
-              <span>💡 창업 아이템명</span>
+              <span>창업 아이템명</span>
               <span className="text-rose-400">*</span>
             </label>
             <input
@@ -281,7 +281,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
           </div>
 
           <div className="space-y-1">
-            <label className="text-slate-400 font-semibold">🏭 산업 분야</label>
+            <label className="text-slate-400 font-semibold">산업 분야</label>
             <input
               type="text"
               value={formData.industry}
@@ -297,7 +297,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
         {fieldConfig.itemDescription.show && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
             <label className="text-slate-300 font-bold text-xs flex items-center space-x-1.5">
-              <span>📝 사업 내용 & 개발 필요성</span>
+              <span>사업 내용 & 개발 필요성</span>
               {fieldConfig.itemDescription.required && <span className="text-rose-400">*</span>}
             </label>
             {fieldConfig.itemDescription.tip && (
@@ -321,7 +321,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
         {fieldConfig.coreStrengths.show && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
             <label className="text-slate-300 font-bold text-xs flex items-center space-x-1.5">
-              <span>🚀 핵심 기술 및 차별화 강점</span>
+              <span>핵심 기술 및 차별화 강점</span>
               {fieldConfig.coreStrengths.required && <span className="text-rose-400">*</span>}
             </label>
             {fieldConfig.coreStrengths.tip && (
@@ -345,7 +345,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
         {fieldConfig.targetCustomer.show && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
             <label className="text-slate-300 font-bold text-xs flex items-center space-x-1.5">
-              <span>🎯 주요 타겟 고객</span>
+              <span>주요 타겟 고객</span>
               {!fieldConfig.targetCustomer.required && (
                 <span className="text-[10px] text-slate-500 font-medium">(선택)</span>
               )}
@@ -371,7 +371,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
         {fieldConfig.budget.show && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
             <label className="text-slate-300 font-bold text-xs flex items-center space-x-1.5">
-              <span>💰 사업 예산 규모</span>
+              <span>사업 예산 규모</span>
               {!fieldConfig.budget.required && (
                 <span className="text-[10px] text-slate-500 font-medium">(선택)</span>
               )}
@@ -417,7 +417,7 @@ export const PsstFormPanel: React.FC<PsstFormPanelProps> = ({
             {isGenerating
               ? "AI가 PSST 사업계획서를 작성하는 중..."
               : readyToGenerate
-              ? "🚀 AI 사업계획서 초안 생성하기"
+              ? "AI 사업계획서 초안 생성하기"
               : "아이템명과 사업 내용을 먼저 입력해 주세요"}
           </span>
         </button>

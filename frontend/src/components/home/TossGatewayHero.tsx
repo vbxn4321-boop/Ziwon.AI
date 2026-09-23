@@ -25,7 +25,7 @@ export const TossGatewayHero: React.FC<TossGatewayHeroProps> = ({
       route: "/explore",
       topBadge: {
         icon: Sparkles,
-        title: "🌱 처음 이용자",
+        title: "처음 이용자",
         sub: "모두의 지원사업",
       },
       cardSubtitle: "정부지원사업이 처음이라면",
@@ -43,7 +43,7 @@ export const TossGatewayHero: React.FC<TossGatewayHeroProps> = ({
       route: "/dashboard",
       topBadge: {
         icon: Building2,
-        title: "🏢 기업 대표님",
+        title: "기업 대표님",
         sub: "맞춤 성장 관리",
       },
       cardSubtitle: "사업자등록을 마친 대표님을 위해",
@@ -61,7 +61,7 @@ export const TossGatewayHero: React.FC<TossGatewayHeroProps> = ({
       route: "/consultant",
       topBadge: {
         icon: BriefcaseBusiness,
-        title: "💼 PSST 전문가",
+        title: "PSST 전문가",
         sub: "AI 사업계획서",
       },
       cardSubtitle: "선정 확률을 극대화하는",

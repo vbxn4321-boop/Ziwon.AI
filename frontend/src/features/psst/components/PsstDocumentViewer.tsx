@@ -200,7 +200,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
             </div>
             <div className="space-y-2 max-w-md mx-auto">
               <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-bold inline-block">
-                ⚡ Gemini 3.7 AI 엔진 실시간 작성 중
+                Gemini 3.7 AI 엔진 실시간 작성 중
               </span>
               <h3 className="text-lg sm:text-xl font-black text-slate-900">
                 공고 맞춤형 PSST 사업계획서를 작성하고 있습니다
@@ -253,7 +253,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                     창업아이템 개요(요약)
                   </h2>
                   <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                    🏛️ {formData.targetProgramTitle || "중소벤처기업부 표준 PSST"}
+                    {formData.targetProgramTitle || "중소벤처기업부 표준 PSST"}
                   </span>
                 </div>
 
@@ -281,7 +281,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
               {/* Government Standard 2-Column Summary Table */}
               {generatedResult.overview.summaryTable && (
                 <div className="space-y-2 pt-1">
-                  <h3 className="text-sm font-bold text-indigo-300">📋 사업 요약 규격표</h3>
+                  <h3 className="text-sm font-bold text-indigo-300">사업 요약 규격표</h3>
                   <div className="overflow-x-auto rounded-xl border border-indigo-500/30 bg-slate-950/70">
                     <table className="w-full text-xs text-left">
                       <thead className="bg-indigo-950/60 text-indigo-200 border-b border-indigo-500/20 font-bold">
@@ -357,7 +357,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 {/* TAM - SAM - SOM Market Size Diagram Card */}
                 {generatedResult.problem.tamSamSom && (
                   <div className="space-y-2 pt-1">
-                    <h3 className="text-sm font-bold text-rose-300">📊 타겟 시장 규모 (TAM - SAM - SOM)</h3>
+                    <h3 className="text-sm font-bold text-rose-300">타겟 시장 규모 (TAM - SAM - SOM)</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
                         <div className="text-[11px] font-bold text-blue-400">TAM (전체 시장)</div>
@@ -419,7 +419,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 {/* Competitor Comparative Matrix Table */}
                 {generatedResult.solution.competitorTable && generatedResult.solution.competitorTable.length > 0 && (
                   <div className="space-y-2 pt-2">
-                    <h3 className="text-sm font-bold text-blue-300">⚔️ 경쟁 제품/대체재 비교 분석표</h3>
+                    <h3 className="text-sm font-bold text-blue-300">경쟁 제품/대체재 비교 분석표</h3>
                     <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
                       <table className="w-full text-xs text-left">
                         <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
@@ -457,7 +457,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                 {/* Q1~Q4 Development Roadmap Milestone Table */}
                 {generatedResult.solution.roadmapTable && generatedResult.solution.roadmapTable.length > 0 && (
                   <div className="space-y-2 pt-2">
-                    <h3 className="text-sm font-bold text-blue-300">🗓️ 협약 기간 내 개발 및 사업화 마일스톤 로드맵</h3>
+                    <h3 className="text-sm font-bold text-blue-300">협약 기간 내 개발 및 사업화 마일스톤 로드맵</h3>
                     <div className="overflow-x-auto rounded-xl border border-blue-500/20 bg-slate-950/70">
                       <table className="w-full text-xs text-left">
                         <thead className="bg-blue-950/60 text-blue-200 border-b border-blue-500/20 font-bold">
@@ -524,8 +524,8 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
                     <h3 className="text-sm font-bold text-purple-300">
                       {generatedResult.overview.summaryTable?.targetBudget?.includes("비현금성") ||
                       generatedResult.scaleUp.fundingAndBudgetPlan?.includes("입주")
-                        ? "🏢 입주 공간 활용 및 연계 지원 / 자체 자금 로드맵"
-                        : "💰 정부지원금 비목별 소요 예산 집행 계획표"}
+                        ? "입주 공간 활용 및 연계 지원 / 자체 자금 로드맵"
+                        : "정부지원금 비목별 소요 예산 집행 계획표"}
                     </h3>
                     <div className="overflow-x-auto rounded-xl border border-purple-500/20 bg-slate-950/70">
                       <table className="w-full text-xs text-left">
@@ -588,7 +588,7 @@ export const PsstDocumentViewer: React.FC<PsstDocumentViewerProps> = ({
               {/* Team Personnel R&R Matrix Table */}
               {generatedResult.team.memberList && generatedResult.team.memberList.length > 0 && (
                 <div className="space-y-2 pt-2">
-                  <h3 className="text-sm font-bold text-emerald-300">👥 핵심 인력 구성 및 업무 분장 (R&R)</h3>
+                  <h3 className="text-sm font-bold text-emerald-300">핵심 인력 구성 및 업무 분장 (R&R)</h3>
                   <div className="overflow-x-auto rounded-xl border border-emerald-500/20 bg-slate-950/70">
                     <table className="w-full text-xs text-left">
                       <thead className="bg-emerald-950/60 text-emerald-200 border-b border-emerald-500/20 font-bold">

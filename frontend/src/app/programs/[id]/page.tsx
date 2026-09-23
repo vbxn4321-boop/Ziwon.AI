@@ -132,7 +132,7 @@ export default function ProgramDetailPage() {
           isOpen: true,
           title: "관심 공고를 찜하고 마감 알림을 받아보세요",
           subtitle: "로그인하시면 마감 D-Day 알림 및 맞춤형 지원사업 변경 소식을 실시간으로 확인하실 수 있습니다.",
-          featureBadge: "❤️ 관심 공고 찜하기",
+          featureBadge: "관심 공고 찜하기",
         });
         return;
       }
@@ -217,7 +217,7 @@ export default function ProgramDetailPage() {
         isOpen: true,
         title: "AI 심층 합격 전략은 회원 전용 혜택이에요",
         subtitle: "3초 간편 로그인 후 이 공고의 HWP 첨부 서식 분석과 3-Step 합격 공략 리포트를 바로 확인해 보세요.",
-        featureBadge: "✨ AI 핵심 합격 분석",
+        featureBadge: "AI 핵심 합격 분석",
       });
       return;
     }
@@ -272,7 +272,7 @@ export default function ProgramDetailPage() {
         isOpen: true,
         title: "사업계획서 작성은 회원 전용이에요",
         subtitle: "3초 간편 로그인 후 이 공고의 서식에 맞춘 AI 사업계획서 작성을 시작해 보세요.",
-        featureBadge: "📝 AI 사업계획서 작성",
+        featureBadge: "AI 사업계획서 작성",
       });
       return;
     }
@@ -334,7 +334,7 @@ export default function ProgramDetailPage() {
         isOpen: true,
         title: "내 기업 맞춤 1:1 적합도 분석",
         subtitle: "로그인 후 내 기업 정보(업력/소재지/매출)와 이 공고의 지원 자격을 1초 만에 비교 채점해 드립니다.",
-        featureBadge: "🎯 1:1 맞춤 적합도 분석",
+        featureBadge: "1:1 맞춤 적합도 분석",
       });
       return;
     }
@@ -483,7 +483,7 @@ export default function ProgramDetailPage() {
             }`}
           >
             <Sparkles className="w-4 h-4 text-indigo-600" />
-            <span>AI 합격 전략 리포트 {aiData ? "✨" : ""}</span>
+            <span>AI 합격 전략 리포트 {aiData ? "" : ""}</span>
           </button>
 
           <button
@@ -550,7 +550,7 @@ export default function ProgramDetailPage() {
                 title: "AI 심층 합격 전략은 회원 전용 혜택이에요",
                 subtitle:
                   "3초 간편 로그인 후 이 공고의 HWP 첨부 서식 분석과 3-Step 합격 공략 리포트를 바로 확인해 보세요.",
-                featureBadge: "✨ AI 핵심 합격 분석",
+                featureBadge: "AI 핵심 합격 분석",
               })
             }
           />
