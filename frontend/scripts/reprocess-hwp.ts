@@ -105,7 +105,17 @@ export async function reprocessHwpBatch(options: ReprocessOptions = {}) {
 }
 
 async function main() {
-  await reprocessHwpBatch({ sampleSize: 50, dryRun: true });
+  // 기본은 50건 시험 실행(dry-run). 실제 반영하려면 --live, 건수는 --size=200.
+  const args = process.argv.slice(2);
+  const dryRun = !args.includes("--live");
+  const sizeArg = args.find((a) => a.startsWith("--size="));
+  const sampleSize = sizeArg ? Number(sizeArg.split("=")[1]) || 50 : 50;
+
+  await reprocessHwpBatch({ sampleSize, dryRun });
+
+  if (dryRun) {
+    console.log("\n(시험 실행이라 DB는 그대로입니다. 실제 반영: --live, 건수 조절: --size=200)");
+  }
 }
 
 if (require.main === module) {
